@@ -123,6 +123,7 @@ Metrics Due separates `Post URL needed` from `Metrics needed`. Add the published
 Use Data Health to see upkeep work that can make the planner less trustworthy:
 
 - stale imported products
+- Etsy and website sync status
 - missing asset files
 - unreviewed source or generated assets
 - manual overrides that protect local edits from imports
@@ -145,6 +146,8 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `POST /api/tasks/<task_id>/asset`
 - `POST /api/planned-content`
 - `POST /api/planned-content/<item_id>/produce`
+- `POST /api/integrations/etsy/sync`
+- `POST /api/integrations/website/sync`
 
 These endpoints are local-first and unauthenticated, like the rest of the app. Do not expose them to the public internet.
 
@@ -162,6 +165,16 @@ Useful CSV headers include:
 - `Listing ID`
 - `Listing URL`
 - `Status`
+
+## Read-Only API Syncs
+
+Settings includes read-only sync actions for Etsy and MattMadeMe.com.
+
+Etsy API sync imports active listings and listing images as external records. It requires local `.env` values for `ETSY_KEYSTRING`, `ETSY_SHARED_SECRET`, and `ETSY_SHOP_ID`.
+
+MattMadeMe Website Sync imports website products, product images, and published blog metadata. It requires `MARKETING_AGENT_API_KEY`.
+
+Both syncs are safe to run without credentials. Missing credentials are recorded in Data Health rather than blocking normal daily work.
 
 ## Backup And Export
 

@@ -35,6 +35,20 @@
     </form>
   </section>
   <section class="panel">
+    <h3>Etsy API Sync</h3>
+    <p class="subtle">Read-only sync for active Etsy listings and listing images. Requires local `.env` credentials.</p>
+    <form method="post" action="{{ url_for('sync_etsy') }}">
+      <button type="submit">Sync Etsy</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>MattMadeMe Website Sync</h3>
+    <p class="subtle">Read product, product image, and published blog metadata from the website agent API. Requires local `.env` token.</p>
+    <form method="post" action="{{ url_for('sync_website') }}">
+      <button type="submit">Sync website</button>
+    </form>
+  </section>
+  <section class="panel">
     <h3>Network Use</h3>
     <p>Default startup binds to 0.0.0.0 so trusted devices on the local network can reach it.</p>
     <p class="subtle">Do not expose this app to the public internet.</p>

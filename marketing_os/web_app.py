@@ -66,6 +66,8 @@ from .services.content_briefs import (
     produce_content_for_item,
     serialize_planned_content_item,
 )
+from .services.etsy_import import sync_etsy_read_only
+from .services.mattmademe_website_import import sync_mattmademe_website
 
 
 def create_app(db_path: str | Path | None = None, business_dir: str = "docs/business") -> Flask:
@@ -208,6 +210,18 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
             return jsonify({"items": [serialize_data_health_item(item) for item in build_data_health(session)]})
+
+    @app.post("/api/integrations/etsy/sync")
+    def api_sync_etsy():
+        with session_scope(factory) as session:
+            summary = sync_etsy_read_only(session)
+            return jsonify(summary.__dict__), 200 if not summary.errors else 400
+
+    @app.post("/api/integrations/website/sync")
+    def api_sync_website():
+        with session_scope(factory) as session:
+            summary = sync_mattmademe_website(session)
+            return jsonify(summary.__dict__), 200 if not summary.errors else 400
 
     @app.get("/api/creative-assets")
     def api_creative_assets():
@@ -603,6 +617,29 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(f"Imported {len(imported)} Etsy listing record(s).")
             except FileNotFoundError as exc:
                 flash(str(exc))
+        return redirect(url_for("data_health"))
+
+    @app.post("/integrations/etsy/sync")
+    def sync_etsy() -> str:
+        with session_scope(factory) as session:
+            summary = sync_etsy_read_only(session)
+            if summary.errors:
+                flash(summary.errors[0])
+            else:
+                flash(f"Synced Etsy: {summary.products_imported} listing(s), {summary.assets_imported} image(s).")
+        return redirect(url_for("data_health"))
+
+    @app.post("/integrations/website/sync")
+    def sync_website() -> str:
+        with session_scope(factory) as session:
+            summary = sync_mattmademe_website(session)
+            if summary.errors:
+                flash(summary.errors[0])
+            else:
+                flash(
+                    f"Synced website: {summary.products_imported} product(s), "
+                    f"{summary.assets_imported} image(s), {summary.blog_posts_imported} blog post(s)."
+                )
         return redirect(url_for("data_health"))
 
     @app.get("/settings")

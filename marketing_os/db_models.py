@@ -100,6 +100,30 @@ class AssetRecord(Base):
     product: Mapped[ProductRecord | None] = relationship(back_populates="assets")
 
 
+class BlogPostRecord(Base):
+    __tablename__ = "blog_posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    external_source: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    title: Mapped[str] = mapped_column(String(260), nullable=False)
+    slug: Mapped[str] = mapped_column(String(220), default="", nullable=False)
+    excerpt: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    canonical_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_external_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tags_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    raw_external_data_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(80), default="imported", nullable=False)
+    sync_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    review_state: Mapped[str] = mapped_column(String(80), default="needs_review", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("external_source", "external_id", name="uq_blog_external_source_id"),)
+
+
 class PlanRecord(Base):
     __tablename__ = "plans"
 

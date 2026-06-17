@@ -12,11 +12,13 @@ from sqlalchemy import select
 from marketing_os.db import create_db_engine, init_db, session_factory, session_scope
 from marketing_os.db_models import (
     AssetRecord,
+    BlogPostRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
     PlannedContentRecord,
     ProductRecord,
+    SyncMetadata,
     TaskRecord,
     TemplateRecord,
 )
@@ -60,6 +62,8 @@ from marketing_os.services.content_briefs import (
     planned_items_needing_production,
     produce_content_for_item,
 )
+from marketing_os.services.etsy_import import sync_etsy_read_only
+from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
 from marketing_os.web_app import create_app
 
 
@@ -854,6 +858,154 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 export_payload = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(len(export_payload["planned_content_items"]), 1)
                 self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
+
+    def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
+        class FakeEtsyAdapter:
+            def __init__(self):
+                self.calls: list[tuple[str, str]] = []
+
+            def list_active_shop_listings(self, shop_id: str) -> list[dict[str, object]]:
+                self.calls.append(("GET listings", shop_id))
+                return [
+                    {
+                        "listing_id": "etsy-100",
+                        "title": "Fixture Duck",
+                        "url": "https://etsy.example/listing/etsy-100",
+                        "state": "active",
+                        "description": "A fixture listing for sync tests.",
+                        "tags": ["gift", "duck"],
+                    }
+                ]
+
+            def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
+                self.calls.append(("GET images", listing_id))
+                return [
+                    {
+                        "listing_image_id": "img-100",
+                        "url_fullxfull": "https://images.example/fixture-duck.jpg",
+                        "url_75x75": "https://images.example/fixture-duck-thumb.jpg",
+                    }
+                ]
+
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            adapter = FakeEtsyAdapter()
+            summary = sync_etsy_read_only(session, adapter=adapter)
+            self.assertEqual(summary.products_imported, 1)
+            self.assertEqual(summary.assets_imported, 1)
+            self.assertEqual(adapter.calls, [("GET listings", "fixture-shop"), ("GET images", "etsy-100")])
+
+            product = session.scalar(select(ProductRecord).where(ProductRecord.external_source == "etsy", ProductRecord.external_id == "etsy-100"))
+            self.assertIsNotNone(product)
+            self.assertEqual(product.canonical_url, "https://etsy.example/listing/etsy-100")
+            self.assertEqual(product.sync_status, "imported")
+
+            asset = session.scalar(select(AssetRecord).where(AssetRecord.external_source == "etsy", AssetRecord.external_id == "img-100"))
+            self.assertIsNotNone(asset)
+            self.assertEqual(asset.product_id, product.id)
+            self.assertEqual(asset.review_state, "needs review")
+            self.assertEqual(asset.file_exists, 0)
+
+            sync = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == "etsy_api"))
+            self.assertIsNotNone(sync)
+            self.assertIn("Imported 1 listing", sync.notes)
+
+            health = data_health(session)
+            self.assertTrue(any(item.area == "Etsy Sync" and item.status == "OK" for item in health))
+
+    def test_phase5_website_sync_imports_products_images_and_blog_posts(self) -> None:
+        class FakeWebsiteAdapter:
+            def list_products(self) -> list[dict[str, object]]:
+                return [
+                    {
+                        "id": "web-200",
+                        "name": "Website Fixture Duck",
+                        "url": "https://mattmademe.example/products/web-200",
+                        "status": "available",
+                        "description": "Website product description.",
+                        "tags": ["collector", "gift"],
+                        "perfectFor": ["Duck collectors"],
+                        "heroImageUrl": "https://mattmademe.example/images/web-200.jpg",
+                    }
+                ]
+
+            def list_published_blog_posts(self) -> list[dict[str, object]]:
+                return [
+                    {
+                        "id": "blog-1",
+                        "slug": "fixture-story",
+                        "headline": "Fixture Story",
+                        "excerpt": "A synced blog post.",
+                        "url": "https://mattmademe.example/blog/fixture-story",
+                        "tags": ["behind the scenes"],
+                    }
+                ]
+
+            def create_blog_draft(self, draft_request: dict[str, object]) -> dict[str, object]:
+                raise AssertionError("Read sync must not create drafts.")
+
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            summary = sync_mattmademe_website(session, adapter=FakeWebsiteAdapter())
+            self.assertEqual(summary.products_imported, 1)
+            self.assertEqual(summary.assets_imported, 1)
+            self.assertEqual(summary.blog_posts_imported, 1)
+
+            product = session.scalar(
+                select(ProductRecord).where(ProductRecord.external_source == "mattmademe_website", ProductRecord.external_id == "web-200")
+            )
+            self.assertIsNotNone(product)
+            self.assertEqual(product.status, "available")
+            self.assertEqual(product.canonical_url, "https://mattmademe.example/products/web-200")
+
+            asset = session.scalar(
+                select(AssetRecord).where(
+                    AssetRecord.external_source == "mattmademe_website",
+                    AssetRecord.external_id == "https://mattmademe.example/images/web-200.jpg",
+                )
+            )
+            self.assertIsNotNone(asset)
+            self.assertEqual(asset.product_id, product.id)
+            self.assertEqual(asset.review_state, "needs review")
+
+            post = session.scalar(select(BlogPostRecord).where(BlogPostRecord.external_source == "mattmademe_website", BlogPostRecord.external_id == "blog-1"))
+            self.assertIsNotNone(post)
+            self.assertEqual(post.title, "Fixture Story")
+            self.assertEqual(post.canonical_url, "https://mattmademe.example/blog/fixture-story")
+
+            target = export_operating_data(session, Path(tmp.name) / "exports")
+            payload = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(len(payload["blog_posts"]), 1)
+            self.assertEqual(payload["blog_posts"][0]["title"], "Fixture Story")
+
+            health = data_health(session)
+            self.assertTrue(any(item.area == "Website Sync" and item.status == "OK" for item in health))
+
+    def test_phase5_web_settings_exposes_safe_sync_actions_without_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-integrations.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            settings = client.get("/settings")
+            self.assertEqual(settings.status_code, 200)
+            self.assertIn(b"Sync Etsy", settings.data)
+            self.assertIn(b"Sync website", settings.data)
+
+            etsy_response = client.post("/api/integrations/etsy/sync")
+            self.assertEqual(etsy_response.status_code, 400)
+            self.assertIn("credentials", etsy_response.get_json()["errors"][0])
+
+            website_response = client.post("/api/integrations/website/sync")
+            self.assertEqual(website_response.status_code, 400)
+            self.assertIn("token", website_response.get_json()["errors"][0])
 
 
 if __name__ == "__main__":

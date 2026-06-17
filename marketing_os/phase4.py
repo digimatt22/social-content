@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from .db_models import (
     AssetRecord,
+    BlogPostRecord,
     CalendarItemRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
@@ -883,6 +884,7 @@ def data_health(session: Session) -> list[DataHealthItem]:
     metric_tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.status.in_(METRIC_RELEVANT_STATUS))))
     planned_items = list(session.scalars(select(PlannedContentRecord)))
     generated_candidates = list(session.scalars(select(GeneratedContentCandidateRecord)))
+    sync_metadata = list(session.scalars(select(SyncMetadata)))
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
     sync_errors = [product for product in products if product.sync_error or product.sync_status == "error"]
@@ -896,6 +898,8 @@ def data_health(session: Session) -> list[DataHealthItem]:
     metrics_due = [task for task in metric_tasks if task.metric_status != "complete"]
     planned_without_candidates = [item for item in planned_items if item.status == "planned" and not item.candidates]
     candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]
+    etsy_sync = next((record for record in sync_metadata if record.source_name == "etsy_api"), None)
+    website_sync = next((record for record in sync_metadata if record.source_name == "mattmademe_website"), None)
     template_types = {template.template_type for template in templates}
     missing_template_types = [kind for kind in ["platform", "copy", "graphic"] if kind not in template_types]
 
@@ -959,6 +963,20 @@ def data_health(session: Session) -> list[DataHealthItem]:
             if planned_without_candidates or candidates_needing_review
             else "No planned content is waiting for production review.",
             "Open Planning.",
+        ),
+        DataHealthItem(
+            "Etsy Sync",
+            _sync_status_label(etsy_sync),
+            0 if etsy_sync and "error:" not in etsy_sync.notes and "missing_credentials" not in etsy_sync.notes else 1,
+            _sync_message(etsy_sync, "Etsy API has not been synced yet."),
+            "Configure Etsy credentials in .env or run sync from Settings.",
+        ),
+        DataHealthItem(
+            "Website Sync",
+            _sync_status_label(website_sync),
+            0 if website_sync and "error:" not in website_sync.notes and "missing_credentials" not in website_sync.notes else 1,
+            _sync_message(website_sync, "MattMadeMe website API has not been synced yet."),
+            "Configure website API credentials in .env or run sync from Settings.",
         ),
     ]
 
@@ -1043,6 +1061,7 @@ def export_operating_data(session: Session, export_dir: str | Path = "data/expor
         ],
         "tasks": [_export_task(record) for record in session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id))],
         "metrics": [_export_metric(record) for record in session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on, MetricRecord.id))],
+        "blog_posts": [_export_blog_post(record) for record in session.scalars(select(BlogPostRecord).order_by(BlogPostRecord.title, BlogPostRecord.id))],
         "sync_metadata": [_export_sync(record) for record in session.scalars(select(SyncMetadata).order_by(SyncMetadata.source_name))],
     }
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -1249,6 +1268,20 @@ def _json_dict(value: str) -> dict[str, object]:
     return data if isinstance(data, dict) else {}
 
 
+def _sync_status_label(record: SyncMetadata | None) -> str:
+    if record is None:
+        return "Missing"
+    if "error:" in record.notes or "missing_credentials" in record.notes:
+        return "Needs attention"
+    return "OK"
+
+
+def _sync_message(record: SyncMetadata | None, empty_message: str) -> str:
+    if record is None:
+        return empty_message
+    return f"{record.notes} Last checked {record.synced_at.isoformat()}."
+
+
 def _date_text(value: date | datetime | None) -> str | None:
     return value.isoformat() if value else None
 
@@ -1392,6 +1425,28 @@ def _export_generated_content_candidate(record: GeneratedContentCandidateRecord)
         "source_asset_ids": json_list(record.source_asset_ids_json),
         "review_state": record.review_state,
         "revision_notes": record.revision_notes,
+        "created_at": _date_text(record.created_at),
+        "updated_at": _date_text(record.updated_at),
+    }
+
+
+def _export_blog_post(record: BlogPostRecord) -> JsonDict:
+    return {
+        "id": record.id,
+        "external_source": record.external_source,
+        "external_id": record.external_id,
+        "title": record.title,
+        "slug": record.slug,
+        "excerpt": record.excerpt,
+        "canonical_url": record.canonical_url,
+        "published_at": _date_text(record.published_at),
+        "updated_external_at": _date_text(record.updated_external_at),
+        "tags": json_list(record.tags_json),
+        "raw_external_data": _json_dict(record.raw_external_data_json),
+        "last_synced_at": _date_text(record.last_synced_at),
+        "sync_status": record.sync_status,
+        "sync_error": record.sync_error,
+        "review_state": record.review_state,
         "created_at": _date_text(record.created_at),
         "updated_at": _date_text(record.updated_at),
     }
