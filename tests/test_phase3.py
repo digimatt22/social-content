@@ -937,7 +937,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn("body", facebook_body)
             self.assertNotIn(facebook_body["hook"], facebook_body["body"])
             self.assertNotIn("..", facebook_body["body"])
+            self.assertNotIn("Planning note:", facebook_body["body"])
+            self.assertNotIn("Keep it conversational.", facebook_body["body"])
             self.assertIn(products[0].name, facebook.source_facts_json)
+            self.assertIn("Keep it conversational.", facebook.source_facts_json)
 
             rerun = produce_content_for_item(session, item)
             self.assertEqual(rerun.created, 0)

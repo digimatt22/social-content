@@ -16,4 +16,5 @@ assets/products/*
 data/*.sqlite
 data/*.sqlite-*
 data/backups/
+data/exports/
 instance/

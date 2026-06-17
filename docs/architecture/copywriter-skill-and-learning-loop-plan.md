@@ -82,6 +82,7 @@ The post should avoid:
 - too many hashtags
 - emoji-heavy or over-polished voice
 - product details not found in source facts
+- internal planning notes copied verbatim into public-facing copy
 - treating generated images as accurate without review
 
 ## Review Workflow
@@ -142,4 +143,3 @@ Learning summaries should identify:
 - The posted task can store a URL, metric due date, metrics, and outcome notes.
 - The app can summarize at least one lesson from copy review or performance data.
 - Copy generation remains separate from automatic publishing.
-

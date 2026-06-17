@@ -23,8 +23,6 @@ def generate_facebook_post(brief: dict[str, object]) -> FacebookPostDraft:
     audience = str(brief.get("audience") or "collectors and gift buyers")
     occasion = str(brief.get("occasion") or "").strip()
     promotion = str(brief.get("promotion") or "").strip()
-    notes = str(brief.get("notes") or "").strip()
-    voice = [str(item) for item in brief.get("voice_pillars", []) if str(item).strip()]
     useful_phrases = [str(item) for item in brief.get("useful_phrases", []) if str(item).strip()]
     product_facts = [item for item in brief.get("product_facts", []) if isinstance(item, dict)]
 
@@ -45,8 +43,6 @@ def generate_facebook_post(brief: dict[str, object]) -> FacebookPostDraft:
     if promotion:
         lines.append(f"Current note: {promotion}.")
     lines.append(_sentence(phrase))
-    if notes:
-        lines.append(f"Planning note: {notes}")
 
     cta = _cta_for_goal(goal_text)
     body = "\n\n".join([*lines, cta])
@@ -58,6 +54,7 @@ def generate_facebook_post(brief: dict[str, object]) -> FacebookPostDraft:
             "Uses real product focus from the planned item.",
             "Keeps a conversational Facebook tone.",
             "Avoids unsupported scarcity or sales claims.",
+            "Keeps internal planning notes out of public-facing copy.",
             "Includes a natural comment-friendly CTA.",
             "Needs human review before posting.",
         ],
