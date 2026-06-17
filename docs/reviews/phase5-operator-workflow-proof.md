@@ -33,6 +33,7 @@ The test uses the Flask web/API surface rather than only direct service calls.
 - Occasion: new batch
 - Generated candidate type: `facebook_post`
 - Review state: `approved`
+- Reviewed by: Matt
 - Created task platform: Facebook
 - Posted URL placeholder: `https://facebook.example/mattmademe/proof`
 - Outcome tags: `sold item`, `got comments`

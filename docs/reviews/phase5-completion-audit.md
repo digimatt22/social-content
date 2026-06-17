@@ -40,7 +40,7 @@ Latest browser/UI evidence:
 | Generated candidates cannot be assigned to tasks until reviewed and approved | Proven | Candidate-to-task service now rejects unapproved candidates; covered by planned intent task creation tests. |
 | User can create planned calendar item with destination, goal, and multiple product focuses | Proven | `/planning`, `/api/planned-content`, `create_planned_content_item`, and Phase 5 planning tests. |
 | Scriptable content-production job finds planned items and writes review candidates | Proven | `python -m marketing_os.jobs.content_production`; `tests/test_phase3.py::test_phase5_web_planning_api_and_job_flow`. |
-| One Facebook post generated from real product/source context and reviewed/approved/copied from workflow | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; Planning/task workflow tests. Human live-use approval by Matt is still not proven. |
+| One Facebook post generated from real product/source context and reviewed/approved/copied from workflow | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; Planning/task workflow tests. Human live-use approval by Matt can now be captured with `reviewed_by` and `reviewed_at`, but the actual taste approval event is still not proven. |
 | Generated copy stores source facts, channel, audience, CTA, review decision, revision notes | Proven | `GeneratedContentCandidateRecord`, serialized candidates, review endpoint, source facts JSON, proof artifact. |
 | Posted-task metric/outcome note links back to generated copy, product, channel, and asset | Proven fixture-backed | `tests/test_phase3.py::test_phase5_learning_loop_links_generated_copy_to_outcomes`; Insights export. |
 | Simple learning summary shows what worked, what did not, or needs more data | Proven | `/insights`, `/api/insights`, `marketing_os/services/insights.py`, Data Health learning row. |
@@ -59,7 +59,7 @@ Latest browser/UI evidence:
 | Codex can enrich planned items asynchronously while app remains review/posting tool | Proven | Content-production job and review workflow. |
 | At least one product has source images discoverable through local asset library path | Proven fixture-backed | Local asset library scan test and asset library metadata. |
 | At least one generated creative candidate from improved workflow is good enough to approve after review | Not fully proven | Manual/Magnific import path and approval gate exist, but no real Magnific/Freepik output has been visually approved in this repo. |
-| At least one Facebook post reads like MattMadeMe and is ready without heavy rewrite | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; still needs Matt's human taste approval. |
+| At least one Facebook post reads like MattMadeMe and is ready without heavy rewrite | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; generated candidate reviews now store reviewer and timestamp, but still needs Matt's actual taste approval. |
 | Future recommendation influenced by performance/outcome notes | Proven fixture-backed | Insights service feeds `performance_context` into content briefs. |
 | Data Health gives actionable next steps | Proven | Data Health rows cover syncs, assets, content production, learning loop, credentials, and review states. |
 | Codebase has clearer integration boundaries | Proven | Dedicated services for Etsy, website, local assets, creative generation, content briefs, copywriter, and insights. |

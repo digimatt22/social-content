@@ -1473,6 +1473,8 @@ def _export_generated_content_candidate(record: GeneratedContentCandidateRecord)
         "source_asset_ids": json_list(record.source_asset_ids_json),
         "review_state": record.review_state,
         "revision_notes": record.revision_notes,
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": _date_text(record.reviewed_at),
         "created_at": _date_text(record.created_at),
         "updated_at": _date_text(record.updated_at),
     }

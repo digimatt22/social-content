@@ -127,6 +127,8 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
         "generated_content_candidates": {
             "source_asset_ids_json": "TEXT NOT NULL DEFAULT '[]'",
             "revision_notes": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_by": "VARCHAR(120) NOT NULL DEFAULT ''",
+            "reviewed_at": "DATETIME",
         },
         "creative_generation_jobs": {
             "candidate_asset_id": "INTEGER",

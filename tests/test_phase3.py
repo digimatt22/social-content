@@ -933,11 +933,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Approve"):
                 create_task_from_planned_content(session, item.id, destination="Facebook", candidate_id=facebook.id)
 
-            record_candidate_review(session, facebook.id, "approved", "Ready for task creation.")
+            record_candidate_review(session, facebook.id, "approved", "Ready for task creation.", reviewed_by="Matt")
             task_result = create_task_from_planned_content(session, item.id, destination="Facebook", candidate_id=facebook.id)
 
             self.assertEqual(task_result.task.planned_content_item_id, item.id)
             self.assertEqual(task_result.task.generated_content_candidate_id, facebook.id)
+            self.assertEqual(facebook.reviewed_by, "Matt")
+            self.assertIsNotNone(facebook.reviewed_at)
             self.assertEqual(task_result.task.platform, "Facebook")
             self.assertEqual(task_result.task.content_type, "post")
             self.assertEqual(task_result.task.product_name, product.name)
@@ -1004,10 +1006,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             review_response = client.post(
                 f"/api/generated-content/{candidate_id}/review",
-                json={"review_state": "approved", "revision_notes": "Ready for posting test."},
+                json={"review_state": "approved", "revision_notes": "Ready for posting test.", "reviewed_by": "Matt"},
             )
             self.assertEqual(review_response.status_code, 200)
             self.assertEqual(review_response.get_json()["candidate"]["review_state"], "approved")
+            self.assertEqual(review_response.get_json()["candidate"]["reviewed_by"], "Matt")
+            self.assertIsNotNone(review_response.get_json()["candidate"]["reviewed_at"])
 
             task_response = client.post(
                 f"/api/planned-content/{item_id}/task",
@@ -1032,6 +1036,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 export_payload = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(len(export_payload["planned_content_items"]), 1)
                 self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
+                reviewed_candidate = next(record for record in export_payload["generated_content_candidates"] if record["id"] == candidate_id)
+                self.assertEqual(reviewed_candidate["reviewed_by"], "Matt")
+                self.assertIsNotNone(reviewed_candidate["reviewed_at"])
                 planned_task = next(record for record in export_payload["tasks"] if record["planned_content_item_id"] == item_id)
                 self.assertEqual(planned_task["generated_content_candidate_id"], candidate_id)
 
@@ -1147,9 +1154,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             review_response = client.post(
                 f"/api/generated-content/{candidate_id}/review",
-                json={"review_state": "approved", "revision_notes": "Operator proof approval."},
+                json={"review_state": "approved", "revision_notes": "Operator proof approval.", "reviewed_by": "Matt"},
             )
             self.assertEqual(review_response.status_code, 200)
+            self.assertEqual(review_response.get_json()["candidate"]["reviewed_by"], "Matt")
 
             task_response = client.post(
                 f"/api/planned-content/{item_id}/task",

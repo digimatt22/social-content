@@ -288,12 +288,20 @@ def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str,
         "source_asset_ids": json_list(candidate.source_asset_ids_json),
         "review_state": candidate.review_state,
         "revision_notes": candidate.revision_notes,
+        "reviewed_by": candidate.reviewed_by,
+        "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
         "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
         "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
     }
 
 
-def record_candidate_review(session: Session, candidate_id: int, review_state: str, revision_notes: str = "") -> GeneratedContentCandidateRecord:
+def record_candidate_review(
+    session: Session,
+    candidate_id: int,
+    review_state: str,
+    revision_notes: str = "",
+    reviewed_by: str = "",
+) -> GeneratedContentCandidateRecord:
     if review_state not in CANDIDATE_REVIEW_STATES:
         raise ValueError(f"Unsupported review state: {review_state}")
     candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
@@ -302,6 +310,10 @@ def record_candidate_review(session: Session, candidate_id: int, review_state: s
     candidate.review_state = review_state
     if revision_notes.strip():
         candidate.revision_notes = revision_notes.strip()
+    if reviewed_by.strip():
+        candidate.reviewed_by = reviewed_by.strip()
+    if review_state != "needs_review" or reviewed_by.strip():
+        candidate.reviewed_at = utc_now()
     return candidate
 
 

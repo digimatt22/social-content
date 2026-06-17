@@ -140,9 +140,17 @@
                   <label>Review notes
                     <input name="revision_notes" value="{{ candidate.revision_notes }}">
                   </label>
+                  <label>Reviewed by
+                    <input name="reviewed_by" value="{{ candidate.reviewed_by }}" placeholder="Matt">
+                  </label>
                 </div>
                 <button class="secondary" type="submit">Save review</button>
               </form>
+              {% if candidate.reviewed_by or candidate.reviewed_at %}
+                <div class="subtle">
+                  Reviewed{% if candidate.reviewed_by %} by {{ candidate.reviewed_by }}{% endif %}{% if candidate.reviewed_at %} at {{ candidate.reviewed_at }}{% endif %}
+                </div>
+              {% endif %}
               {% if candidate.candidate_type == 'facebook_post' %}
                 <form method="post" action="{{ url_for('link_planning_candidate_to_task', candidate_id=candidate.id) }}">
                   <label>Attach copy to task

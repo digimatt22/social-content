@@ -20,6 +20,7 @@ A planned Facebook item was created from seeded MattMadeMe product context and t
 - Candidate type: facebook_post
 - Candidate review state: approved
 - Review notes: Proof review: accurate product context, conversational tone, clear CTA.
+- Future live review should set `reviewed_by` to Matt in the Planning review form or API response.
 - Created task title: Facebook planned post for Bingo Duck - new batch
 - Task platform: Facebook
 - Task content type: post

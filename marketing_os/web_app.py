@@ -367,10 +367,21 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     candidate_id,
                     str(payload.get("review_state") or "needs_review"),
                     revision_notes=str(payload.get("revision_notes") or ""),
+                    reviewed_by=str(payload.get("reviewed_by") or ""),
                 )
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
-            return jsonify({"candidate": {"id": candidate.id, "review_state": candidate.review_state, "revision_notes": candidate.revision_notes}})
+            return jsonify(
+                {
+                    "candidate": {
+                        "id": candidate.id,
+                        "review_state": candidate.review_state,
+                        "revision_notes": candidate.revision_notes,
+                        "reviewed_by": candidate.reviewed_by,
+                        "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
+                    }
+                }
+            )
 
     @app.get("/")
     def dashboard() -> str:
@@ -503,6 +514,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     candidate_id,
                     request.form.get("review_state", "needs_review"),
                     revision_notes=request.form.get("revision_notes", ""),
+                    reviewed_by=request.form.get("reviewed_by", ""),
                 )
                 flash("Candidate review saved.")
             except ValueError as exc:
