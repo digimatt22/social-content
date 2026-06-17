@@ -124,9 +124,17 @@
                 <span class="pill">{{ candidate.provider }}</span>
                 <span class="pill">{{ candidate.review_state.replace('_', ' ').title() }}</span>
               </div>
-              <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.display_body }}</pre>
+              {% if candidate.candidate_type == 'facebook_post' and candidate.copy_text %}
+                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</pre>
+                <details>
+                  <summary class="subtle">Review evidence</summary>
+                  <pre class="copybox">{{ candidate.display_body }}</pre>
+                </details>
+              {% else %}
+                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.display_body }}</pre>
+              {% endif %}
               <div class="button-group">
-                <button class="secondary" type="button" data-copy-target="#candidate-copy-{{ candidate.id }}">Copy candidate</button>
+                <button class="secondary" type="button" data-copy-target="#candidate-copy-{{ candidate.id }}">Copy {{ 'post' if candidate.candidate_type == 'facebook_post' else 'candidate' }}</button>
               </div>
               <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
                 <div class="grid">

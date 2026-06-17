@@ -422,6 +422,7 @@ def _serialize_copy_candidate(candidate: GeneratedContentCandidateRecord | None)
         "candidate_type": candidate.candidate_type,
         "provider": candidate.provider,
         "body": candidate.body,
+        "copy_text": _candidate_copy_body(candidate.body),
         "display_body": _display_body(candidate.body),
         "source_facts": _json_dict(candidate.source_facts_json),
         "source_asset_ids": _json_list(candidate.source_asset_ids_json),
@@ -553,6 +554,14 @@ def _json_list(value: str) -> list[object]:
     except json.JSONDecodeError:
         return []
     return data if isinstance(data, list) else []
+
+
+def _candidate_copy_body(value: str) -> str:
+    data = _json_dict(value)
+    if not data:
+        return value.strip()
+    pieces = [str(data.get("hook") or "").strip(), str(data.get("body") or "").strip()]
+    return "\n\n".join(piece for piece in pieces if piece)
 
 
 def _slug(value: str) -> str:

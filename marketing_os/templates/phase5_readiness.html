@@ -27,7 +27,12 @@
     <h3 style="margin-top: 10px;">Latest Facebook Copy</h3>
     {% if packet.copy_review %}
       <p class="subtle">Candidate #{{ packet.copy_review.id }} · Planned item #{{ packet.copy_review.planned_item_id }}</p>
-      <div class="copybox">{{ packet.copy_review.display_body }}</div>
+      <div class="copybox" id="phase5-copy-text">{{ packet.copy_review.copy_text or packet.copy_review.display_body }}</div>
+      <button class="secondary" type="button" data-copy-target="#phase5-copy-text">Copy post</button>
+      <details>
+        <summary class="subtle">Review evidence</summary>
+        <div class="copybox">{{ packet.copy_review.display_body }}</div>
+      </details>
       <form method="post" action="{{ url_for('phase5_copy_review') }}" style="margin-top: 12px;">
         <input type="hidden" name="candidate_id" value="{{ packet.copy_review.id }}">
         <div class="grid">

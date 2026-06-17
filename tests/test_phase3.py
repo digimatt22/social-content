@@ -1102,11 +1102,20 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(payload["created"], 2)
             self.assertEqual(payload["planned_item"]["status"], "needs_review")
             self.assertTrue(any(candidate["candidate_type"] == "facebook_post" for candidate in payload["planned_item"]["candidates"]))
+            facebook_payload = next(
+                candidate
+                for candidate in payload["planned_item"]["candidates"]
+                if candidate["candidate_type"] == "facebook_post"
+            )
+            self.assertIn("copy_text", facebook_payload)
+            self.assertIn(products[0].name, facebook_payload["copy_text"])
+            self.assertNotIn("Quality checklist", facebook_payload["copy_text"])
 
             rendered_review = client.get("/planning")
             self.assertEqual(rendered_review.status_code, 200)
             self.assertIn(b"Facebook Post", rendered_review.data)
-            self.assertIn(b"Copy candidate", rendered_review.data)
+            self.assertIn(b"Copy post", rendered_review.data)
+            self.assertIn(b"Review evidence", rendered_review.data)
             self.assertIn(b"Save review", rendered_review.data)
             self.assertIn(b"Attach to task", rendered_review.data)
 
@@ -1431,6 +1440,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
                 self.assertEqual(payload["readiness"]["remaining_count"], 2)
                 self.assertEqual(payload["copy_review"]["id"], facebook.id)
+                self.assertIn("copy_text", payload["copy_review"])
+                self.assertIn("Bingo Duck", payload["copy_review"]["copy_text"])
+                self.assertNotIn("Quality checklist", payload["copy_review"]["copy_text"])
                 self.assertEqual(payload["creative_review"]["id"], creative.job.id)
                 self.assertIn("Matt-approved Facebook copy", markdown)
                 self.assertIn("Matt-approved generated creative", markdown)
