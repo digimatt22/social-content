@@ -12,6 +12,7 @@ Active inputs:
 - `docs/architecture/local-asset-library-agent-access-plan.md`
 - `docs/architecture/freepik-magnific-creative-integration-plan.md`
 - `docs/architecture/copywriter-skill-and-learning-loop-plan.md`
+- `docs/architecture/codex-nightly-content-production-plan.md`
 - `docs/operating-guides/local-web-console.md`
 - current implementation in `marketing_os/`
 
@@ -30,6 +31,7 @@ The biggest risks are:
 - the user still has to manually keep product/listing/blog facts current
 - the creative generation pass produced low-quality images
 - generated copy can still sound generic unless it has a dedicated voice, channel, and quality-review layer
+- the app could become too synchronous if the operator has to wait for creative generation while planning
 - assets can become scattered across repo-local folders, generated-output folders, and external files
 - Data Health can identify problems without making them easy enough to fix
 - integrations could become one-off code paths that force a rewrite later
@@ -48,6 +50,8 @@ Phase 5 should:
 - improve creative quality through Freepik/Magnific or a manual/MCP bridge
 - generate at least one high-quality Facebook post in MattMadeMe's tone and voice
 - establish a copywriter service boundary for posts and future blog drafts
+- let a user create high-level marketing calendar intent that Codex can enrich later
+- support a scheduled Codex-assisted production loop for copy, image briefs, generated asset candidates, and review notes
 - create a learning loop that tracks what worked, what did not, and what should change next time
 - keep all generated assets behind human review
 - validate the operator UI through an actual walkthrough
@@ -143,7 +147,56 @@ Out of scope:
 - auto-approving generated images
 - publishing generated assets automatically
 
-### 6. Copywriter Skill And Facebook Post Generation
+### 6. Planning Intent And Calendar Briefs
+
+Let Matt or the social operator create high-level marketing intent in the web app without needing to write the final copy or creative brief upfront.
+
+Required:
+
+- add a planning surface for campaign/calendar intent
+- support destination/channel choices such as Instagram, Facebook, Pinterest, and blog post
+- support goal choices such as sales growth, repeat customers, followers, product awareness, email signup, blog traffic, or seasonal launch
+- support one or more product focuses per planned item
+- support optional audience, occasion, promotion, deadline, and notes
+- save planned intent to the calendar as a lightweight item before detailed content exists
+- show each planned item status: `planned`, `brief_ready`, `drafted`, `needs_review`, `approved`, `posted`, or `skipped`
+- generate a structured content brief from the planned intent plus imported product, asset, brand voice, channel, and performance context
+
+The planning UI should feel like filling out a small marketing request, not writing the post manually.
+
+Suggested implementation shape:
+
+```text
+marketing_os/services/content_briefs.py
+marketing_os/templates/plan_intent.html
+```
+
+### 7. Codex-Assisted Content Production Automation
+
+Use Codex as the scheduled creative production worker that enriches planned calendar items.
+
+Required:
+
+- create a scriptable job that finds planned calendar items needing creative detail
+- export each item as a structured brief for Codex/model-assisted work
+- let Codex generate or refine post copy, blog outlines, image prompts, asset recommendations, and review notes
+- write generated candidates back into Marketing OS records
+- keep all generated content in `needs_review`
+- make the automation idempotent so reruns do not duplicate drafts
+- log what was generated, skipped, failed, or needs more human input
+- show automation results in the web app for human review
+
+Suggested implementation shape:
+
+```text
+python -m marketing_os.jobs.content_production
+```
+
+The first schedule can be nightly, but the job should also be runnable manually from the command line for testing.
+
+Codex should not directly publish content. The web interface remains the planning, review, posting, and measurement tool.
+
+### 8. Copywriter Skill And Facebook Post Generation
 
 Create a dedicated copywriter capability for high-quality social posts and future blog drafts.
 
@@ -157,6 +210,7 @@ Required:
 - store the draft body, hook, CTA, product references, source facts, channel, intended audience, and revision notes
 - include a quality checklist for accuracy, tone, useful specificity, non-generic wording, and platform fit
 - make the post easy to copy into Facebook from the task detail workflow
+- allow the nightly content-production job to generate the first draft from a planned calendar brief
 - keep the generated post out of any automatic publishing path
 
 The first version should focus on Facebook because it is lower-friction, conversational, and useful for community/product storytelling. The same boundary should later support Instagram captions, Etsy listing refresh ideas, emails, and blog drafts.
@@ -181,7 +235,7 @@ Out of scope:
 - replacing human review
 - long-form blog publication without the website draft review path
 
-### 7. Performance Monitoring And Learning Loop
+### 9. Performance Monitoring And Learning Loop
 
 Marketing OS should always improve by observing what is working and what is not.
 
@@ -206,13 +260,15 @@ Useful future metric sources:
 
 The first Phase 5 implementation can be manual, but the data model and UI should make future API metric ingestion natural.
 
-### 8. UI/UX Validation Pass
+### 10. UI/UX Validation Pass
 
 Run a practical UI/UX review after integrations are visible.
 
 Required:
 
 - test Today, task detail, Assets, Creative Assets, Data Health, Settings, and integration sync screens
+- test the high-level planning surface for destinations, goals, and multiple product focuses
+- test the review flow for Codex-generated candidates created by the scheduled job
 - test the Facebook post copy review flow
 - test how performance notes and metrics are entered after the post is live
 - check desktop and mobile layouts
@@ -232,6 +288,7 @@ Implementation should:
 - prefer service functions that can be reused by a future frontend
 - avoid direct dependencies from core planning logic to Etsy, website, or Magnific clients
 - keep copywriting prompts and quality rules in a reusable service/config layer rather than scattered across templates
+- keep scheduled content production scriptable and idempotent so Codex automation can run it safely
 - keep performance-learning logic source-agnostic so manual metrics and future API metrics use the same concepts
 - add tests before relying on new integration behavior
 - fail gracefully when credentials are missing
@@ -247,6 +304,8 @@ Phase 5 is done when:
 - local asset library scanning works against a configured asset root and produces searchable/indexed records
 - Freepik/Magnific or manual/MCP creative output import produces generated candidates from approved source assets
 - generated candidates cannot be assigned to tasks until reviewed and approved
+- a user can create a planned calendar item with destination, goal, and multiple product focuses
+- a scriptable content-production job can find planned items, prepare briefs, and write draft candidates back for review
 - one Facebook post can be generated from real product/source context, reviewed, revised or approved, and copied from the operator workflow
 - generated copy stores source facts, channel, audience, CTA, review decision, and revision notes
 - at least one posted-task metric or outcome note can be linked back to the generated copy, product, channel, and asset
@@ -262,6 +321,8 @@ Phase 5 succeeds if:
 
 - Matt can see which product/listing/blog facts came from Etsy or MattMadeMe.com and when they were last synced.
 - The operator can start the day without caring whether a product came from local docs, Etsy, or the website.
+- Matt or the operator can plan future marketing at a high level without writing final copy during planning.
+- Codex can enrich planned calendar items asynchronously, leaving the web app as the review/posting tool.
 - At least one product has source images discoverable through the local asset library path.
 - At least one generated creative candidate from the improved workflow is good enough to approve after review.
 - At least one Facebook post reads like MattMadeMe, uses accurate product context, and is ready for human posting without heavy rewrite.
