@@ -123,6 +123,9 @@ Useful options:
 - `--planned-item-id <id>`
 - `--limit <n>`
 - `--force`
+- `--export-briefs-dir <dir>`
+
+Use `--export-briefs-dir` to write one structured JSON brief per planned item before generation. The filename should be stable by planned item ID so a nightly run can refresh the current Codex handoff without creating duplicate files.
 
 The job should be idempotent. If a planned item already has current candidates, rerunning should update run metadata or create a new revision intentionally, not silently duplicate drafts.
 

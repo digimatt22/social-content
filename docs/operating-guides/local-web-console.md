@@ -65,9 +65,10 @@ Useful test options:
 python -m marketing_os.jobs.content_production --dry-run --limit 10
 python -m marketing_os.jobs.content_production --planned-item-id 1
 python -m marketing_os.jobs.content_production --channel facebook
+python -m marketing_os.jobs.content_production --export-briefs-dir data/exports/content-briefs
 ```
 
-The job finds planned items, builds structured briefs from business/product context, creates review candidates, and writes them back to Marketing OS. Rerunning the job does not duplicate existing candidates unless `--force` is used.
+The job finds planned items, builds structured briefs from business/product context, creates review candidates, and writes them back to Marketing OS. Use `--export-briefs-dir` when Codex or another model-assisted worker needs a file handoff before or during generation. Brief filenames are stable by planned item ID, so rerunning the job updates the handoff instead of creating duplicate files. Rerunning the job does not duplicate existing candidates unless `--force` is used.
 
 ## Assets
 

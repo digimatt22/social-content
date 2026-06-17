@@ -1171,6 +1171,58 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 planned_task = next(record for record in export_payload["tasks"] if record["planned_content_item_id"] == item_id)
                 self.assertEqual(planned_task["generated_content_candidate_id"], candidate_id)
 
+    def test_phase5_content_production_exports_structured_briefs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-briefs.sqlite"
+            export_dir = Path(tmp) / "briefs"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 30),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    audience="gift buyers",
+                    notes="Use this for a Codex handoff test.",
+                )
+                item_id = item.id
+
+            dry_run = run_content_production_job(
+                db_path=db_path,
+                planned_item_id=item_id,
+                dry_run=True,
+                export_briefs_dir=export_dir,
+            )
+            self.assertEqual(dry_run["processed"], 0)
+            self.assertEqual(len(dry_run["items"]), 1)
+            brief_path = Path(dry_run["items"][0]["brief_export_path"])
+            self.assertEqual(brief_path, export_dir / f"planned-item-{item_id}-content-brief.json")
+            self.assertTrue(brief_path.is_file())
+            brief = json.loads(brief_path.read_text(encoding="utf-8"))
+            self.assertEqual(brief["planned_item_id"], item_id)
+            self.assertIn("Facebook", brief["destinations"])
+            self.assertIn("Bingo Duck", brief["products"])
+            self.assertIn("performance_context", brief)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                self.assertEqual(len(list(session.scalars(select(GeneratedContentCandidateRecord)))), 0)
+
+            live_run = run_content_production_job(
+                db_path=db_path,
+                planned_item_id=item_id,
+                export_briefs_dir=export_dir,
+            )
+            self.assertEqual(live_run["processed"], 1)
+            self.assertEqual(live_run["created"], 2)
+            self.assertEqual(Path(live_run["items"][0]["brief_export_path"]), brief_path)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                self.assertEqual(len(list(session.scalars(select(GeneratedContentCandidateRecord)))), 2)
+
     def test_phase5_learning_loop_links_generated_copy_to_outcomes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "phase5-learning.sqlite"

@@ -5,9 +5,12 @@ import json
 from datetime import date
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from ..db import create_db_engine, init_db, session_factory, session_scope
 from ..db_models import PlannedContentRecord
 from ..services.content_briefs import (
+    build_content_brief,
     planned_items_needing_production,
     produce_content_for_item,
     serialize_planned_content_item,
@@ -23,6 +26,7 @@ def run(
     limit: int = 10,
     force: bool = False,
     dry_run: bool = False,
+    export_briefs_dir: str | Path | None = None,
 ) -> dict[str, object]:
     engine = create_db_engine(db_path)
     init_db(engine)
@@ -37,9 +41,18 @@ def run(
                 items = planned_items_needing_production(session, target_date=target_date, channel=channel, limit=limit)
 
             for item in items:
+                brief_export_path = None
+                if export_briefs_dir is not None:
+                    brief_export_path = str(write_content_brief(session, item, export_briefs_dir, business_dir=business_dir))
                 if dry_run:
                     serialized = serialize_planned_content_item(session, item)
-                    summary["items"].append({"planned_item": serialized, "dry_run": True})
+                    summary["items"].append(
+                        {
+                            "planned_item": serialized,
+                            "dry_run": True,
+                            "brief_export_path": brief_export_path,
+                        }
+                    )
                     continue
                 result = produce_content_for_item(session, item, business_dir=business_dir, force=force)
                 summary["processed"] = int(summary["processed"]) + 1
@@ -51,11 +64,25 @@ def run(
                         "status": item.status,
                         "brief_status": item.brief_status,
                         "candidate_ids": [candidate.id for candidate in result.candidates],
+                        "brief_export_path": brief_export_path,
                     }
                 )
     finally:
         engine.dispose()
     return summary
+
+
+def write_content_brief(
+    session: Session,
+    item: PlannedContentRecord,
+    export_dir: str | Path,
+    business_dir: str = "docs/business",
+) -> Path:
+    target_dir = Path(export_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"planned-item-{item.id}-content-brief.json"
+    target.write_text(json.dumps(build_content_brief(session, item, business_dir=business_dir), indent=2), encoding="utf-8")
+    return target
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--export-briefs-dir", default=None)
     args = parser.parse_args(argv)
 
     summary = run(
@@ -79,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         force=args.force,
         dry_run=args.dry_run,
+        export_briefs_dir=args.export_briefs_dir,
     )
     print(json.dumps(summary, indent=2))
     return 0
