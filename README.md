@@ -1,6 +1,6 @@
 # MattMadeMe Marketing OS
 
-Local-first Phase 1 Marketing Operating System for MattMadeMe.
+Local-first Marketing Operating System for MattMadeMe.
 
 The app helps a solo business owner generate marketing plans, content ideas, weekly reports, and prioritized recommendations from the business knowledge stored in `docs/business`.
 
@@ -29,6 +29,14 @@ Phase 2 adds:
 - weekly action list
 - manual weekly review template
 
+Phase 3 adds:
+
+- a local browser-based operator console
+- SQLite persistence through SQLAlchemy
+- database-backed plans, tasks, assets, templates, and metrics
+- beginner-friendly task pages for Instagram, Facebook, Etsy, and website work
+- editable platform, copy, and graphic templates under `docs/templates`
+
 ## Installation
 
 Requirements:
@@ -42,13 +50,13 @@ git clone <repo-url>
 cd marketing-os
 ```
 
-Optional editable install:
+Editable install:
 
 ```bash
 python -m pip install -e .
 ```
 
-No third-party Python packages are required for Phase 1.
+Phase 3 uses Flask and SQLAlchemy.
 
 ## Configuration
 
@@ -109,6 +117,26 @@ Run the Phase 2 demos:
 python demo_phase2.py
 ```
 
+Run the Phase 3 local web console:
+
+```bash
+python run_local.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+To make the app available on a trusted local network:
+
+```bash
+python run_local.py --host 0.0.0.0 --port 8000
+```
+
+Do not expose this local app to the public internet.
+
 The demo writes:
 
 ```text
@@ -125,7 +153,7 @@ python -m unittest discover -s tests
 
 ## Current Scope
 
-Phase 1 is a local planning assistant. It does not publish content or connect to external analytics.
+The Marketing OS is a local planning and operator assistant. It does not publish content or connect to external analytics.
 
 Out of scope:
 

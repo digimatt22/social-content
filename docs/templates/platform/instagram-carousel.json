@@ -1,0 +1,14 @@
+{
+  "name": "Instagram Carousel",
+  "platform": "Instagram",
+  "format": "carousel",
+  "recommended_dimensions": "1080x1350 portrait slides",
+  "media_count": "3-6 images",
+  "text_overlay_rules": "Keep text short and high contrast; one idea per slide.",
+  "caption_structure": "Hook, why it matters, CTA, hashtags.",
+  "cta_placement": "Final slide and caption ending.",
+  "asset_requirements": "Consistent crops and clear slide order.",
+  "example_layout": "Hero duck, detail, use case, shop/follow CTA.",
+  "difficulty_level": "medium",
+  "reuse_notes": "Useful for gift guides, collector sets, and product education."
+}

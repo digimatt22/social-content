@@ -1,0 +1,11 @@
+{
+  "name": "Cruise Duck Post",
+  "hook_pattern": "Where would you hide this one on a cruise?",
+  "body_pattern": "Connect the duck to cruising, hiding, gifting, or finding.",
+  "cta_pattern": "Tag a cruise friend or shop the flock on Etsy.",
+  "hashtag_rules": "Include #CruiseDucks when relevant.",
+  "first_comment": "Optional note about shop link or hiding idea.",
+  "alt_text_guidance": "Describe the duck and any travel/cruise context.",
+  "short_version": "{product} is ready for a cruise duck hiding spot.",
+  "long_version": "Frame {product} as a small surprise for cruise duck hunters and ask where it should be hidden."
+}

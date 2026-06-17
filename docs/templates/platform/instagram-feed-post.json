@@ -1,0 +1,14 @@
+{
+  "name": "Instagram Feed Post",
+  "platform": "Instagram",
+  "format": "feed post",
+  "recommended_dimensions": "1080x1080 square or 1080x1350 portrait",
+  "media_count": "1-3 images",
+  "text_overlay_rules": "Avoid heavy text on the image. Let the duck be clear and close.",
+  "caption_structure": "Hook, product/use-case detail, question or CTA, hashtags.",
+  "cta_placement": "End of caption.",
+  "asset_requirements": "Clear product photo, cropped for mobile, no cluttered background.",
+  "example_layout": "Product closeup first, optional detail image second.",
+  "difficulty_level": "easy",
+  "reuse_notes": "Use for product spotlights, gift prompts, and collector questions."
+}

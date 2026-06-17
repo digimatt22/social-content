@@ -1,0 +1,14 @@
+{
+  "name": "Instagram Reel",
+  "platform": "Instagram",
+  "format": "reel",
+  "recommended_dimensions": "1080x1920 vertical",
+  "media_count": "1 short video or 3-5 clips",
+  "text_overlay_rules": "Use a short readable hook only; avoid covering the duck.",
+  "caption_structure": "One-line hook, short product note, CTA, hashtags.",
+  "cta_placement": "Caption ending and optional on-screen final frame.",
+  "asset_requirements": "Vertical video with product visible in the first second.",
+  "example_layout": "Printer/process clip, hand reveal, finished duck closeup.",
+  "difficulty_level": "medium",
+  "reuse_notes": "Best for launches, process moments, and new duck reveals."
+}

@@ -1,0 +1,11 @@
+{
+  "name": "New Duck Launch Post",
+  "hook_pattern": "Meet {product}: a small original 3D printed duck with a very specific job.",
+  "body_pattern": "Show who it is for, why it exists, and one detail that makes it giftable or collectible.",
+  "cta_pattern": "See the newest duck in the Etsy shop.",
+  "hashtag_rules": "Use #MattMadeMe, #3DPrinted, #DuckCollector, plus one audience-specific tag.",
+  "first_comment": "Optional Etsy link if the platform caption should stay conversational.",
+  "alt_text_guidance": "Describe the duck, color, accessory, and setting plainly.",
+  "short_version": "Meet {product}. Made for {audience}. Shop the newest duck on Etsy.",
+  "long_version": "Meet {product}, made for {audience}. Share the story behind it, explain the use case, and invite shoppers to see it on Etsy."
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Gift Buyer Post",
+  "hook_pattern": "For the person who needs a gift that feels made for them.",
+  "body_pattern": "Name the recipient type and why the duck fits.",
+  "cta_pattern": "Shop the flock on Etsy.",
+  "hashtag_rules": "Use gift and audience tags sparingly.",
+  "first_comment": "Optional shipping or seasonal note.",
+  "alt_text_guidance": "Describe the duck as a gift item with its defining details.",
+  "short_version": "{product} is a tiny gift for {audience}.",
+  "long_version": "Describe why {product} works as a specific, personal gift and point shoppers to Etsy."
+}

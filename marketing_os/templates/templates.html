@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Templates</h2>
+<p class="subtle">Platform, copy, and graphic template records synced from docs/templates.</p>
+<div class="grid">
+  {% for template in templates %}
+    <section class="panel">
+      <h3>{{ template.name }}</h3>
+      <div class="meta">
+        <span class="pill">{{ template.template_type }}</span>
+        {% if template.platform %}<span class="pill">{{ template.platform }}</span>{% endif %}
+        {% if template.format %}<span class="pill">{{ template.format }}</span>{% endif %}
+      </div>
+      <p class="subtle">{{ template.source_path }}</p>
+      {% set body = template_body(template) %}
+      {% if body.caption_structure %}<p><strong>Caption:</strong> {{ body.caption_structure }}</p>{% endif %}
+      {% if body.hook_pattern %}<p><strong>Hook:</strong> {{ body.hook_pattern }}</p>{% endif %}
+      {% if body.rules %}<p><strong>Rules:</strong> {{ body.rules }}</p>{% endif %}
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

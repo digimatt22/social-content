@@ -1,0 +1,8 @@
+{
+  "name": "Reel Cover",
+  "dimensions": "1080x1920",
+  "intended_platforms": ["Instagram"],
+  "required_inputs": ["vertical product image or video frame", "short hook"],
+  "rules": "Keep the hook large enough to read on mobile and do not cover the duck.",
+  "future_agent_notes": "Placeholder for future generated covers and launch graphics."
+}

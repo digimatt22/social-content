@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+<div class="grid">
+  <section class="panel">
+    <h3>Local Files</h3>
+    <p><strong>Business directory:</strong> {{ business_dir }}</p>
+    <p class="subtle">Edit docs/business and docs/templates files, then restart the server to sync them into SQLite.</p>
+  </section>
+  <section class="panel">
+    <h3>Network Use</h3>
+    <p>Default startup binds to 127.0.0.1. Use 0.0.0.0 only on a trusted local network.</p>
+  </section>
+</div>
+{% endblock %}

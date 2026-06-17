@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MattMadeMe Marketing OS</title>
+    <style>
+      :root {
+        --ink: #202124;
+        --muted: #626a73;
+        --line: #d7dce0;
+        --panel: #ffffff;
+        --field: #f7f8f5;
+        --accent: #0f766e;
+        --accent-soft: #d7f3ee;
+        --warn: #9a3412;
+        --ready: #1d4ed8;
+        --blocked: #991b1b;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #eef1ed; }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+      nav { background: #24312f; color: #f6f7f5; padding: 20px 14px; }
+      nav h1 { font-size: 18px; margin: 0 0 18px; letter-spacing: 0; }
+      nav a { display: block; color: #f6f7f5; padding: 9px 10px; border-radius: 6px; margin-bottom: 4px; }
+      nav a.active, nav a:hover { background: #36514d; text-decoration: none; }
+      main { padding: 22px clamp(16px, 3vw, 34px); }
+      .topline { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+      h2 { margin: 0; font-size: 24px; letter-spacing: 0; }
+      h3 { margin: 0 0 10px; font-size: 18px; letter-spacing: 0; }
+      .subtle { color: var(--muted); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+      .panel, .task, .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+      .task { display: grid; gap: 8px; }
+      .task-title { font-weight: 700; color: var(--ink); }
+      .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .pill { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 8px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); color: var(--ink); font-size: 13px; }
+      .pill.ready { background: #dbeafe; color: var(--ready); border-color: #bfdbfe; }
+      .pill.blocked { background: #fee2e2; color: var(--blocked); border-color: #fecaca; }
+      .pill.complete { background: var(--accent-soft); color: #0f5f58; border-color: #a7e7dc; }
+      .button, button { border: 1px solid #0b5f59; background: var(--accent); color: white; border-radius: 6px; padding: 8px 11px; font: inherit; cursor: pointer; }
+      .button.secondary, button.secondary { background: white; color: var(--ink); border-color: var(--line); }
+      form.inline { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; background: white; }
+      textarea { min-height: 95px; }
+      label { display: grid; gap: 4px; font-weight: 650; margin-bottom: 10px; }
+      label span { color: var(--muted); font-weight: 500; font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; background: white; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { padding: 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { background: #f3f5f1; font-size: 13px; color: var(--muted); }
+      .copybox { white-space: pre-wrap; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+      .flash { background: var(--accent-soft); border: 1px solid #a7e7dc; padding: 10px; border-radius: 6px; margin-bottom: 14px; }
+      @media (max-width: 760px) {
+        .shell { grid-template-columns: 1fr; }
+        nav { position: static; }
+        nav a { display: inline-block; margin-right: 4px; }
+        .topline { display: block; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <nav>
+        <h1>MattMadeMe Marketing OS</h1>
+        {% for key, label, endpoint in [
+          ("today", "Today", "dashboard"),
+          ("calendar", "Calendar", "calendar"),
+          ("plans", "Plans", "plans"),
+          ("assets", "Assets", "assets"),
+          ("templates", "Templates", "templates"),
+          ("metrics", "Metrics", "metrics"),
+          ("settings", "Settings", "settings")
+        ] %}
+          <a class="{{ 'active' if active == key else '' }}" href="{{ url_for(endpoint) }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <main>
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}<div class="flash">{{ message }}</div>{% endfor %}
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

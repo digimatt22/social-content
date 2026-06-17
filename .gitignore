@@ -4,6 +4,11 @@
 .Trashes
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .venv/
 outputs/
+data/*.sqlite
+data/*.sqlite-*
+data/backups/
+instance/

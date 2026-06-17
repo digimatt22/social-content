@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Plans</h2>
+    <div class="subtle">Generate and review database-backed plans.</div>
+  </div>
+</div>
+<section class="panel" style="margin-bottom: 14px;">
+  <h3>Generate Plan</h3>
+  <form class="inline" method="post" action="{{ url_for('generate_plan') }}">
+    <select name="mode">
+      {% for mode in ["light", "standard", "launch", "holiday", "event"] %}
+        <option value="{{ mode }}">{{ mode }}</option>
+      {% endfor %}
+    </select>
+    <input name="start_date" type="date" value="{{ today.isoformat() }}">
+    <button type="submit">Generate</button>
+  </form>
+</section>
+<table>
+  <thead><tr><th>Generated</th><th>Mode</th><th>Start</th><th>Theme</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for plan in plans %}
+      <tr><td>{{ plan.generated_at }}</td><td>{{ plan.mode }}</td><td>{{ plan.start_date }}</td><td>{{ plan.weekly_theme }}</td><td>{{ plan.status }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

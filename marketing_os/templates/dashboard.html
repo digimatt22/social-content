@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Today’s Tasks</h2>
+    <div class="subtle">Open a task, follow the plain-English steps, then save status and metrics.</div>
+  </div>
+  <form class="inline" method="get" action="{{ url_for('dashboard') }}">
+    <select name="role">
+      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
+      {% for role in roles %}
+        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
+      {% endfor %}
+    </select>
+    <button class="secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+{% if plan %}
+  <section class="panel" style="margin-bottom: 14px;">
+    <h3>Active Plan</h3>
+    <div class="subtle">{{ plan.mode }} plan starting {{ plan.start_date }}. {{ plan.weekly_theme }}</div>
+    <div class="meta" style="margin-top: 10px;">
+      {% for status, count in status_counts.items() if count %}
+        <span class="pill {{ 'complete' if status == 'complete' else 'blocked' if status == 'blocked' else 'ready' if status == 'ready to post' else '' }}">{{ status }}: {{ count }}</span>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<section class="grid">
+  {% for task in today_tasks %}
+    {% include "_task_card.html" %}
+  {% else %}
+    <div class="panel">No open tasks due today. Check the calendar for what is coming next.</div>
+  {% endfor %}
+</section>
+
+<h3 style="margin-top: 22px;">This Week</h3>
+<section class="grid">
+  {% for task in week_tasks %}
+    {% include "_task_card.html" %}
+  {% endfor %}
+</section>
+{% endblock %}

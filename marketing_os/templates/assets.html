@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Assets</h2>
+<p class="subtle">Local inventory for product photos and future graphic-generation work.</p>
+<table>
+  <thead><tr><th>Name</th><th>Product</th><th>Type</th><th>Readiness</th><th>Source</th></tr></thead>
+  <tbody>
+    {% for asset in assets %}
+      <tr>
+        <td>{{ asset.name }}</td>
+        <td>{{ asset.product.name if asset.product else "" }}</td>
+        <td>{{ asset.asset_type }}</td>
+        <td>{{ asset.readiness_state }}</td>
+        <td>{{ asset.source_path }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

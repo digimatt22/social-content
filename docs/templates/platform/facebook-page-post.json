@@ -1,0 +1,14 @@
+{
+  "name": "Facebook Page Post",
+  "platform": "Facebook",
+  "format": "page post",
+  "recommended_dimensions": "Square or landscape image",
+  "media_count": "1-4 images",
+  "text_overlay_rules": "Optional; plain product photo is usually enough.",
+  "caption_structure": "Conversational opener, product story, question, link or CTA.",
+  "cta_placement": "Natural sentence near the end.",
+  "asset_requirements": "Clear image that still works when viewed small.",
+  "example_layout": "Product photo with short question in caption.",
+  "difficulty_level": "easy",
+  "reuse_notes": "Good for comments, repeat buyers, and gift conversations."
+}

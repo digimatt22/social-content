@@ -1,0 +1,8 @@
+{
+  "name": "Square Product Card",
+  "dimensions": "1080x1080",
+  "intended_platforms": ["Instagram", "Facebook"],
+  "required_inputs": ["product photo", "product name", "short CTA"],
+  "rules": "Duck must remain the visual focus. Use minimal text. Preserve brand tone.",
+  "future_agent_notes": "Placeholder for a creative asset agent that can build reusable social graphics."
+}

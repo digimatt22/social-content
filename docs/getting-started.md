@@ -1,6 +1,6 @@
 # Getting Started
 
-Use this guide to test the Phase 1 MattMadeMe Marketing OS locally.
+Use this guide to test the MattMadeMe Marketing OS locally.
 
 ## Requirements
 
@@ -46,6 +46,7 @@ Expected output should look like:
 ```text
 Loaded 6 business files
 Products: 36
+Structured products: 12
 Audiences: 5
 Goals: 5
 ```
@@ -163,14 +164,14 @@ python -m unittest discover -s tests
 Expected output:
 
 ```text
-........
+.....................
 ----------------------------------------------------------------------
-Ran 8 tests
+Ran 21 tests
 
 OK
 ```
 
-## 6. Confirm Business Docs Update Without Code Changes
+## 7. Confirm Business Docs Update Without Code Changes
 
 Open `docs/business/products.md` and temporarily add a new duck under `Current Public Ducks And Themes`:
 
@@ -200,7 +201,7 @@ rg "Test Launch Duck" outputs/test-updated-context-plan.md
 
 Remove the temporary product from `docs/business/products.md` when finished.
 
-## 7. Test Structured Product Metadata
+## 8. Test Structured Product Metadata
 
 Phase 2 uses structured product metadata from:
 
@@ -216,7 +217,57 @@ python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --o
 
 The plan should reflect the updated product metadata without code changes.
 
-## 8. Common Commands
+## 9. Install Phase 3 Dependencies
+
+Run:
+
+```bash
+python -m pip install -e .
+```
+
+This installs Flask and SQLAlchemy for the local web console.
+
+## 10. Start The Local Web Console
+
+Run:
+
+```bash
+python run_local.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The app will initialize `data/marketing_os.sqlite`, sync business context and templates, and create a default standard plan if no plan exists.
+
+For trusted local-network testing:
+
+```bash
+python run_local.py --host 0.0.0.0 --port 8000
+```
+
+## 11. Test The Operator Workflow
+
+In the browser:
+
+1. Open Today.
+2. Click a social operator task.
+3. Confirm the page shows product, asset, draft caption, CTA, hashtags, posting steps, preview checklist, status controls, and metric fields.
+4. Change status to `posted`.
+5. Save a note.
+6. Enter a test metric.
+7. Open Metrics and confirm the metric appears.
+
+## 12. Generate A Database-Backed Plan
+
+Open Plans, choose a mode, and generate a new plan.
+
+The new plan is stored in SQLite and appears in the calendar and task views.
+
+## 13. Common Commands
 
 Print a plan to the terminal:
 
@@ -255,6 +306,8 @@ Expected:
 ### Output Files Dirty The Repo
 
 Generated files in `outputs/` are ignored by git. They are safe to create while testing.
+
+The Phase 3 SQLite database in `data/` is also ignored by git.
 
 ### Business Context Fails To Load
 

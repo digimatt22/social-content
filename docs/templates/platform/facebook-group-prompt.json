@@ -1,0 +1,14 @@
+{
+  "name": "Facebook Group Discussion Prompt",
+  "platform": "Facebook",
+  "format": "group-style discussion prompt",
+  "recommended_dimensions": "Square image if allowed by the group",
+  "media_count": "0-1 image",
+  "text_overlay_rules": "Avoid sales-heavy graphics in community spaces.",
+  "caption_structure": "Community question first, product context second, no hard sell.",
+  "cta_placement": "Soft CTA only if group rules allow.",
+  "asset_requirements": "Optional product image related to the question.",
+  "example_layout": "Question about where people hide cruise ducks or what design should come next.",
+  "difficulty_level": "medium",
+  "reuse_notes": "Use carefully; check group rules before posting."
+}

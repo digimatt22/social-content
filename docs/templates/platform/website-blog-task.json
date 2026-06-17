@@ -1,0 +1,14 @@
+{
+  "name": "Website Blog Task",
+  "platform": "Website",
+  "format": "blog task",
+  "recommended_dimensions": "1200x630 featured image if available",
+  "media_count": "1+ images",
+  "text_overlay_rules": "Use descriptive images; avoid decorative filler.",
+  "caption_structure": "Short article with product origin, audience, use case, and shop link.",
+  "cta_placement": "Intro or conclusion.",
+  "asset_requirements": "Product image plus optional process photo.",
+  "example_layout": "Why this duck exists, who it is for, where to shop it.",
+  "difficulty_level": "medium",
+  "reuse_notes": "Good for evergreen SEO and linkable launch stories."
+}

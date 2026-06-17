@@ -1,0 +1,8 @@
+{
+  "name": "Carousel Slide",
+  "dimensions": "1080x1350",
+  "intended_platforms": ["Instagram"],
+  "required_inputs": ["product photo", "slide headline", "optional detail text"],
+  "rules": "One idea per slide. Keep product and text separated.",
+  "future_agent_notes": "Placeholder for future carousel templates and product education cards."
+}

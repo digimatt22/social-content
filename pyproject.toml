@@ -1,13 +1,19 @@
 [project]
 name = "mattmademe-marketing-os"
 version = "0.1.0"
-description = "Local-first Phase 1 Marketing Operating System for MattMadeMe"
+description = "Local-first Marketing Operating System for MattMadeMe"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "SQLAlchemy>=2.0,<3.0",
+]
 
 [project.scripts]
 marketing-os = "marketing_os.cli:main"
+marketing-os-web = "marketing_os.web_app:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
+[tool.setuptools.packages.find]
+include = ["marketing_os*"]

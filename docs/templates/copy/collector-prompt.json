@@ -1,0 +1,11 @@
+{
+  "name": "Collector Prompt",
+  "hook_pattern": "Collectors, which duck should join this theme next?",
+  "body_pattern": "Mention the featured product and invite people to suggest related designs.",
+  "cta_pattern": "Comment with the next duck idea or follow for future drops.",
+  "hashtag_rules": "Keep hashtags light; prioritize comments.",
+  "first_comment": "Add shop link only if sales intent is clear.",
+  "alt_text_guidance": "Describe the full duck lineup or featured product.",
+  "short_version": "Which duck should join {product} next?",
+  "long_version": "{product} is part of a growing flock. Ask collectors what companion design they would want next."
+}

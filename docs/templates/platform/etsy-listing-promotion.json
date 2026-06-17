@@ -1,0 +1,14 @@
+{
+  "name": "Etsy Listing Promotion",
+  "platform": "Etsy",
+  "format": "listing/promotion task",
+  "recommended_dimensions": "Use Etsy listing photo guidance",
+  "media_count": "Listing-dependent",
+  "text_overlay_rules": "Avoid text-heavy listing images unless it clarifies size or options.",
+  "caption_structure": "Improve title, first paragraph, tags, or listing announcement.",
+  "cta_placement": "Listing description opening or shop announcement.",
+  "asset_requirements": "Best listing hero photo available.",
+  "example_layout": "Clear duck photo, specific buyer/use case in listing lead.",
+  "difficulty_level": "medium",
+  "reuse_notes": "Best for sales-focused tasks and new releases."
+}
