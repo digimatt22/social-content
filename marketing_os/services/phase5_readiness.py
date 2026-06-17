@@ -306,7 +306,7 @@ def write_phase5_creative_handoff(session: Session, export_dir: str | Path) -> P
 
 
 def _copy_review_item(session: Session) -> ReadinessItem:
-    candidate = session.scalar(
+    approved = session.scalar(
         select(GeneratedContentCandidateRecord)
         .where(
             GeneratedContentCandidateRecord.candidate_type == "facebook_post",
@@ -316,14 +316,27 @@ def _copy_review_item(session: Session) -> ReadinessItem:
         )
         .order_by(GeneratedContentCandidateRecord.reviewed_at.desc(), GeneratedContentCandidateRecord.id.desc())
     )
-    if candidate:
+    if approved:
         return ReadinessItem(
             key="facebook_copy_review",
             label="Matt-approved Facebook copy",
             complete=True,
             message="A Facebook generated-copy candidate has reviewer evidence.",
-            evidence=f"Candidate #{candidate.id} approved by {candidate.reviewed_by}.",
+            evidence=f"Candidate #{approved.id} approved by {approved.reviewed_by}.",
             action="Keep the reviewed candidate linked to a posting task.",
+        )
+    latest = _latest_facebook_candidate(session)
+    if latest and latest.review_state == "rewrite_requested":
+        return ReadinessItem(
+            key="facebook_copy_review",
+            label="Matt-approved Facebook copy",
+            complete=False,
+            message="Latest Facebook copy candidate is waiting on a rewrite.",
+            evidence=f"Candidate #{latest.id} has rewrite notes: {latest.revision_notes or 'no notes recorded'}.",
+            action=(
+                "Run `python -m marketing_os.jobs.content_production --planned-item-id "
+                f"{latest.planned_item_id} --export-briefs-dir data/exports/content-briefs` to generate a revised candidate."
+            ),
         )
     return ReadinessItem(
         key="facebook_copy_review",

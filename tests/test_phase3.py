@@ -1646,6 +1646,24 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 "/phase5-readiness/copy-review",
                 data={
                     "candidate_id": str(facebook.id),
+                    "review_state": "rewrite_requested",
+                    "revision_notes": "Make it warmer and less salesy.",
+                    "reviewed_by": "Matt",
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(readiness_copy_response.status_code, 302)
+            rewrite_ready_response = client.get("/api/phase5-readiness")
+            self.assertEqual(rewrite_ready_response.status_code, 200)
+            rewrite_payload = rewrite_ready_response.get_json()["readiness"]
+            rewrite_item = next(item for item in rewrite_payload["items"] if item["key"] == "facebook_copy_review")
+            self.assertIn("waiting on a rewrite", rewrite_item["message"])
+            self.assertIn("content_production --planned-item-id", rewrite_item["action"])
+
+            readiness_copy_response = client.post(
+                "/phase5-readiness/copy-review",
+                data={
+                    "candidate_id": str(facebook.id),
                     "review_state": "approved",
                     "revision_notes": "Matt approved the voice and facts.",
                     "reviewed_by": "Matt",
