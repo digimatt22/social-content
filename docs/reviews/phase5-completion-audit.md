@@ -34,7 +34,7 @@ Live readiness gate:
 - `/api/phase5-approval-packet`
 - `python -m marketing_os.jobs.phase5_readiness --export-markdown`
 
-The readiness page links directly to the latest Facebook copy and generated creative review targets. The readiness page and CLI can also export a Markdown approval packet into the configured runtime export folder. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
+The readiness page can record final copy and creative reviews directly, links to the underlying Planning and Creative Assets records for deeper inspection, and can export a Markdown approval packet into the configured runtime export folder. The CLI can also export the same packet. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
 
 ## Doneness Criteria Audit
 
@@ -86,7 +86,7 @@ The readiness page links directly to the latest Facebook copy and generated crea
 - Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
 - Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, and approving a job approves the file-backed candidate asset.
 - Phase 5 readiness gate: `/phase5-readiness`, `/api/phase5-readiness`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_tracks_remaining_human_proof_items`.
-- Phase 5 approval packet export and direct review targets: `/api/phase5-approval-packet`, `/phase5-readiness` export/action links, `python -m marketing_os.jobs.phase5_readiness --export-markdown`, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_approval_packet_exports_copy_and_creative_review_actions`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_job_reports_and_exports_packet`.
+- Phase 5 approval packet export and direct review targets: `/api/phase5-approval-packet`, `/phase5-readiness` inline review/export/action links, `python -m marketing_os.jobs.phase5_readiness --export-markdown`, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_approval_packet_exports_copy_and_creative_review_actions`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_job_reports_and_exports_packet`.
 
 ## Notes
 

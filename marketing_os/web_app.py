@@ -856,6 +856,46 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             path = write_phase5_approval_packet(session, app.config["EXPORT_DIR"])
         return send_file(path.resolve(), as_attachment=True, download_name=path.name, mimetype="text/markdown")
 
+    @app.post("/phase5-readiness/copy-review")
+    def phase5_copy_review() -> str:
+        candidate_id = _int_or_none(request.form.get("candidate_id"))
+        if candidate_id is None:
+            flash("Choose a Facebook copy candidate to review.")
+            return redirect(url_for("phase5_readiness"))
+        with session_scope(factory) as session:
+            try:
+                record_candidate_review(
+                    session,
+                    candidate_id,
+                    request.form.get("review_state", "needs_review"),
+                    revision_notes=request.form.get("revision_notes", ""),
+                    reviewed_by=request.form.get("reviewed_by", ""),
+                )
+                flash("Phase 5 copy review saved.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("phase5_readiness", _anchor="facebook-copy-review"))
+
+    @app.post("/phase5-readiness/creative-review")
+    def phase5_creative_review() -> str:
+        job_id = _int_or_none(request.form.get("job_id"))
+        if job_id is None:
+            flash("Choose a generated creative job to review.")
+            return redirect(url_for("phase5_readiness"))
+        with session_scope(factory) as session:
+            try:
+                review_creative_generation_job(
+                    session,
+                    job_id,
+                    review_state=request.form.get("review_state", "needs_review"),
+                    review_notes=request.form.get("review_notes", ""),
+                    reviewed_by=request.form.get("reviewed_by", ""),
+                )
+                flash("Phase 5 creative review saved.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("phase5_readiness", _anchor="generated-creative-review"))
+
     @app.get("/data-health")
     def data_health() -> str:
         with session_scope(factory) as session:
