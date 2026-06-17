@@ -71,6 +71,7 @@ from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
+from marketing_os.services.phase5_readiness import build_phase5_readiness, serialize_phase5_readiness
 from marketing_os.web_app import create_app
 
 
@@ -1228,6 +1229,73 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertTrue(summary["what_worked"])
             self.assertEqual(summary["generated_candidate_outcomes"][0]["candidate_id"], candidate_id)
             self.assertEqual(summary["generated_candidate_outcomes"][0]["task_id"], task_id)
+
+    def test_phase5_readiness_tracks_remaining_human_proof_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-readiness.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            output_path = Path(tmp) / "generated.jpg"
+            source_path.write_bytes(b"source image bytes")
+            output_path.write_bytes(b"generated image bytes")
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            initial_response = client.get("/api/phase5-readiness")
+            self.assertEqual(initial_response.status_code, 200)
+            self.assertFalse(initial_response.get_json()["readiness"]["complete"])
+            self.assertEqual(initial_response.get_json()["readiness"]["remaining_count"], 2)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Readiness source")
+                review_asset(session, source.id, "approved", "Source approved.")
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 27),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    audience="gift buyers",
+                )
+                result = produce_content_for_item(session, item)
+                facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                record_candidate_review(session, facebook.id, "approved", "Matt approved copy.", reviewed_by="Matt")
+                creative = import_manual_generated_output(
+                    session,
+                    source.id,
+                    output_path,
+                    target_format="Facebook post image",
+                    prompt="Preserve product accuracy.",
+                    provider="magnific_manual",
+                    provider_job_id="readiness-job",
+                )
+                review_creative_generation_job(
+                    session,
+                    creative.job.id,
+                    "approved",
+                    review_notes="Matt approved generated output.",
+                    reviewed_by="Matt",
+                )
+
+                readiness = build_phase5_readiness(session)
+                payload = serialize_phase5_readiness(readiness)
+                self.assertTrue(readiness.complete)
+                self.assertEqual(payload["remaining_count"], 0)
+
+            ready_response = client.get("/api/phase5-readiness")
+            self.assertEqual(ready_response.status_code, 200)
+            self.assertTrue(ready_response.get_json()["readiness"]["complete"])
+
+            page = client.get("/phase5-readiness")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"Matt-approved Facebook copy", page.data)
+            self.assertIn(b"Matt-approved generated creative", page.data)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                health = data_health(session)
+                self.assertTrue(any(item.area == "Phase 5 Readiness" and item.status == "OK" for item in health))
 
     def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
         class FakeEtsyAdapter:

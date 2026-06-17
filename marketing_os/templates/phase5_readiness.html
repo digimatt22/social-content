@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Phase 5 Readiness</h2>
+    <div class="subtle">{{ readiness.remaining_count }} final proof item(s) remaining</div>
+  </div>
+  <a class="button secondary" href="{{ url_for('data_health') }}">Data Health</a>
+</div>
+
+<section class="grid">
+  {% for item in readiness.items %}
+    <article class="panel">
+      <div class="meta">
+        <span class="pill {{ 'complete' if item.complete else 'blocked' }}">{{ 'Complete' if item.complete else 'Needs proof' }}</span>
+        <span class="pill">{{ item.key }}</span>
+      </div>
+      <h3 style="margin-top: 10px;">{{ item.label }}</h3>
+      <p>{{ item.message }}</p>
+      <div class="copybox">{{ item.evidence }}</div>
+      <p class="subtle">{{ item.action }}</p>
+    </article>
+  {% endfor %}
+</section>
+{% endblock %}

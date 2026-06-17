@@ -27,6 +27,7 @@ from .phase3 import (
     update_task_status,
 )
 from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
+from .services.phase5_readiness import build_phase5_readiness, serialize_phase5_readiness
 from .phase4 import (
     OPERATOR_DEFAULT_ROLE,
     assign_asset_to_task,
@@ -243,6 +244,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def api_insights():
         with session_scope(factory) as session:
             return jsonify({"summary": serialize_learning_summary(build_learning_summary(session))})
+
+    @app.get("/api/phase5-readiness")
+    def api_phase5_readiness():
+        with session_scope(factory) as session:
+            return jsonify({"readiness": serialize_phase5_readiness(build_phase5_readiness(session))})
 
     @app.post("/api/assets/library/scan")
     def api_scan_asset_library():
@@ -821,6 +827,12 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             summary = build_learning_summary(session)
             return render_template("insights.html", active="insights", summary=summary)
+
+    @app.get("/phase5-readiness")
+    def phase5_readiness() -> str:
+        with session_scope(factory) as session:
+            readiness = build_phase5_readiness(session)
+            return render_template("phase5_readiness.html", active="phase5_readiness", readiness=readiness)
 
     @app.get("/data-health")
     def data_health() -> str:

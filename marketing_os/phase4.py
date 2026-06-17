@@ -31,6 +31,7 @@ from .db_models import (
 )
 from .phase3 import ROLE_OPTIONS, TASK_STATUSES, json_list, slugify, update_task_status
 from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
+from .services.phase5_readiness import build_phase5_readiness
 
 
 OPERATOR_DEFAULT_ROLE = "social operator"
@@ -891,6 +892,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     creative_jobs = list(session.scalars(select(CreativeGenerationJobRecord)))
     sync_metadata = list(session.scalars(select(SyncMetadata)))
     learning_summary = build_learning_summary(session)
+    phase5_readiness = build_phase5_readiness(session)
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
     sync_errors = [product for product in products if product.sync_error or product.sync_status == "error"]
@@ -1011,6 +1013,15 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             if creative_jobs_attention
             else "No imported creative generation jobs are waiting for review.",
             "Open Creative Assets.",
+        ),
+        DataHealthItem(
+            "Phase 5 Readiness",
+            "OK" if phase5_readiness.complete else "Needs proof",
+            phase5_readiness.remaining_count,
+            "Phase 5 final approval evidence is complete."
+            if phase5_readiness.complete
+            else "Phase 5 still needs final copy or creative approval evidence.",
+            "Open Phase 5 Readiness.",
         ),
     ]
 

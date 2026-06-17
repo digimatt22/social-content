@@ -27,6 +27,11 @@ Latest browser/UI evidence:
 - `docs/reviews/phase5-ui-screenshots-2026-06-17/mobile-planning.png`
 - `docs/reviews/phase5-ui-screenshots-2026-06-17/mobile-task.png`
 
+Live readiness gate:
+
+- `/phase5-readiness`
+- `/api/phase5-readiness`
+
 ## Doneness Criteria Audit
 
 | Criterion | Status | Evidence |
@@ -75,6 +80,7 @@ Latest browser/UI evidence:
 
 - Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
 - Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, and approving a job approves the file-backed candidate asset.
+- Phase 5 readiness gate: `/phase5-readiness`, `/api/phase5-readiness`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_tracks_remaining_human_proof_items`.
 
 ## Notes
 
