@@ -225,6 +225,32 @@ class GeneratedContentCandidateRecord(Base):
     __table_args__ = (UniqueConstraint("planned_item_id", "candidate_type", "provider", name="uq_candidate_planned_type_provider"),)
 
 
+class CreativeGenerationJobRecord(Base):
+    __tablename__ = "creative_generation_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), nullable=False)
+    candidate_asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    target_format: Mapped[str] = mapped_column(String(160), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), default="magnific_manual", nullable=False)
+    model_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    requested_dimensions: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    provider_job_id: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    provider_status: Mapped[str] = mapped_column(String(80), default="manual_import", nullable=False)
+    provider_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    output_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    output_path: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    response_metadata_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    review_state: Mapped[str] = mapped_column(String(80), default="needs_review", nullable=False)
+    review_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    source_asset: Mapped[AssetRecord] = relationship(foreign_keys=[source_asset_id])
+    candidate_asset: Mapped[AssetRecord | None] = relationship(foreign_keys=[candidate_asset_id])
+
+
 class TaskRecord(Base):
     __tablename__ = "tasks"
 

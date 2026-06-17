@@ -13,6 +13,7 @@ from marketing_os.db import create_db_engine, init_db, session_factory, session_
 from marketing_os.db_models import (
     AssetRecord,
     BlogPostRecord,
+    CreativeGenerationJobRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
@@ -62,6 +63,7 @@ from marketing_os.services.content_briefs import (
     planned_items_needing_production,
     produce_content_for_item,
 )
+from marketing_os.services.creative_generation import import_manual_generated_output
 from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
@@ -672,6 +674,112 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertTrue(all(Path(candidate.source_path).exists() for candidate in run.candidates))
             self.assertTrue(all(candidate.file_checksum for candidate in run.candidates))
             self.assertTrue(all(candidate.review_state == "needs review" for candidate in run.candidates))
+
+    def test_phase5_manual_magnific_import_requires_approved_source_and_review(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "assets" / "products" / "bingo-duck" / "source" / "photo.jpg"
+        output_path = Path(tmp.name) / "outputs" / "bingo-facebook.jpg"
+        source_path.parent.mkdir(parents=True)
+        output_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"source image bytes")
+        output_path.write_bytes(b"generated image bytes")
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            plan = ensure_default_plan(session, start_date=date(2026, 6, 17))
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            source = register_local_source_photo(session, source_path, product_id=product.id, name="Bingo approved source")
+
+            with self.assertRaises(ValueError):
+                import_manual_generated_output(
+                    session,
+                    source.id,
+                    output_path,
+                    target_format="Facebook post image",
+                    prompt="Preserve product accuracy.",
+                    provider="magnific_manual",
+                )
+
+            review_asset(session, source.id, "approved", "Source is accurate.")
+            result = import_manual_generated_output(
+                session,
+                source.id,
+                output_path,
+                target_format="Facebook post image",
+                prompt="Preserve product accuracy.",
+                provider="magnific_manual",
+                model_name="Magnific MCP",
+                provider_job_id="job-123",
+                output_url="https://magnific.example/jobs/job-123",
+                requested_dimensions="1080x1080",
+                notes="Check product shape before approving.",
+            )
+
+            self.assertEqual(result.job.provider, "magnific_manual")
+            self.assertEqual(result.job.provider_job_id, "job-123")
+            self.assertEqual(result.job.review_state, "needs_review")
+            self.assertEqual(result.candidate.review_state, "needs review")
+            self.assertEqual(result.candidate.source_asset_id, source.id)
+            self.assertEqual(result.candidate.external_source, "magnific_manual")
+            self.assertEqual(result.candidate.external_id, "job-123")
+
+            health = data_health(session)
+            self.assertTrue(any(item.area == "Creative Generation" and item.count >= 1 for item in health))
+
+            task = next(task for task in plan.tasks if task.product_name == "Bingo Duck")
+            with self.assertRaises(ValueError):
+                assign_asset_to_task(session, task.id, result.candidate.id)
+            review_asset(session, result.candidate.id, "approved", "Generated output preserves product.")
+            assign_asset_to_task(session, task.id, result.candidate.id)
+            self.assertEqual(task.asset_id, result.candidate.id)
+
+            target = export_operating_data(session, Path(tmp.name) / "exports")
+            payload = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(len(payload["creative_generation_jobs"]), 1)
+            self.assertEqual(payload["creative_generation_jobs"][0]["provider_job_id"], "job-123")
+
+    def test_phase5_web_manual_creative_import_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-creative.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            output_path = Path(tmp) / "generated.jpg"
+            source_path.write_bytes(b"source image bytes")
+            output_path.write_bytes(b"generated image bytes")
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Web source")
+                review_asset(session, source.id, "approved", "Source approved.")
+                source_id = source.id
+
+            page = client.get("/creative-assets")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"Import Magnific / MCP Output", page.data)
+
+            response = client.post(
+                "/api/creative-assets/manual-import",
+                json={
+                    "source_asset_id": source_id,
+                    "output_path": output_path.as_posix(),
+                    "target_format": "Square product card",
+                    "prompt": "Preserve product accuracy.",
+                    "provider": "magnific_manual",
+                    "provider_job_id": "api-job-1",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertIn("candidate_id", response.get_json())
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                jobs = session.scalars(select(CreativeGenerationJobRecord)).all()
+                self.assertEqual(len(jobs), 1)
+                self.assertEqual(jobs[0].provider_job_id, "api-job-1")
 
     def test_phase4_sqlite_backup_copies_database_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

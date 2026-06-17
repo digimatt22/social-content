@@ -22,6 +22,7 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - source-photo upload into the local product asset inventory
 - manual source-photo registration from a local file path
 - creative asset planning, generation manifests, and generated-output review registration
+- Magnific/MCP generated-output import with provider/job metadata and review state
 - high-level Planning page for destination, goal, and multi-product calendar intent
 - scriptable content-production job for Codex-assisted copy and image-brief candidates
 - read-only Etsy CSV listing import foundation

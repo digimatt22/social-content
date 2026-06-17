@@ -18,6 +18,7 @@ from .db_models import (
     AssetRecord,
     BlogPostRecord,
     CalendarItemRecord,
+    CreativeGenerationJobRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
@@ -884,6 +885,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     metric_tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.status.in_(METRIC_RELEVANT_STATUS))))
     planned_items = list(session.scalars(select(PlannedContentRecord)))
     generated_candidates = list(session.scalars(select(GeneratedContentCandidateRecord)))
+    creative_jobs = list(session.scalars(select(CreativeGenerationJobRecord)))
     sync_metadata = list(session.scalars(select(SyncMetadata)))
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
@@ -898,6 +900,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     metrics_due = [task for task in metric_tasks if task.metric_status != "complete"]
     planned_without_candidates = [item for item in planned_items if item.status == "planned" and not item.candidates]
     candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]
+    creative_jobs_attention = [job for job in creative_jobs if job.provider_error or job.review_state == "needs_review" or job.provider_status == "error"]
     etsy_sync = next((record for record in sync_metadata if record.source_name == "etsy_api"), None)
     website_sync = next((record for record in sync_metadata if record.source_name == "mattmademe_website"), None)
     local_asset_sync = next((record for record in sync_metadata if record.source_name == "local_asset_library"), None)
@@ -989,6 +992,15 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             else _sync_message(local_asset_sync, "Local asset library has not been indexed yet."),
             "Mount the asset drive and run Local Asset Library scan from Settings.",
         ),
+        DataHealthItem(
+            "Creative Generation",
+            "Needs review" if creative_jobs_attention else "OK",
+            len(creative_jobs_attention),
+            "Generated creative jobs need review or have provider errors."
+            if creative_jobs_attention
+            else "No imported creative generation jobs are waiting for review.",
+            "Open Creative Assets.",
+        ),
     ]
 
 
@@ -1069,6 +1081,10 @@ def export_operating_data(session: Session, export_dir: str | Path = "data/expor
         "generated_content_candidates": [
             _export_generated_content_candidate(record)
             for record in session.scalars(select(GeneratedContentCandidateRecord).order_by(GeneratedContentCandidateRecord.created_at, GeneratedContentCandidateRecord.id))
+        ],
+        "creative_generation_jobs": [
+            _export_creative_generation_job(record)
+            for record in session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.created_at, CreativeGenerationJobRecord.id))
         ],
         "tasks": [_export_task(record) for record in session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id))],
         "metrics": [_export_metric(record) for record in session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on, MetricRecord.id))],
@@ -1445,6 +1461,29 @@ def _export_generated_content_candidate(record: GeneratedContentCandidateRecord)
         "source_asset_ids": json_list(record.source_asset_ids_json),
         "review_state": record.review_state,
         "revision_notes": record.revision_notes,
+        "created_at": _date_text(record.created_at),
+        "updated_at": _date_text(record.updated_at),
+    }
+
+
+def _export_creative_generation_job(record: CreativeGenerationJobRecord) -> JsonDict:
+    return {
+        "id": record.id,
+        "source_asset_id": record.source_asset_id,
+        "candidate_asset_id": record.candidate_asset_id,
+        "target_format": record.target_format,
+        "provider": record.provider,
+        "model_name": record.model_name,
+        "prompt": record.prompt,
+        "requested_dimensions": record.requested_dimensions,
+        "provider_job_id": record.provider_job_id,
+        "provider_status": record.provider_status,
+        "provider_error": record.provider_error,
+        "output_url": record.output_url,
+        "output_path": record.output_path,
+        "response_metadata": _json_dict(record.response_metadata_json),
+        "review_state": record.review_state,
+        "review_notes": record.review_notes,
         "created_at": _date_text(record.created_at),
         "updated_at": _date_text(record.updated_at),
     }

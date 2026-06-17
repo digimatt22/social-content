@@ -124,6 +124,8 @@ Generated assets should not be used in normal tasks until approved. The first Ph
 
 After approval, open the relevant task, use `Change asset` in the `Prepare` section, and assign the approved file-backed asset.
 
+Use `Import Magnific / MCP Output` after generating or upscaling an image outside the app. The source asset must already be approved, the output file must exist locally, and the imported generated candidate starts in `needs review`. Review and approve it from Assets before assigning it to a task.
+
 ## Metrics Due
 
 Metrics are follow-up work. A task should not feel like it requires metrics before it has been posted.
@@ -141,6 +143,7 @@ Use Data Health to see upkeep work that can make the planner less trustworthy:
 - local asset-library mount/index status
 - missing asset files
 - unreviewed source or generated assets
+- Magnific/MCP generation jobs waiting for review
 - manual overrides that protect local edits from imports
 - posted tasks waiting for metrics
 
@@ -156,6 +159,7 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/data-health`
 - `GET /api/creative-assets`
 - `GET /api/planned-content`
+- `POST /api/creative-assets/manual-import`
 - `POST /api/tasks/<task_id>/finish`
 - `POST /api/tasks/<task_id>/metrics`
 - `POST /api/tasks/<task_id>/asset`

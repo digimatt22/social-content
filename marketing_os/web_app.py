@@ -66,6 +66,11 @@ from .services.content_briefs import (
     produce_content_for_item,
     serialize_planned_content_item,
 )
+from .services.creative_generation import (
+    creative_generation_jobs,
+    import_manual_generated_output,
+    serialize_creative_generation_job,
+)
 from .services.etsy_import import sync_etsy_read_only
 from .services.local_assets import scan_asset_root
 from .services.mattmademe_website_import import sync_mattmademe_website
@@ -235,7 +240,35 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def api_creative_assets():
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
-            return jsonify({"plans": [serialize_creative_asset_plan(plan) for plan in creative_asset_plans(session)]})
+            return jsonify(
+                {
+                    "plans": [serialize_creative_asset_plan(plan) for plan in creative_asset_plans(session)],
+                    "jobs": [serialize_creative_generation_job(job) for job in creative_generation_jobs(session)],
+                }
+            )
+
+    @app.post("/api/creative-assets/manual-import")
+    def api_creative_assets_manual_import():
+        payload = request.get_json(silent=True) or {}
+        try:
+            source_asset_id = int(payload.get("source_asset_id"))
+            with session_scope(factory) as session:
+                result = import_manual_generated_output(
+                    session=session,
+                    source_asset_id=source_asset_id,
+                    output_path=str(payload.get("output_path") or ""),
+                    target_format=str(payload.get("target_format") or "Generated output"),
+                    prompt=str(payload.get("prompt") or ""),
+                    provider=str(payload.get("provider") or "magnific_manual"),
+                    model_name=str(payload.get("model_name") or ""),
+                    provider_job_id=str(payload.get("provider_job_id") or ""),
+                    output_url=str(payload.get("output_url") or ""),
+                    requested_dimensions=str(payload.get("requested_dimensions") or ""),
+                    notes=str(payload.get("notes") or ""),
+                )
+                return jsonify({"job": serialize_creative_generation_job(result.job), "candidate_id": result.candidate.id}), 201
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
 
     @app.get("/api/planned-content")
     def api_planned_content():
@@ -334,7 +367,9 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
             plans = creative_asset_plans(session)
-            return render_template("creative_assets.html", active="creative_assets", plans=plans)
+            source_assets = [plan.source_asset for plan in plans if plan.source_ready]
+            jobs = creative_generation_jobs(session)
+            return render_template("creative_assets.html", active="creative_assets", plans=plans, source_assets=source_assets, jobs=jobs)
 
     @app.get("/planning")
     def planning() -> str:
@@ -396,6 +431,29 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 )
             except ValueError as exc:
                 flash(str(exc))
+        return redirect(url_for("creative_assets"))
+
+    @app.post("/creative-assets/manual-import")
+    def creative_assets_manual_import() -> str:
+        try:
+            source_asset_id = int(request.form.get("source_asset_id", "0"))
+            with session_scope(factory) as session:
+                result = import_manual_generated_output(
+                    session,
+                    source_asset_id=source_asset_id,
+                    output_path=request.form.get("output_path", "").strip(),
+                    target_format=request.form.get("target_format", "Generated output").strip(),
+                    prompt=request.form.get("prompt", "").strip(),
+                    provider=request.form.get("provider", "magnific_manual").strip(),
+                    model_name=request.form.get("model_name", "").strip(),
+                    provider_job_id=request.form.get("provider_job_id", "").strip(),
+                    output_url=request.form.get("output_url", "").strip(),
+                    requested_dimensions=request.form.get("requested_dimensions", "").strip(),
+                    notes=request.form.get("notes", "").strip(),
+                )
+                flash(f"Imported generated candidate #{result.candidate.id}. Review it in Assets before use.")
+        except ValueError as exc:
+            flash(str(exc))
         return redirect(url_for("creative_assets"))
 
     @app.get("/calendar")
