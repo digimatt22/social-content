@@ -127,6 +127,8 @@ After approval, open the relevant task, use `Change asset` in the `Prepare` sect
 
 Use `Import Magnific / MCP Output` after generating or upscaling an image outside the app. The source asset must already be approved. You can either upload the downloaded generated file or enter an existing local output path; uploaded files are saved under `MARKETING_OS_GENERATED_OUTPUT_ROOT` or `outputs/magnific` by default. The imported generated candidate starts in `needs review`. Review and approve it from Assets before assigning it to a task.
 
+When reviewing generated creative, compare the source and generated previews side by side. Approve only if product shape, colors, printed details, and proportions match the source, no new markings/logos/text/packaging were invented, the composition fits the target format, and the local output file is usable.
+
 ## Metrics Due
 
 Metrics are follow-up work. A task should not feel like it requires metrics before it has been posted.

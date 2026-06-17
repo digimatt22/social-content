@@ -1598,6 +1598,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(f'href="/planning#candidate-{facebook.id}"'.encode(), page.data)
             self.assertIn(f'href="/creative-assets#creative-job-{creative.job.id}"'.encode(), page.data)
             self.assertIn(b"Generated candidate", page.data)
+            self.assertIn(b"Creative approval checklist", page.data)
+            self.assertIn(b"No invented markings", page.data)
             self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), page.data)
             self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), page.data)
             self.assertIn(b'action="/phase5-readiness/copy-review"', page.data)
@@ -1611,6 +1613,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(creative_page.status_code, 200)
             self.assertIn(f'id="creative-job-{creative.job.id}"'.encode(), creative_page.data)
             self.assertIn(b"Generated candidate", creative_page.data)
+            self.assertIn(b"Creative approval checklist", creative_page.data)
+            self.assertIn(b"No invented markings", creative_page.data)
             self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), creative_page.data)
             self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), creative_page.data)
 

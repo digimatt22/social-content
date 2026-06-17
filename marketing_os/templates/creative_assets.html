@@ -160,6 +160,13 @@
         <div class="copybox">{{ job.prompt }}</div>
         {% if job.review_notes %}<p class="subtle">{{ job.review_notes }}</p>{% endif %}
       </details>
+      <div class="copybox" style="margin-top: 12px;">
+Creative approval checklist:
+- Product shape, color, printed details, and proportions match the source.
+- No invented markings, logos, text, packaging, or character references.
+- Composition fits {{ job.target_format }} without hiding the product.
+- File is usable from the local output path before approval.
+      </div>
       <form method="post" action="{{ url_for('creative_assets_job_review', job_id=job.id) }}" style="margin-top: 12px;">
         <div class="grid">
           <label>Review state
