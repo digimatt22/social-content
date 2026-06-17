@@ -41,7 +41,7 @@
         <div class="grid">
           <label>Review state
             <select name="review_state">
-              {% for state in ["needs_review", "approved", "rejected"] %}
+              {% for state in ["needs_review", "approved", "rejected", "rewrite_requested"] %}
                 <option value="{{ state }}" {{ 'selected' if packet.copy_review.review_state == state else '' }}>{{ state.replace('_', ' ').title() }}</option>
               {% endfor %}
             </select>
