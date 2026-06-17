@@ -1116,6 +1116,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Facebook Post", rendered_review.data)
             self.assertIn(b"Copy post", rendered_review.data)
             self.assertIn(b"Review evidence", rendered_review.data)
+            self.assertIn(b"Edit post copy", rendered_review.data)
             self.assertIn(b"Save review", rendered_review.data)
             self.assertIn(b"Attach to task", rendered_review.data)
 
@@ -1133,12 +1134,23 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 for candidate in payload["planned_item"]["candidates"]
                 if candidate["candidate_type"] == "facebook_post"
             )
+            edited_copy = (
+                f"{products[0].name} is ready for a gift list.\n\n"
+                "This edited Facebook draft keeps the warm MattMadeMe voice and mentions the product clearly.\n\n"
+                "Tell me who would smile at this one."
+            )
             review_response = client.post(
                 f"/api/generated-content/{candidate_id}/review",
-                json={"review_state": "approved", "revision_notes": "Ready for posting test.", "reviewed_by": "Matt"},
+                json={
+                    "review_state": "approved",
+                    "revision_notes": "Ready for posting test after edit.",
+                    "reviewed_by": "Matt",
+                    "copy_text": edited_copy,
+                },
             )
             self.assertEqual(review_response.status_code, 200)
             self.assertEqual(review_response.get_json()["candidate"]["review_state"], "approved")
+            self.assertEqual(review_response.get_json()["candidate"]["copy_text"], edited_copy)
             self.assertEqual(review_response.get_json()["candidate"]["reviewed_by"], "Matt")
             self.assertIsNotNone(review_response.get_json()["candidate"]["reviewed_at"])
 
@@ -1151,6 +1163,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(task_payload["platform"], "Facebook")
             self.assertEqual(task_payload["planned_content_item_id"], item_id)
             self.assertEqual(task_payload["generated_content_candidate_id"], candidate_id)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                task = session.get(TaskRecord, task_payload["id"])
+                self.assertIn("This edited Facebook draft", task.draft_caption)
+                self.assertNotIn("Quality checklist", task.draft_caption)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
@@ -1458,6 +1474,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(page.status_code, 200)
             self.assertIn(b"Matt-approved Facebook copy", page.data)
             self.assertIn(b"Matt-approved generated creative", page.data)
+            self.assertIn(b"Edit post copy", page.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 health = data_health(session)

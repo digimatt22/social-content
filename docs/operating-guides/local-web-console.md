@@ -49,7 +49,7 @@ The Planning page saves lightweight calendar intent:
 
 Planned items start as `planned`. Use `Prepare candidates` to create review-only copy and image-prompt candidates immediately, or let the content-production job process them later.
 
-Generated candidates start in `needs_review`. They are not posted automatically.
+Generated candidates start in `needs_review`. They are not posted automatically. For Facebook post candidates, review the generated draft, edit the post copy if needed, then approve, reject, or request a rewrite. Approved edited copy is what flows into the posting task.
 
 ## Content Production Job
 

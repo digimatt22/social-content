@@ -77,6 +77,7 @@ from .services.content_briefs import (
     planned_content_items,
     produce_content_for_item,
     record_candidate_review,
+    serialize_candidate,
     serialize_planned_content_item,
 )
 from .services.creative_generation import (
@@ -404,6 +405,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     str(payload.get("review_state") or "needs_review"),
                     revision_notes=str(payload.get("revision_notes") or ""),
                     reviewed_by=str(payload.get("reviewed_by") or ""),
+                    edited_copy_text=str(payload.get("copy_text") or ""),
                 )
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
@@ -413,6 +415,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                         "id": candidate.id,
                         "review_state": candidate.review_state,
                         "revision_notes": candidate.revision_notes,
+                        "copy_text": serialize_candidate(candidate)["copy_text"],
                         "reviewed_by": candidate.reviewed_by,
                         "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
                     }
@@ -569,6 +572,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     request.form.get("review_state", "needs_review"),
                     revision_notes=request.form.get("revision_notes", ""),
                     reviewed_by=request.form.get("reviewed_by", ""),
+                    edited_copy_text=request.form.get("copy_text", ""),
                 )
                 flash("Candidate review saved.")
             except ValueError as exc:
@@ -900,6 +904,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     request.form.get("review_state", "needs_review"),
                     revision_notes=request.form.get("revision_notes", ""),
                     reviewed_by=request.form.get("reviewed_by", ""),
+                    edited_copy_text=request.form.get("copy_text", ""),
                 )
                 flash("Phase 5 copy review saved.")
             except ValueError as exc:

@@ -332,12 +332,15 @@ def record_candidate_review(
     review_state: str,
     revision_notes: str = "",
     reviewed_by: str = "",
+    edited_copy_text: str = "",
 ) -> GeneratedContentCandidateRecord:
     if review_state not in CANDIDATE_REVIEW_STATES:
         raise ValueError(f"Unsupported review state: {review_state}")
     candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
     if candidate is None:
         raise ValueError(f"Generated content candidate not found: {candidate_id}")
+    if edited_copy_text.strip():
+        update_facebook_candidate_copy(candidate, edited_copy_text)
     candidate.review_state = review_state
     if revision_notes.strip():
         candidate.revision_notes = revision_notes.strip()
@@ -346,6 +349,33 @@ def record_candidate_review(
     if review_state != "needs_review" or reviewed_by.strip():
         candidate.reviewed_at = utc_now()
     return candidate
+
+
+def update_facebook_candidate_copy(candidate: GeneratedContentCandidateRecord, copy_text: str) -> None:
+    if candidate.candidate_type != "facebook_post":
+        raise ValueError("Only Facebook post candidates can be edited as post copy.")
+    paragraphs = [part.strip() for part in copy_text.replace("\r\n", "\n").split("\n\n") if part.strip()]
+    if not paragraphs:
+        raise ValueError("Edited Facebook copy cannot be blank.")
+
+    existing = _json_dict(candidate.body)
+    source_facts = _json_dict(candidate.source_facts_json)
+    hook = paragraphs[0]
+    body = "\n\n".join(paragraphs[1:]) if len(paragraphs) > 1 else hook
+    cta = paragraphs[-1]
+    quality_score = score_copy_against_voice("\n\n".join([hook, body]), source_facts)
+    existing.update(
+        {
+            "hook": hook,
+            "body": body,
+            "cta": cta,
+            "quality_score": {
+                "passed": quality_score.passed,
+                "warnings": quality_score.warnings,
+            },
+        }
+    )
+    candidate.body = json.dumps(existing, indent=2)
 
 
 def create_task_from_planned_content(

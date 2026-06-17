@@ -137,6 +137,11 @@
                 <button class="secondary" type="button" data-copy-target="#candidate-copy-{{ candidate.id }}">Copy {{ 'post' if candidate.candidate_type == 'facebook_post' else 'candidate' }}</button>
               </div>
               <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
+                {% if candidate.candidate_type == 'facebook_post' %}
+                  <label>Edit post copy
+                    <textarea name="copy_text">{{ candidate.copy_text }}</textarea>
+                  </label>
+                {% endif %}
                 <div class="grid">
                   <label>Review state
                     <select name="review_state">

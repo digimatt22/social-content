@@ -35,6 +35,9 @@
       </details>
       <form method="post" action="{{ url_for('phase5_copy_review') }}" style="margin-top: 12px;">
         <input type="hidden" name="candidate_id" value="{{ packet.copy_review.id }}">
+        <label>Edit post copy
+          <textarea name="copy_text">{{ packet.copy_review.copy_text }}</textarea>
+        </label>
         <div class="grid">
           <label>Review state
             <select name="review_state">
