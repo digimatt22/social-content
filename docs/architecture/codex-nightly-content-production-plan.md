@@ -154,6 +154,7 @@ Current local implementation:
 
 - manual-safe runner: `./scripts/run-content-production.sh`
 - macOS LaunchAgent template: `docs/automation/com.mattmademe.marketing-os.content-production.plist`
+- installer helper: `./scripts/install-content-production-launchagent.sh --dry-run install`
 - default schedule: weekdays at 2:30 AM local time
 - default item window: due within the next 14 days
 - brief export path: `data/exports/content-briefs`

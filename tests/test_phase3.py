@@ -1073,6 +1073,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
     def test_phase5_content_production_runner_and_launchagent_template(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         runner = repo_root / "scripts" / "run-content-production.sh"
+        installer = repo_root / "scripts" / "install-content-production-launchagent.sh"
         plist_path = repo_root / "docs" / "automation" / "com.mattmademe.marketing-os.content-production.plist"
 
         self.assertTrue(runner.is_file())
@@ -1080,6 +1081,11 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         self.assertIn("marketing_os.jobs.content_production", runner_text)
         self.assertIn("--days-ahead", runner_text)
         self.assertIn("MARKETING_OS_CONTENT_DAYS_AHEAD", runner_text)
+        self.assertTrue(installer.is_file())
+        installer_text = installer.read_text(encoding="utf-8")
+        self.assertIn("--dry-run", installer_text)
+        self.assertIn("launchctl load", installer_text)
+        self.assertIn("launchctl unload", installer_text)
         self.assertTrue(plist_path.is_file())
 
         plist = plistlib.loads(plist_path.read_bytes())

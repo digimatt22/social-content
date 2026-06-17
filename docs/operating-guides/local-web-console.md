@@ -80,11 +80,12 @@ For the first local nightly schedule, use the wrapper script:
 The wrapper writes structured briefs to `data/exports/content-briefs`, appends job output to `data/logs/content-production.log`, and defaults to planned items due within the next 14 days. Override the window with `MARKETING_OS_CONTENT_DAYS_AHEAD`. To install the weekday 2:30 AM macOS LaunchAgent template:
 
 ```bash
-mkdir -p data/logs
-cp docs/automation/com.mattmademe.marketing-os.content-production.plist ~/Library/LaunchAgents/
-launchctl unload ~/Library/LaunchAgents/com.mattmademe.marketing-os.content-production.plist 2>/dev/null || true
-launchctl load ~/Library/LaunchAgents/com.mattmademe.marketing-os.content-production.plist
+./scripts/install-content-production-launchagent.sh --dry-run install
+./scripts/install-content-production-launchagent.sh install
+./scripts/install-content-production-launchagent.sh status
 ```
+
+Use `./scripts/install-content-production-launchagent.sh uninstall` to remove the local LaunchAgent.
 
 Keep manual runs available even after scheduling. If the nightly job creates candidates, they still start in `needs_review`; the schedule should never approve, post, or mark Phase 5 complete.
 
