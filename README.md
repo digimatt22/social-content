@@ -129,6 +129,7 @@ Current active planning docs:
 - [MattMadeMe website integration plan](docs/architecture/mattmademe-website-integration-plan.md)
 - [Local asset library agent access plan](docs/architecture/local-asset-library-agent-access-plan.md)
 - [Freepik/Magnific creative integration plan](docs/architecture/freepik-magnific-creative-integration-plan.md)
+- [Copywriter skill and learning loop plan](docs/architecture/copywriter-skill-and-learning-loop-plan.md)
 
 Out of scope:
 
