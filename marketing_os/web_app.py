@@ -754,7 +754,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             asset = session.get(AssetRecord, asset_id)
             if asset is None:
                 abort(404)
-            path = asset_path(asset)
+            path = asset_path(asset).resolve()
             if not path.is_file():
                 abort(404)
             return send_file(path)

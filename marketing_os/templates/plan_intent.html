@@ -30,23 +30,23 @@
     </div>
 
     <h3>Destinations</h3>
-    <div class="grid">
+    <div class="check-grid">
       {% for destination in destinations %}
-        <label><input type="checkbox" name="destinations" value="{{ destination }}"> {{ destination }}</label>
+        <label class="check-label"><input type="checkbox" name="destinations" value="{{ destination }}"> {{ destination }}</label>
       {% endfor %}
     </div>
 
     <h3>Goals</h3>
-    <div class="grid">
+    <div class="check-grid">
       {% for goal in goals %}
-        <label><input type="checkbox" name="goals" value="{{ goal }}"> {{ goal }}</label>
+        <label class="check-label"><input type="checkbox" name="goals" value="{{ goal }}"> {{ goal }}</label>
       {% endfor %}
     </div>
 
     <h3>Product Focus</h3>
-    <div class="grid">
+    <div class="check-grid">
       {% for product in products %}
-        <label><input type="checkbox" name="product_ids" value="{{ product.id }}"> {{ product.name }}</label>
+        <label class="check-label"><input type="checkbox" name="product_ids" value="{{ product.id }}"> {{ product.name }}</label>
       {% endfor %}
     </div>
 

@@ -895,7 +895,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(item.brief_status, "ready")
             self.assertTrue(all(candidate.review_state == "needs_review" for candidate in result.candidates))
             facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
-            self.assertIn("body", json.loads(facebook.body))
+            facebook_body = json.loads(facebook.body)
+            self.assertIn("body", facebook_body)
+            self.assertNotIn(facebook_body["hook"], facebook_body["body"])
+            self.assertNotIn("..", facebook_body["body"])
             self.assertIn(products[0].name, facebook.source_facts_json)
 
             rerun = produce_content_for_item(session, item)

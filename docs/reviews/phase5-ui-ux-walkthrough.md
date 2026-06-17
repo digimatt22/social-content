@@ -24,6 +24,16 @@ Live route smoke was run against the local Flask server at `http://127.0.0.1:800
 
 The local runtime database did not contain planned items or candidates during the live smoke, so candidate review and planned-item task creation controls were verified through the automated web-flow test that creates planned content and renders the Planning review state.
 
+Screenshot evidence:
+
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/desktop-today.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/desktop-planning.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/desktop-creative-assets.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/desktop-data-health.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/mobile-today.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/mobile-planning.png`
+- `docs/reviews/phase5-ui-screenshots-2026-06-17/mobile-task.png`
+
 ## Result
 
 The current Python/Flask UI is usable enough to continue Phase 5 without a frontend rewrite.
@@ -91,6 +101,35 @@ Fix:
 - Tasks created from planned intent carry the planned item ID, selected destination, product focus, approved generated copy, source asset when available, posting checklist, and metric guidance.
 - Candidate assignment now requires approval before a generated draft can become task copy.
 
+### Planning Checkbox Layout Was Hard To Scan
+
+Problem:
+
+The global form label style made Planning checkboxes appear visually separated from their labels in desktop screenshots.
+
+Why it would cause non-use:
+
+Choosing destinations, goals, and product focus should feel like a small marketing request. Detached checkbox labels make that step feel fussy and error-prone.
+
+Fix:
+
+- Added a dedicated checkbox grid and label style for Planning choices.
+- Recaptured desktop and mobile Planning screenshots after the fix.
+
+### Asset Preview Paths Could 500 During Visual QA
+
+Problem:
+
+One generated/source asset preview route resolved a relative path under the Flask package directory during screenshot capture, causing a 500 instead of a missing/valid file response.
+
+Why it would cause non-use:
+
+Broken previews reduce trust in the creative asset workflow.
+
+Fix:
+
+- Resolved asset preview paths before passing them to Flask `send_file`.
+
 ## Route Smoke Evidence
 
 All checked routes returned HTTP 200:
@@ -134,21 +173,12 @@ Recommendation:
 
 Once the Magnific MCP server is configured in Codex Desktop, add a direct generated-output registration path that writes the provider run note and output metadata without manual retyping.
 
-### Mobile Layout Needs Browser-Level QA
-
-The HTML uses responsive grids and route smoke passed, but this pass did not include browser screenshots because browser control was not available in the session.
-
-Recommendation:
-
-Run a visual mobile/desktop screenshot pass before marking Phase 5 complete.
-
 ## Doneness Impact
 
-This walkthrough moved Phase 5 closer to done by addressing the most immediate review-flow and learning-loop friction.
+This walkthrough moved Phase 5 closer to done by addressing the most immediate review-flow, planning, visual QA, and learning-loop friction.
 
 Still not complete:
 
-- browser screenshot-based mobile/desktop QA
 - final Phase 5 completion audit
 - stronger generated image quality proof from the Freepik/Magnific path
 - at least one fully reviewed, approved, and task-attached real Facebook post in the live workflow

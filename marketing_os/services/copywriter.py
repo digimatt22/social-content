@@ -26,27 +26,30 @@ def generate_facebook_post(brief: dict[str, object]) -> FacebookPostDraft:
     notes = str(brief.get("notes") or "").strip()
     voice = [str(item) for item in brief.get("voice_pillars", []) if str(item).strip()]
     useful_phrases = [str(item) for item in brief.get("useful_phrases", []) if str(item).strip()]
+    product_facts = [item for item in brief.get("product_facts", []) if isinstance(item, dict)]
 
     product_text = _join_human(products) or "a new MattMadeMe duck"
-    goal_text = _join_human(goals).lower() if goals else "share what makes it fun"
-    voice_hint = voice[0].lower() if voice else "playful and handmade"
-    phrase = useful_phrases[0] if useful_phrases else "little details make it feel personal"
+    goal_text = _goal_phrase(goals)
+    use_case = _first_fact_value(product_facts, "use_cases") or "desk mascot, small gift, or collection-shelf surprise"
+    momentum = _first_fact_value(product_facts, "sales_momentum_note")
+    phrase = _clean_sentence(useful_phrases[0]) if useful_phrases else "Made to make someone smile"
 
-    hook = f"{product_text} is ready for a little spotlight."
+    hook = f"{product_text} is having a moment."
     lines = [
-        f"I made this with the kind of {voice_hint} detail that makes a desk, gift box, or collection shelf feel less ordinary.",
-        f"It is a good fit for {audience.lower()}, especially when the goal is to {goal_text}.",
+        f"This one works nicely as a {use_case}, especially for {audience.lower()}.",
     ]
+    if momentum:
+        lines.append(_sentence(momentum))
     if occasion:
-        lines.append(f"It also has a nice tie-in for {occasion.lower()}.")
+        lines.append(f"I pulled it forward for {_occasion_phrase(occasion)} because it has that easy little giftable spark.")
     if promotion:
         lines.append(f"Current note: {promotion}.")
-    lines.append(f"{phrase}.")
+    lines.append(_sentence(phrase))
     if notes:
         lines.append(f"Planning note: {notes}")
 
-    cta = "Take a look, and tell me who this one reminds you of."
-    body = "\n\n".join([hook, *lines, cta])
+    cta = _cta_for_goal(goal_text)
+    body = "\n\n".join([*lines, cta])
     return FacebookPostDraft(
         hook=hook,
         body=body,
@@ -70,3 +73,48 @@ def _join_human(values: list[str]) -> str:
         return f"{values[0]} and {values[1]}"
     return ", ".join(values[:-1]) + f", and {values[-1]}"
 
+
+def _first_fact_value(product_facts: list[dict[object, object]], key: str) -> str:
+    for fact in product_facts:
+        value = fact.get(key)
+        if isinstance(value, list) and value:
+            return str(value[0]).strip()
+        if isinstance(value, str) and value.strip():
+            return _clean_sentence(value)
+    return ""
+
+
+def _goal_phrase(goals: list[str]) -> str:
+    normalized = {goal.lower() for goal in goals}
+    if "sales growth" in normalized:
+        return "sales growth"
+    if "followers" in normalized:
+        return "followers"
+    if "repeat customers" in normalized:
+        return "repeat customers"
+    return _join_human(goals).lower() if goals else "engagement"
+
+
+def _cta_for_goal(goal_text: str) -> str:
+    if goal_text == "sales growth":
+        return "Take a look in the shop, and tell me who this one reminds you of."
+    if goal_text == "followers":
+        return "Follow along if you want to see the next duck off the printer."
+    return "Tell me where this duck should show up next."
+
+
+def _clean_sentence(value: str) -> str:
+    text = value.strip()
+    return text[:-1] if text.endswith(".") else text
+
+
+def _sentence(value: str) -> str:
+    text = value.strip()
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def _occasion_phrase(value: str) -> str:
+    text = value.strip().lower()
+    if text.startswith(("a ", "an ", "the ", "this ", "that ")):
+        return text
+    return f"this {text}"

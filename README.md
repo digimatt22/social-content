@@ -143,6 +143,9 @@ Current active planning docs:
 - [Freepik/Magnific creative integration plan](docs/architecture/freepik-magnific-creative-integration-plan.md)
 - [Copywriter skill and learning loop plan](docs/architecture/copywriter-skill-and-learning-loop-plan.md)
 - [Codex nightly content production plan](docs/architecture/codex-nightly-content-production-plan.md)
+- [Phase 5 UI/UX walkthrough](docs/reviews/phase5-ui-ux-walkthrough.md)
+- [Phase 5 Facebook post proof](docs/reviews/phase5-facebook-post-proof.md)
+- [Phase 5 completion audit](docs/reviews/phase5-completion-audit.md)
 
 Out of scope:
 
