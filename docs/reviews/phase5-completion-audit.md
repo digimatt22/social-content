@@ -35,7 +35,7 @@ Live readiness gate:
 - `python -m marketing_os.jobs.phase5_readiness --export-markdown`
 - `python -m marketing_os.jobs.phase5_readiness --export-creative-handoff`
 
-The readiness page can record final copy and creative reviews directly, links to the underlying Planning and Creative Assets records for deeper inspection, and shows a recommended source asset plus Magnific/MCP prompt handoff when no generated creative job exists yet. It can open Creative Assets with the import form prefilled, and can export a Markdown approval packet or focused creative handoff into the configured runtime export folder. The CLI can also export the same files. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
+The readiness page can record final copy and creative reviews directly, links to the underlying Planning and Creative Assets records for deeper inspection, and shows a recommended source asset preview plus Magnific/MCP prompt handoff when no generated creative job exists yet. It can open Creative Assets with the import form prefilled, includes copy controls for the source path and prompt, and can export a Markdown approval packet or focused creative handoff into the configured runtime export folder. The CLI can also export the same files. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
 
 ## Doneness Criteria Audit
 

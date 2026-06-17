@@ -53,6 +53,23 @@
   <p class="subtle">Use this after generating or upscaling an image outside the app. The output starts in needs review and cannot be assigned to tasks until approved.</p>
   {% if manual_import_defaults %}
     <div class="copybox">Prefilled from Phase 5 creative handoff. Generate the image externally, update the output path if needed, then import for review.</div>
+    {% if manual_import_defaults.source_asset %}
+      {% set handoff_asset = manual_import_defaults.source_asset %}
+      <div class="grid" style="margin-top: 12px;">
+        <div>
+          {% if handoff_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=handoff_asset.id) }}" alt="{{ handoff_asset.name }}">
+          {% else %}
+            <div class="asset-missing">Source photo missing</div>
+          {% endif %}
+        </div>
+        <div>
+          <p class="subtle">Source asset #{{ handoff_asset.id }} · {{ handoff_asset.name }}</p>
+          <div class="copybox" id="handoff-source-path">{{ handoff_asset.source_path }}</div>
+          <button class="secondary" type="button" data-copy-target="#handoff-source-path">Copy source path</button>
+        </div>
+      </div>
+    {% endif %}
   {% endif %}
   <form method="post" action="{{ url_for('creative_assets_manual_import') }}">
     <div class="grid">
@@ -89,6 +106,9 @@
     <label>Prompt
       <textarea name="prompt" placeholder="Prompt used in Magnific/MCP, including product accuracy constraints." required>{{ manual_import_defaults.prompt or '' }}</textarea>
     </label>
+    {% if manual_import_defaults.prompt %}
+      <button class="secondary" type="button" data-copy-target="[name='prompt']">Copy prompt</button>
+    {% endif %}
     <label>Review notes
       <textarea name="notes" placeholder="What should the reviewer check?">{{ manual_import_defaults.notes or '' }}</textarea>
     </label>

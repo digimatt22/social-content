@@ -479,6 +479,9 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     defaults = handoff.get("import_defaults")
                     if isinstance(defaults, dict):
                         manual_import_defaults = defaults
+                    source_asset = handoff.get("source_asset")
+                    if isinstance(source_asset, dict):
+                        manual_import_defaults["source_asset"] = source_asset
             return render_template(
                 "creative_assets.html",
                 active="creative_assets",

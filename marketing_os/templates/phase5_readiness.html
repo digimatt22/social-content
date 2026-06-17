@@ -97,12 +97,17 @@
       {% if packet.creative_handoff %}
         {% if packet.creative_handoff.source_asset %}
           <p class="subtle">Recommended source asset #{{ packet.creative_handoff.source_asset.id }} · {{ packet.creative_handoff.source_asset.name }}</p>
-          <div class="copybox">{{ packet.creative_handoff.source_asset.source_path }}</div>
+          {% if packet.creative_handoff.source_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=packet.creative_handoff.source_asset.id) }}" alt="{{ packet.creative_handoff.source_asset.name }}">
+          {% endif %}
+          <div class="copybox" id="phase5-source-path">{{ packet.creative_handoff.source_asset.source_path }}</div>
+          <button class="secondary" type="button" data-copy-target="#phase5-source-path">Copy source path</button>
         {% endif %}
         {% if packet.creative_handoff.prompt %}
           <details open>
             <summary class="subtle">Magnific/MCP prompt handoff</summary>
-            <div class="copybox">{{ packet.creative_handoff.prompt }}</div>
+            <div class="copybox" id="phase5-creative-prompt">{{ packet.creative_handoff.prompt }}</div>
+            <button class="secondary" type="button" data-copy-target="#phase5-creative-prompt">Copy prompt</button>
           </details>
         {% endif %}
         <p class="subtle">{{ packet.creative_handoff.next_step }}</p>
