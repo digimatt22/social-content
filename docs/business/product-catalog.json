@@ -1,0 +1,136 @@
+{
+  "products": [
+    {
+      "name": "Bingo Duck",
+      "status": "momentum",
+      "primary_audience": "Collector / Completionist",
+      "secondary_audiences": ["Gift Buyer", "Hobby, Profession, Or Identity Buyer"],
+      "best_channels": ["Instagram", "Facebook", "Etsy"],
+      "use_cases": ["collector drop", "game night gift", "social engagement prompt"],
+      "seasonality": ["steady", "giftable"],
+      "sales_momentum_note": "Strong current momentum with 123 units in the last 90 days.",
+      "launch_priority": "high"
+    },
+    {
+      "name": "Biker Duck",
+      "status": "momentum",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Instagram", "Facebook", "Etsy"],
+      "use_cases": ["hobby gift", "collector launch", "identity-based gift"],
+      "seasonality": ["summer travel", "steady"],
+      "sales_momentum_note": "Fast recent seller with 46 units in the last 30 days.",
+      "launch_priority": "high"
+    },
+    {
+      "name": "Declaration Duck",
+      "status": "momentum",
+      "primary_audience": "Gift Buyer",
+      "secondary_audiences": ["Collector / Completionist", "Cruise Duck Hunter"],
+      "best_channels": ["Instagram", "Facebook", "Etsy"],
+      "use_cases": ["patriotic gift", "summer holiday content", "new release promotion"],
+      "seasonality": ["summer", "July 4"],
+      "sales_momentum_note": "Recent launch with 40 units in the last 30 days.",
+      "launch_priority": "high"
+    },
+    {
+      "name": "EMT Duck",
+      "status": "momentum",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Facebook", "Instagram", "Etsy"],
+      "use_cases": ["first responder gift", "profession gift", "collector series"],
+      "seasonality": ["steady", "appreciation gifting"],
+      "sales_momentum_note": "Up versus prior 90-day window and part of the first-responder cluster.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Mailman Duck",
+      "status": "cooling",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Etsy", "Facebook", "Instagram"],
+      "use_cases": ["postal worker gift", "personalized gift", "proven Etsy seller"],
+      "seasonality": ["steady", "holiday gifting"],
+      "sales_momentum_note": "Lifetime leader, but last-90-day units are down versus the prior 90 days.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Mailwoman Duck",
+      "status": "momentum",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Etsy", "Facebook", "Instagram"],
+      "use_cases": ["postal worker gift", "series expansion", "repeat-buyer prompt"],
+      "seasonality": ["steady", "holiday gifting"],
+      "sales_momentum_note": "Up versus prior 90-day window.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Firefighter Duck",
+      "status": "cooling",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Facebook", "Instagram", "Etsy"],
+      "use_cases": ["first responder gift", "profession gift", "collector series"],
+      "seasonality": ["steady", "appreciation gifting"],
+      "sales_momentum_note": "Lifetime top seller but down versus prior 90-day window.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Room Steward Duck",
+      "status": "new",
+      "primary_audience": "Cruise Duck Hunter",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Facebook", "Instagram", "Etsy"],
+      "use_cases": ["cruise duck hiding", "room steward gift", "travel content"],
+      "seasonality": ["summer travel", "cruise season"],
+      "sales_momentum_note": "Newer listing with recent sales signal.",
+      "launch_priority": "high"
+    },
+    {
+      "name": "Casino Duck",
+      "status": "active",
+      "primary_audience": "Cruise Duck Hunter",
+      "secondary_audiences": ["Gift Buyer", "Hobby, Profession, Or Identity Buyer"],
+      "best_channels": ["Instagram", "Facebook", "Etsy"],
+      "use_cases": ["cruise gift", "casino night gift", "gambler gift"],
+      "seasonality": ["steady", "cruise season"],
+      "sales_momentum_note": "Steady recent seller.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Spa Duck",
+      "status": "cooling",
+      "primary_audience": "Gift Buyer",
+      "secondary_audiences": ["Cruise Duck Hunter", "Collector / Completionist"],
+      "best_channels": ["Instagram", "Facebook", "Etsy"],
+      "use_cases": ["self-care gift", "cruise hiding", "desk mascot"],
+      "seasonality": ["steady", "holiday gifting"],
+      "sales_momentum_note": "Lifetime top seller but down versus prior 90-day window.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Delivery Duck",
+      "status": "cooling",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Facebook", "Etsy", "Instagram"],
+      "use_cases": ["delivery worker gift", "profession gift", "postal-adjacent bundle"],
+      "seasonality": ["steady", "holiday gifting"],
+      "sales_momentum_note": "Meaningful lifetime seller but down versus prior 90-day window.",
+      "launch_priority": "medium"
+    },
+    {
+      "name": "Police Duck",
+      "status": "active",
+      "primary_audience": "Hobby, Profession, Or Identity Buyer",
+      "secondary_audiences": ["Gift Buyer", "Collector / Completionist"],
+      "best_channels": ["Facebook", "Instagram", "Etsy"],
+      "use_cases": ["first responder gift", "profession gift", "collector series"],
+      "seasonality": ["steady", "appreciation gifting"],
+      "sales_momentum_note": "Top lifetime first-responder product cluster.",
+      "launch_priority": "medium"
+    }
+  ]
+}

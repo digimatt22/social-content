@@ -62,6 +62,24 @@ Phase 1 includes:
 - `MockAnalyticsProvider`
 - `MarkdownCalendarExporter`
 
+## Phase 2 Additions
+
+Phase 2 adds structured product knowledge, validation, planning modes, ready-to-edit content drafts, weekly actions, and manual measurement templates.
+
+Structured product knowledge lives in:
+
+- `docs/business/product-catalog.json`
+
+Phase 2 modules:
+
+```text
+marketing_os/
+├── phase2.py          # structured planner, validation, actions, review template
+└── render_phase2.py   # Phase 2 Markdown rendering
+```
+
+Validation blocks P0 issues by default, including invalid products, unsupported platforms, missing asset briefs, missing success metrics, and known awkward brand-voice patterns.
+
 Future integrations can implement those protocols for Etsy, Instagram, Facebook, Google Analytics, Search Console, email platforms, or calendar tools while keeping the core planning services local and testable.
 
 ## Out-Of-Scope Integrations
@@ -85,4 +103,3 @@ Run:
 python -m unittest discover -s tests
 python demo.py
 ```
-

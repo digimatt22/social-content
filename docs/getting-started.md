@@ -105,7 +105,54 @@ Open the demo output:
 open outputs/demo-marketing-plan.md
 ```
 
-## 5. Run The Tests
+## 5. Generate A Phase 2 Plan
+
+Phase 2 produces a more operational weekly plan with validation, ready-to-edit content, asset briefs, recommendations, action lists, and manual metrics tracking.
+
+Generate a standard-week plan:
+
+```bash
+python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-standard.md
+```
+
+Generate a launch-week plan:
+
+```bash
+python -m marketing_os.cli --phase 2 --mode launch --start-date 2026-06-17 --output outputs/phase2-launch.md
+```
+
+Open a plan:
+
+```bash
+open outputs/phase2-standard.md
+```
+
+The Phase 2 output should include:
+
+- validation report
+- 30-day calendar
+- ready-to-edit content drafts
+- asset briefs
+- production notes
+- recommendations
+- weekly action list
+- manual weekly review template
+
+Run the Phase 2 demo:
+
+```bash
+python demo_phase2.py
+```
+
+Expected output:
+
+```text
+Phase 2 demo workflows completed successfully.
+Standard output: outputs/demo-phase2-standard.md
+Launch output: outputs/demo-phase2-launch.md
+```
+
+## 6. Run The Tests
 
 Run:
 
@@ -153,7 +200,23 @@ rg "Test Launch Duck" outputs/test-updated-context-plan.md
 
 Remove the temporary product from `docs/business/products.md` when finished.
 
-## 7. Common Commands
+## 7. Test Structured Product Metadata
+
+Phase 2 uses structured product metadata from:
+
+```text
+docs/business/product-catalog.json
+```
+
+Temporarily edit one product's `sales_momentum_note`, then regenerate a Phase 2 plan:
+
+```bash
+python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-updated-product.md
+```
+
+The plan should reflect the updated product metadata without code changes.
+
+## 8. Common Commands
 
 Print a plan to the terminal:
 
@@ -209,4 +272,3 @@ Required files:
 - `audiences.md`
 - `brand-voice.md`
 - `marketing-channels.md`
-

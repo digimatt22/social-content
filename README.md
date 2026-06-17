@@ -7,6 +7,7 @@ The app helps a solo business owner generate marketing plans, content ideas, wee
 ## What It Does
 
 - Loads business context from Markdown files in `docs/business`.
+- Loads structured product metadata from `docs/business/product-catalog.json`.
 - Generates a 30-day marketing calendar.
 - Generates:
   - 30 Instagram post ideas
@@ -18,6 +19,15 @@ The app helps a solo business owner generate marketing plans, content ideas, wee
 - Generates a weekly marketing report.
 - Generates prioritized marketing recommendations with aligned business goals, impact, effort, rationale, and next steps.
 - Runs fully locally with Python stdlib only.
+
+Phase 2 adds:
+
+- planning modes: `light`, `standard`, `launch`, `holiday`, and `event`
+- validated calendar items
+- ready-to-edit content drafts
+- asset briefs and production notes
+- weekly action list
+- manual weekly review template
 
 ## Installation
 
@@ -75,10 +85,28 @@ Generate a Markdown plan file:
 python -m marketing_os.cli --start-date 2026-06-17 --output outputs/marketing-plan.md
 ```
 
+Generate a Phase 2 standard-week plan:
+
+```bash
+python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-standard.md
+```
+
+Generate a Phase 2 launch-week plan:
+
+```bash
+python -m marketing_os.cli --phase 2 --mode launch --start-date 2026-06-17 --output outputs/phase2-launch.md
+```
+
 Run the end-to-end demo:
 
 ```bash
 python demo.py
+```
+
+Run the Phase 2 demos:
+
+```bash
+python demo_phase2.py
 ```
 
 The demo writes:

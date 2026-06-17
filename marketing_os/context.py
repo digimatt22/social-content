@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
-from .models import BusinessContext
+from .models import BusinessContext, ProductEntity
 
 
 REQUIRED_BUSINESS_FILES = (
@@ -14,6 +15,7 @@ REQUIRED_BUSINESS_FILES = (
     "brand-voice.md",
     "marketing-channels.md",
 )
+PRODUCT_CATALOG_FILE = "product-catalog.json"
 
 
 class BusinessContextError(RuntimeError):
@@ -43,13 +45,18 @@ def load_business_context(business_dir: str | Path = "docs/business") -> Busines
     if missing:
         raise BusinessContextError("Missing business files: " + ", ".join(missing))
 
+    product_entities = _load_product_catalog(root / PRODUCT_CATALOG_FILE)
+    structured_product_names = [product.name for product in product_entities]
     products = _dedupe(
+        structured_product_names
+        +
         _table_products(raw["products.md"])
         + _section_bullets(raw["products.md"], "Current Public Ducks And Themes")
         + _duck_bullets(raw["products.md"])
     )
     momentum_products = _dedupe(
-        _products_from_colon_bullets(raw["products.md"], "Current Momentum")
+        [product.name for product in product_entities if product.status == "momentum"]
+        + _products_from_colon_bullets(raw["products.md"], "Current Momentum")
         + _table_products(raw["products.md"])[:8]
     )
     upcoming_products = _section_bullets(raw["products.md"], "Upcoming / Work-In-Progress Designs")
@@ -74,9 +81,33 @@ def load_business_context(business_dir: str | Path = "docs/business") -> Busines
         avoid=avoid,
         channels=channels,
         seasonal_windows=seasonal,
+        product_entities=product_entities,
         etsy_url=_first_url(raw["marketing-channels.md"], "Etsy"),
         website_url=_first_url(raw["marketing-channels.md"], "Website"),
     )
+
+
+def _load_product_catalog(path: Path) -> list[ProductEntity]:
+    if not path.exists():
+        return []
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    entities: list[ProductEntity] = []
+    for item in data.get("products", []):
+        entities.append(
+            ProductEntity(
+                name=item["name"],
+                status=item["status"],
+                primary_audience=item["primary_audience"],
+                secondary_audiences=list(item.get("secondary_audiences", [])),
+                best_channels=list(item.get("best_channels", [])),
+                use_cases=list(item.get("use_cases", [])),
+                seasonality=list(item.get("seasonality", [])),
+                sales_momentum_note=item.get("sales_momentum_note", ""),
+                launch_priority=item.get("launch_priority", "medium"),
+            )
+        )
+    return entities
 
 
 def _section(markdown: str, heading: str) -> str:
