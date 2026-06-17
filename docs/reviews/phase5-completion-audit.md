@@ -69,8 +69,11 @@ Latest browser/UI evidence:
 
 1. Run a real Freepik/Magnific or MCP generation/import pass using an approved source asset, then visually review and approve one generated creative candidate.
 2. Have Matt review the Facebook proof post or a live generated task draft for voice/taste; adjust the copywriter if it still needs heavy rewrite.
-3. Run one live operator workflow with a planned item, approved generated copy, created task, posted/marked task, and recorded outcome note in the local app database.
-4. Re-run the full completion audit after those artifacts exist.
+3. Re-run the full completion audit after those artifacts exist.
+
+## Closed After Initial Audit
+
+- Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
 
 ## Notes
 

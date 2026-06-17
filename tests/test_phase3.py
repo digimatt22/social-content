@@ -1114,6 +1114,84 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(metric_response.status_code, 200)
             self.assertEqual(metric_response.get_json()["metric"]["outcome_tags"], ["no engagement"])
 
+    def test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-operator.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                product_id = product.id
+
+            planned_response = client.post(
+                "/api/planned-content",
+                json={
+                    "calendar_date": "2026-06-27",
+                    "destinations": ["Facebook"],
+                    "goals": ["Sales growth"],
+                    "product_ids": [product_id],
+                    "audience": "gift buyers",
+                    "occasion": "new batch",
+                    "notes": "Keep it conversational and specific.",
+                },
+            )
+            self.assertEqual(planned_response.status_code, 201)
+            item_id = planned_response.get_json()["planned_item"]["id"]
+
+            production_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
+            self.assertEqual(production_response.status_code, 200)
+            candidates = production_response.get_json()["planned_item"]["candidates"]
+            candidate_id = next(candidate["id"] for candidate in candidates if candidate["candidate_type"] == "facebook_post")
+
+            review_response = client.post(
+                f"/api/generated-content/{candidate_id}/review",
+                json={"review_state": "approved", "revision_notes": "Operator proof approval."},
+            )
+            self.assertEqual(review_response.status_code, 200)
+
+            task_response = client.post(
+                f"/api/planned-content/{item_id}/task",
+                json={"destination": "Facebook", "candidate_id": candidate_id},
+            )
+            self.assertEqual(task_response.status_code, 201)
+            task_payload = task_response.get_json()["task"]
+            task_id = task_payload["id"]
+            self.assertEqual(task_payload["planned_content_item_id"], item_id)
+            self.assertEqual(task_payload["generated_content_candidate_id"], candidate_id)
+
+            finish_response = client.post(
+                f"/api/tasks/{task_id}/finish",
+                json={"action": "mark_posted", "notes": "Operator proof marked posted.", "post_url": "https://facebook.example/mattmademe/proof"},
+            )
+            self.assertEqual(finish_response.status_code, 200)
+            self.assertEqual(finish_response.get_json()["task"]["status"], "posted")
+
+            metric_response = client.post(
+                f"/api/tasks/{task_id}/metrics",
+                json={
+                    "post_url": "https://facebook.example/mattmademe/proof",
+                    "reach": 420,
+                    "likes": 34,
+                    "comments": 8,
+                    "etsy_orders": 1,
+                    "outcome_tags": ["sold item", "got comments"],
+                    "notes": "Operator proof outcome: comment thread and sale note recorded.",
+                },
+            )
+            self.assertEqual(metric_response.status_code, 200)
+            self.assertEqual(metric_response.get_json()["task"]["metric_status"], "complete")
+            self.assertEqual(metric_response.get_json()["metric"]["outcome_tags"], ["sold item", "got comments"])
+
+            insights_response = client.get("/api/insights")
+            self.assertEqual(insights_response.status_code, 200)
+            summary = insights_response.get_json()["summary"]
+            self.assertEqual(summary["linked_metric_count"], 1)
+            self.assertTrue(summary["what_worked"])
+            self.assertEqual(summary["generated_candidate_outcomes"][0]["candidate_id"], candidate_id)
+            self.assertEqual(summary["generated_candidate_outcomes"][0]["task_id"], task_id)
+
     def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
         class FakeEtsyAdapter:
             def __init__(self):
