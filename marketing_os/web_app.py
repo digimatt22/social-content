@@ -61,11 +61,13 @@ from .phase4 import (
     week_agenda,
 )
 from .services.content_briefs import (
+    CANDIDATE_REVIEW_STATES,
     DESTINATION_OPTIONS,
     GOAL_OPTIONS,
     create_planned_content_item,
     planned_content_items,
     produce_content_for_item,
+    record_candidate_review,
     serialize_planned_content_item,
 )
 from .services.creative_generation import (
@@ -338,6 +340,21 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 }
             )
 
+    @app.post("/api/generated-content/<int:candidate_id>/review")
+    def api_review_generated_content(candidate_id: int):
+        payload = request.get_json(silent=True) or {}
+        with session_scope(factory) as session:
+            try:
+                candidate = record_candidate_review(
+                    session,
+                    candidate_id,
+                    str(payload.get("review_state") or "needs_review"),
+                    revision_notes=str(payload.get("revision_notes") or ""),
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"candidate": {"id": candidate.id, "review_state": candidate.review_state, "revision_notes": candidate.revision_notes}})
+
     @app.get("/")
     def dashboard() -> str:
         role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
@@ -397,14 +414,17 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def planning() -> str:
         with session_scope(factory) as session:
             products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            tasks = list(session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id)))
             items = planned_content_items(session)
             return render_template(
                 "plan_intent.html",
                 active="planning",
                 products=products,
+                tasks=tasks,
                 planned_items=[serialize_planned_content_item(session, item) for item in items],
                 destinations=DESTINATION_OPTIONS,
                 goals=GOAL_OPTIONS,
+                candidate_review_states=CANDIDATE_REVIEW_STATES,
             )
 
     @app.post("/planning")
@@ -439,6 +459,35 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             result = produce_content_for_item(session, item, business_dir=business_dir, force=request.form.get("force") == "1")
             flash(f"Prepared {len(result.candidates)} candidate(s): {result.created} new, {result.skipped} already present.")
         return redirect(url_for("planning"))
+
+    @app.post("/planning/candidates/<int:candidate_id>/review")
+    def review_planning_candidate(candidate_id: int) -> str:
+        with session_scope(factory) as session:
+            try:
+                record_candidate_review(
+                    session,
+                    candidate_id,
+                    request.form.get("review_state", "needs_review"),
+                    revision_notes=request.form.get("revision_notes", ""),
+                )
+                flash("Candidate review saved.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("planning"))
+
+    @app.post("/planning/candidates/<int:candidate_id>/link-task")
+    def link_planning_candidate_to_task(candidate_id: int) -> str:
+        task_id = _int_or_none(request.form.get("task_id"))
+        if task_id is None:
+            flash("Choose a task to receive this candidate.")
+            return redirect(url_for("planning"))
+        with session_scope(factory) as session:
+            try:
+                task = link_generated_content_to_task(session, task_id, candidate_id)
+                flash(f"Candidate attached to task: {task.title}.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("task_detail", task_id=task_id))
 
     @app.post("/creative-assets/register")
     def creative_assets_register() -> str:

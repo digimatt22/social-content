@@ -946,6 +946,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(rendered_review.status_code, 200)
             self.assertIn(b"Facebook Post", rendered_review.data)
             self.assertIn(b"Copy candidate", rendered_review.data)
+            self.assertIn(b"Save review", rendered_review.data)
+            self.assertIn(b"Attach to task", rendered_review.data)
 
             calendar_page = client.get("/calendar")
             self.assertEqual(calendar_page.status_code, 200)
@@ -955,6 +957,18 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             second_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
             self.assertEqual(second_response.status_code, 200)
             self.assertEqual(second_response.get_json()["created"], 0)
+
+            candidate_id = next(
+                candidate["id"]
+                for candidate in payload["planned_item"]["candidates"]
+                if candidate["candidate_type"] == "facebook_post"
+            )
+            review_response = client.post(
+                f"/api/generated-content/{candidate_id}/review",
+                json={"review_state": "approved", "revision_notes": "Ready for posting test."},
+            )
+            self.assertEqual(review_response.status_code, 200)
+            self.assertEqual(review_response.get_json()["candidate"]["review_state"], "approved")
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)

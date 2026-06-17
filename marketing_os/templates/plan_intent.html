@@ -101,10 +101,38 @@
                 <span class="pill">{{ candidate.provider }}</span>
                 <span class="pill">{{ candidate.review_state.replace('_', ' ').title() }}</span>
               </div>
-              <pre class="copybox" id="candidate-{{ candidate.id }}">{{ candidate.body }}</pre>
+              <pre class="copybox" id="candidate-{{ candidate.id }}">{{ candidate.display_body }}</pre>
               <div class="button-group">
                 <button class="secondary" type="button" data-copy-target="#candidate-{{ candidate.id }}">Copy candidate</button>
               </div>
+              <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
+                <div class="grid">
+                  <label>Review state
+                    <select name="review_state">
+                      {% for state in candidate_review_states %}
+                        <option value="{{ state }}" {{ 'selected' if candidate.review_state == state else '' }}>{{ state.replace('_', ' ').title() }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>Review notes
+                    <input name="revision_notes" value="{{ candidate.revision_notes }}">
+                  </label>
+                </div>
+                <button class="secondary" type="submit">Save review</button>
+              </form>
+              {% if candidate.candidate_type == 'facebook_post' %}
+                <form method="post" action="{{ url_for('link_planning_candidate_to_task', candidate_id=candidate.id) }}">
+                  <label>Attach copy to task
+                    <select name="task_id">
+                      <option value="">Choose a task</option>
+                      {% for task in tasks %}
+                        <option value="{{ task.id }}">{{ task.due_date }} · {{ task.platform }} · {{ task.title }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <button class="secondary" type="submit">Attach to task</button>
+                </form>
+              {% endif %}
               {% if candidate.revision_notes %}<div class="subtle">{{ candidate.revision_notes }}</div>{% endif %}
             </div>
           {% endfor %}

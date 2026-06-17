@@ -31,6 +31,7 @@ GOAL_OPTIONS = [
     "Engagement",
 ]
 PLANNED_STATUSES = ["planned", "brief_ready", "drafted", "needs_review", "approved", "posted", "skipped"]
+CANDIDATE_REVIEW_STATES = ["needs_review", "approved", "rejected", "rewrite_requested"]
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,7 @@ def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str,
         "candidate_type": candidate.candidate_type,
         "provider": candidate.provider,
         "body": candidate.body,
+        "display_body": _display_body(candidate.body),
         "source_facts": _json_dict(candidate.source_facts_json),
         "source_asset_ids": json_list(candidate.source_asset_ids_json),
         "review_state": candidate.review_state,
@@ -280,6 +282,18 @@ def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str,
         "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
         "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
     }
+
+
+def record_candidate_review(session: Session, candidate_id: int, review_state: str, revision_notes: str = "") -> GeneratedContentCandidateRecord:
+    if review_state not in CANDIDATE_REVIEW_STATES:
+        raise ValueError(f"Unsupported review state: {review_state}")
+    candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
+    if candidate is None:
+        raise ValueError(f"Generated content candidate not found: {candidate_id}")
+    candidate.review_state = review_state
+    if revision_notes.strip():
+        candidate.revision_notes = revision_notes.strip()
+    return candidate
 
 
 def _valid_choices(values: list[str], allowed: list[str]) -> list[str]:
@@ -322,3 +336,18 @@ def _json_dict(value: str) -> dict[str, object]:
     except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _display_body(value: str) -> str:
+    data = _json_dict(value)
+    if not data:
+        return value
+    parts: list[str] = []
+    for label, key in (("Hook", "hook"), ("Body", "body"), ("CTA", "cta")):
+        text = str(data.get(key) or "").strip()
+        if text:
+            parts.append(f"{label}: {text}")
+    checklist = data.get("quality_checklist")
+    if isinstance(checklist, list) and checklist:
+        parts.append("Quality checklist: " + "; ".join(str(item) for item in checklist))
+    return "\n\n".join(parts) or value
