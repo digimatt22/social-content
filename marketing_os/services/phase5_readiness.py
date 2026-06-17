@@ -160,6 +160,17 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
                 f"- Candidate asset ID: {creative_review['candidate_asset_id'] or 'not recorded'}",
                 f"- Output path: {creative_review['output_path'] or 'not recorded'}",
                 "",
+                "### Asset References",
+                "",
+                *_creative_asset_reference_lines(creative_review),
+                "",
+                "### Creative Approval Checklist",
+                "",
+                "- Product shape, color, printed details, and proportions match the source.",
+                "- No invented markings, logos, text, packaging, or character references.",
+                f"- Composition fits {creative_review['target_format'] or 'the target format'} without hiding the product.",
+                "- File is usable from the local output path before approval.",
+                "",
                 "### Prompt",
                 "",
                 str(creative_review["prompt"] or "").strip() or "No prompt recorded.",
@@ -530,6 +541,31 @@ def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         "review_path": f"/creative-assets#creative-job-{job.id}",
     }
+
+
+def _creative_asset_reference_lines(creative_review: dict[str, object]) -> list[str]:
+    lines: list[str] = []
+    source_asset = creative_review.get("source_asset")
+    if isinstance(source_asset, dict):
+        lines.extend(
+            [
+                f"- Source asset: #{source_asset.get('id')} · {source_asset.get('name') or 'unnamed'}",
+                f"- Source file: {source_asset.get('source_path') or 'not recorded'}",
+                f"- Source file exists: {source_asset.get('file_exists')}",
+                f"- Source review state: {source_asset.get('review_state') or 'not recorded'}",
+            ]
+        )
+    candidate_asset = creative_review.get("candidate_asset")
+    if isinstance(candidate_asset, dict):
+        lines.extend(
+            [
+                f"- Candidate asset: #{candidate_asset.get('id')} · {candidate_asset.get('name') or 'unnamed'}",
+                f"- Candidate file: {candidate_asset.get('source_path') or 'not recorded'}",
+                f"- Candidate file exists: {candidate_asset.get('file_exists')}",
+                f"- Candidate review state: {candidate_asset.get('review_state') or 'not recorded'}",
+            ]
+        )
+    return lines or ["- No source or candidate asset references recorded."]
 
 
 def _final_actions(readiness: Phase5Readiness) -> list[str]:
