@@ -143,6 +143,7 @@ def build_content_brief(session: Session, item: PlannedContentRecord, business_d
         "source_assets": [_source_asset_facts(asset) for asset in source_assets],
         "approved_source_asset_ids": [asset.id for asset in approved_source_assets],
         "missing_inputs": _missing_inputs(source_assets, approved_source_assets),
+        "rewrite_requests": [_rewrite_request_facts(candidate) for candidate in item.candidates if candidate.review_state == "rewrite_requested"],
         "audience": item.audience,
         "occasion": item.occasion,
         "promotion": item.promotion,
@@ -239,7 +240,7 @@ def upsert_candidate(
         return existing, False
     if existing is None:
         existing = GeneratedContentCandidateRecord(
-            planned_item_id=item.id,
+            planned_item=item,
             candidate_type=candidate_type,
             provider=provider,
         )
@@ -584,6 +585,19 @@ def _source_asset_facts(asset: AssetRecord) -> dict[str, object]:
         "canonical_url": asset.canonical_url,
         "rights": asset.rights,
         "brand_safe": asset.brand_safe,
+    }
+
+
+def _rewrite_request_facts(candidate: GeneratedContentCandidateRecord) -> dict[str, object]:
+    return {
+        "candidate_id": candidate.id,
+        "candidate_type": candidate.candidate_type,
+        "provider": candidate.provider,
+        "review_state": candidate.review_state,
+        "revision_notes": candidate.revision_notes,
+        "reviewed_by": candidate.reviewed_by,
+        "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
+        "previous_copy_text": _candidate_copy_body(candidate.body),
     }
 
 

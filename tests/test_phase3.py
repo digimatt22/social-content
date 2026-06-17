@@ -1037,7 +1037,15 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 item_id = item.id
                 candidate_id = facebook.id
 
-            summary = run_content_production_job(db_path=db_path)
+            dry_run = run_content_production_job(db_path=db_path, dry_run=True, export_briefs_dir=Path(tmp) / "briefs")
+            self.assertEqual(len(dry_run["items"]), 1)
+            brief_path = Path(dry_run["items"][0]["brief_export_path"])
+            rewrite_brief = json.loads(brief_path.read_text(encoding="utf-8"))
+            self.assertEqual(rewrite_brief["rewrite_requests"][0]["candidate_id"], candidate_id)
+            self.assertEqual(rewrite_brief["rewrite_requests"][0]["revision_notes"], "Too generic; make it warmer.")
+            self.assertEqual(rewrite_brief["rewrite_requests"][0]["previous_copy_text"], "stale draft that should be replaced")
+
+            summary = run_content_production_job(db_path=db_path, export_briefs_dir=Path(tmp) / "briefs")
             self.assertEqual(summary["processed"], 1)
             self.assertEqual(summary["created"], 0)
             self.assertTrue(summary["items"][0]["rewrite_requested"])
@@ -1048,6 +1056,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertEqual(rewritten.review_state, "needs_review")
                 self.assertNotEqual(rewritten.body, "stale draft that should be replaced")
                 self.assertIn("Bingo Duck", rewritten.body)
+                self.assertIn("Too generic; make it warmer.", rewritten.source_facts_json)
                 self.assertNotIn(item_id, [item.id for item in planned_items_needing_production(session)])
 
     def test_phase5_copy_quality_score_flags_internal_notes_and_unsupported_terms(self) -> None:
