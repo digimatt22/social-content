@@ -110,7 +110,11 @@
           <button class="secondary" type="submit">Export creative handoff</button>
         </form>
       {% endif %}
-      <a class="button secondary" href="{{ url_for('creative_assets') }}">Import in Creative Assets</a>
+      {% if packet.creative_handoff %}
+        <a class="button secondary" href="{{ packet.creative_handoff.manual_import_query }}">Import prefilled handoff</a>
+      {% else %}
+        <a class="button secondary" href="{{ url_for('creative_assets') }}">Import in Creative Assets</a>
+      {% endif %}
     {% endif %}
   </article>
 </section>

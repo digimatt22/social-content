@@ -471,7 +471,22 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             plans = creative_asset_plans(session)
             source_assets = [plan.source_asset for plan in plans if plan.source_ready]
             jobs = creative_generation_jobs(session)
-            return render_template("creative_assets.html", active="creative_assets", plans=plans, source_assets=source_assets, jobs=jobs)
+            manual_import_defaults: dict[str, object] = {}
+            if request.args.get("phase5_handoff") == "1":
+                packet = serialize_phase5_approval_packet(build_phase5_approval_packet(session))
+                handoff = packet.get("creative_handoff")
+                if isinstance(handoff, dict):
+                    defaults = handoff.get("import_defaults")
+                    if isinstance(defaults, dict):
+                        manual_import_defaults = defaults
+            return render_template(
+                "creative_assets.html",
+                active="creative_assets",
+                plans=plans,
+                source_assets=source_assets,
+                jobs=jobs,
+                manual_import_defaults=manual_import_defaults,
+            )
 
     @app.get("/planning")
     def planning() -> str:

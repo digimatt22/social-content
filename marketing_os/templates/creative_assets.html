@@ -48,46 +48,49 @@
   {% endfor %}
 </section>
 
-<section class="panel" style="margin-top: 18px;">
+<section class="panel" style="margin-top: 18px;" id="import-magnific-output">
   <h3>Import Magnific / MCP Output</h3>
   <p class="subtle">Use this after generating or upscaling an image outside the app. The output starts in needs review and cannot be assigned to tasks until approved.</p>
+  {% if manual_import_defaults %}
+    <div class="copybox">Prefilled from Phase 5 creative handoff. Generate the image externally, update the output path if needed, then import for review.</div>
+  {% endif %}
   <form method="post" action="{{ url_for('creative_assets_manual_import') }}">
     <div class="grid">
       <label>Approved source asset
         <select name="source_asset_id" required>
           <option value="">Choose source</option>
           {% for asset in source_assets %}
-            <option value="{{ asset.id }}">{{ asset.name }}</option>
+            <option value="{{ asset.id }}" {{ 'selected' if manual_import_defaults.source_asset_id == asset.id else '' }}>{{ asset.name }}</option>
           {% endfor %}
         </select>
       </label>
       <label>Output file path
-        <input name="output_path" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg" required>
+        <input name="output_path" value="{{ manual_import_defaults.output_path or '' }}" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg" required>
       </label>
       <label>Target format
-        <input name="target_format" placeholder="Facebook post image" required>
+        <input name="target_format" value="{{ manual_import_defaults.target_format or '' }}" placeholder="Facebook post image" required>
       </label>
       <label>Provider
-        <input name="provider" value="magnific_manual">
+        <input name="provider" value="{{ manual_import_defaults.provider or 'magnific_manual' }}">
       </label>
       <label>Model/tool
-        <input name="model_name" placeholder="Magnific MCP, Upscaler Creative, Mystic">
+        <input name="model_name" value="{{ manual_import_defaults.model_name or '' }}" placeholder="Magnific MCP, Upscaler Creative, Mystic">
       </label>
       <label>Provider job or run ID
-        <input name="provider_job_id" placeholder="Optional job URL or ID">
+        <input name="provider_job_id" value="{{ manual_import_defaults.provider_job_id or '' }}" placeholder="Optional job URL or ID">
       </label>
       <label>Output URL
-        <input name="output_url" placeholder="Optional provider output URL">
+        <input name="output_url" value="{{ manual_import_defaults.output_url or '' }}" placeholder="Optional provider output URL">
       </label>
       <label>Requested dimensions
-        <input name="requested_dimensions" placeholder="1080x1080">
+        <input name="requested_dimensions" value="{{ manual_import_defaults.requested_dimensions or '' }}" placeholder="1080x1080">
       </label>
     </div>
     <label>Prompt
-      <textarea name="prompt" placeholder="Prompt used in Magnific/MCP, including product accuracy constraints." required></textarea>
+      <textarea name="prompt" placeholder="Prompt used in Magnific/MCP, including product accuracy constraints." required>{{ manual_import_defaults.prompt or '' }}</textarea>
     </label>
     <label>Review notes
-      <textarea name="notes" placeholder="What should the reviewer check?"></textarea>
+      <textarea name="notes" placeholder="What should the reviewer check?">{{ manual_import_defaults.notes or '' }}</textarea>
     </label>
     <button type="submit" {{ 'disabled' if not source_assets else '' }}>Import generated candidate</button>
   </form>

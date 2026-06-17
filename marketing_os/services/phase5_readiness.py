@@ -222,6 +222,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
         )
 
     source_asset = handoff["source_asset"]
+    import_defaults = handoff["import_defaults"]
     lines = [
         "# Phase 5 Creative Handoff",
         "",
@@ -259,10 +260,11 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
             "## Import Back Into Marketing OS",
             "",
             f"- Open: {handoff['manual_import_path']}",
+            f"- Prefilled form: {handoff['manual_import_query']}",
             "- Use the source asset ID above.",
             "- Set provider to `magnific_mcp` or the actual provider/tool used.",
             "- Paste the prompt above into the Prompt field.",
-            "- Save the generated output to a local path that Marketing OS can read.",
+            f"- Suggested output path: {import_defaults['output_path'] or 'choose a local path that Marketing OS can read'}",
             "- Import the output as `Facebook post image` and leave it in `needs_review` until Matt approves it.",
             "",
         ]
@@ -447,7 +449,26 @@ def _serialize_creative_handoff(
         "prompt_review_path": f"/planning#candidate-{prompt_candidate.id}" if prompt_candidate else "",
         "source_asset": _serialize_source_asset(source_asset),
         "manual_import_path": "/creative-assets",
+        "manual_import_query": "/creative-assets?phase5_handoff=1#import-magnific-output",
+        "import_defaults": _creative_import_defaults(prompt_candidate, source_asset),
         "next_step": "Generate a real Magnific/MCP output from the recommended source asset, save it locally, then import it through Creative Assets.",
+    }
+
+
+def _creative_import_defaults(prompt_candidate: GeneratedContentCandidateRecord | None, source_asset: AssetRecord | None) -> dict[str, object]:
+    source_id = source_asset.id if source_asset else ""
+    source_slug = _slug(source_asset.name) if source_asset else "phase5"
+    return {
+        "source_asset_id": source_id,
+        "output_path": f"outputs/magnific/{source_slug}-facebook-post-image.png" if source_asset else "",
+        "target_format": "Facebook post image",
+        "provider": "magnific_mcp",
+        "model_name": "Magnific MCP",
+        "provider_job_id": "",
+        "output_url": "",
+        "requested_dimensions": "1080x1080",
+        "prompt": _creative_handoff_prompt(prompt_candidate, source_asset),
+        "notes": "Phase 5 generated creative candidate. Review product accuracy, composition, and brand fit before approval.",
     }
 
 
@@ -532,6 +553,19 @@ def _json_list(value: str) -> list[object]:
     except json.JSONDecodeError:
         return []
     return data if isinstance(data, list) else []
+
+
+def _slug(value: str) -> str:
+    chars: list[str] = []
+    previous_dash = False
+    for char in value.lower():
+        if char.isalnum():
+            chars.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            chars.append("-")
+            previous_dash = True
+    return "".join(chars).strip("-") or "phase5"
 
 
 def _candidate_product_ids(candidate: GeneratedContentCandidateRecord | None) -> list[int]:
