@@ -159,6 +159,8 @@ Use Phase 5 Readiness to check the two final human-proof items before calling Ph
 
 The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset preview and Magnific/MCP prompt handoff with copy controls, and it can open Creative Assets with the import form prefilled for either file upload or path-based import. It can export either a full Markdown approval packet or a focused creative handoff file.
 
+The approval packet includes a final proof runbook. Use it as the last-mile checklist: review the copyable Facebook post, set `Reviewed by` to Matt when approving, generate/import the real Magnific/MCP output if needed, review the source and generated creative previews, and then rerun the strict readiness command. If copy is marked `rewrite_requested`, the readiness action points back to the content-production job so the next draft can address the review notes.
+
 The same check can run from the command line:
 
 ```bash

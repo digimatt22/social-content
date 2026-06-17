@@ -129,6 +129,8 @@ python -m marketing_os.jobs.phase5_readiness --export-markdown
 python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
 ```
 
+The Markdown approval packet includes a final proof runbook, the latest copyable Facebook post, creative review or handoff details, and the strict final-gate command. Approved generated copy and approved generated creative must include `Reviewed by` evidence.
+
 For strict completion gates, add `--fail-on-incomplete` so the command exits with code 2 while human proof is still missing.
 
 Do not expose this local app to the public internet.

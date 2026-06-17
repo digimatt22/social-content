@@ -35,7 +35,7 @@ Live readiness gate:
 - `python -m marketing_os.jobs.phase5_readiness --export-markdown`
 - `python -m marketing_os.jobs.phase5_readiness --export-creative-handoff`
 
-The readiness page can record final copy and creative reviews directly, links to the underlying Planning and Creative Assets records for deeper inspection, and shows a recommended source asset preview plus Magnific/MCP prompt handoff when no generated creative job exists yet. It can open Creative Assets with the import form prefilled, includes copy controls for the source path and prompt, and can export a Markdown approval packet or focused creative handoff into the configured runtime export folder. The CLI can also export the same files. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
+The readiness page can record final copy and creative reviews directly, links to the underlying Planning and Creative Assets records for deeper inspection, and shows a recommended source asset preview plus Magnific/MCP prompt handoff when no generated creative job exists yet. It can open Creative Assets with the import form prefilled, includes copy controls for the source path and prompt, and can export a Markdown approval packet or focused creative handoff into the configured runtime export folder. The CLI can also export the same files. The packet packages the latest Facebook copy candidate, latest creative generation job or creative handoff, readiness status, final human-review actions, and a final proof runbook. Generated copy and generated creative approval now require `Reviewed by` evidence, and rewrite requests point the operator back to the content-production job.
 
 ## Doneness Criteria Audit
 
@@ -77,17 +77,17 @@ The readiness page can record final copy and creative reviews directly, links to
 
 ## Remaining Work Before Marking Phase 5 Complete
 
-1. Run a real Freepik/Magnific or MCP generation/import pass using an approved source asset, then visually review and approve one generated creative candidate.
-2. Have Matt review the Facebook proof post or a live generated task draft for voice/taste; adjust the copywriter if it still needs heavy rewrite.
-3. Use `/phase5-readiness` to export the Phase 5 approval packet if Matt needs one review artifact for the remaining copy and creative decisions.
+1. Run a real Freepik/Magnific or MCP generation/import pass using an approved source asset, then visually review and approve one generated creative candidate with `Reviewed by` set to Matt.
+2. Have Matt review the Facebook proof post or a live generated task draft for voice/taste, approve it with `Reviewed by` set to Matt, or mark it `rewrite_requested` and rerun content production.
+3. Use `/phase5-readiness` or `python -m marketing_os.jobs.phase5_readiness --export-markdown` to export the Phase 5 approval packet and follow its final proof runbook.
 4. Re-run the full completion audit after those artifacts exist.
 
 ## Closed After Initial Audit
 
 - Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
-- Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, and approving a job approves the file-backed candidate asset.
+- Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, approving a job approves the file-backed candidate asset, and approval requires reviewer evidence.
 - Phase 5 readiness gate: `/phase5-readiness`, `/api/phase5-readiness`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_tracks_remaining_human_proof_items`.
-- Phase 5 approval packet export and direct review targets: `/api/phase5-approval-packet`, `/phase5-readiness` inline review/export/action links and creative handoff, `python -m marketing_os.jobs.phase5_readiness --export-markdown`, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_approval_packet_exports_copy_and_creative_review_actions`, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_surfaces_creative_handoff_when_no_job_exists`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_job_reports_and_exports_packet`.
+- Phase 5 approval packet export and direct review targets: `/api/phase5-approval-packet`, `/phase5-readiness` inline review/export/action links and creative handoff, `python -m marketing_os.jobs.phase5_readiness --export-markdown`, final proof runbook rendering, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_approval_packet_exports_copy_and_creative_review_actions`, `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_surfaces_creative_handoff_when_no_job_exists`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_job_reports_and_exports_packet`.
 
 ## Notes
 
