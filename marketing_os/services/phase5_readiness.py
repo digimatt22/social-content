@@ -349,7 +349,7 @@ def _copy_review_item(session: Session) -> ReadinessItem:
 
 
 def _creative_review_item(session: Session) -> ReadinessItem:
-    job = session.scalar(
+    approved = session.scalar(
         select(CreativeGenerationJobRecord)
         .where(
             CreativeGenerationJobRecord.review_state == "approved",
@@ -359,14 +359,42 @@ def _creative_review_item(session: Session) -> ReadinessItem:
         )
         .order_by(CreativeGenerationJobRecord.reviewed_at.desc(), CreativeGenerationJobRecord.id.desc())
     )
-    if job:
+    if approved:
         return ReadinessItem(
             key="creative_generation_review",
             label="Matt-approved generated creative",
             complete=True,
             message="A generated creative job has reviewer evidence and a candidate asset.",
-            evidence=f"Creative job #{job.id} approved by {job.reviewed_by}.",
+            evidence=f"Creative job #{approved.id} approved by {approved.reviewed_by}.",
             action="Use the approved generated asset from Creative Assets when appropriate.",
+        )
+    latest = _latest_creative_job(session)
+    if latest and latest.review_state == "needs_review":
+        return ReadinessItem(
+            key="creative_generation_review",
+            label="Matt-approved generated creative",
+            complete=False,
+            message="Latest generated creative is imported and waiting for Matt review.",
+            evidence=_creative_job_evidence(latest),
+            action="Open Creative Assets, compare the source and generated candidate, set Reviewed by to Matt, then approve or reject.",
+        )
+    if latest and latest.review_state == "approved":
+        return ReadinessItem(
+            key="creative_generation_review",
+            label="Matt-approved generated creative",
+            complete=False,
+            message="Latest generated creative is approved but missing final proof evidence.",
+            evidence=_creative_job_evidence(latest),
+            action="Open Creative Assets, confirm the candidate asset exists, set Reviewed by to Matt, and save creative review.",
+        )
+    if latest and latest.review_state == "rejected":
+        return ReadinessItem(
+            key="creative_generation_review",
+            label="Matt-approved generated creative",
+            complete=False,
+            message="Latest generated creative was rejected.",
+            evidence=_creative_job_evidence(latest),
+            action="Generate or import a revised Magnific/MCP output from an approved source asset and review the new candidate.",
         )
     return ReadinessItem(
         key="creative_generation_review",
@@ -376,6 +404,21 @@ def _creative_review_item(session: Session) -> ReadinessItem:
         evidence="Missing approved creative generation job with reviewed_by, reviewed_at, and candidate asset.",
         action="Import a real Magnific/MCP output, visually review it, set Reviewed by to Matt, and save creative review.",
     )
+
+
+def _creative_job_evidence(job: CreativeGenerationJobRecord) -> str:
+    parts = [
+        f"Creative job #{job.id}",
+        f"state {job.review_state}",
+        f"source asset #{job.source_asset_id}",
+    ]
+    if job.candidate_asset_id:
+        parts.append(f"candidate asset #{job.candidate_asset_id}")
+    if job.output_path:
+        parts.append(f"output {job.output_path}")
+    if job.reviewed_by:
+        parts.append(f"reviewed by {job.reviewed_by}")
+    return "; ".join(parts) + "."
 
 
 def _latest_facebook_candidate(session: Session) -> GeneratedContentCandidateRecord | None:
