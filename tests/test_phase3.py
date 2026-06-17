@@ -1364,7 +1364,38 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             api_payload = api_response.get_json()["packet"]
             self.assertFalse(api_payload["readiness"]["complete"])
             self.assertEqual(api_payload["copy_review"]["candidate_type"], "facebook_post")
+            self.assertEqual(api_payload["copy_review"]["review_path"], f"/planning#candidate-{facebook.id}")
             self.assertEqual(api_payload["creative_review"]["provider_job_id"], "packet-job")
+            self.assertEqual(api_payload["creative_review"]["review_path"], f"/creative-assets#creative-job-{creative.job.id}")
+
+            page = client.get("/phase5-readiness")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(f'href="/planning#candidate-{facebook.id}"'.encode(), page.data)
+            self.assertIn(f'href="/creative-assets#creative-job-{creative.job.id}"'.encode(), page.data)
+
+            planning_page = client.get("/planning")
+            self.assertEqual(planning_page.status_code, 200)
+            self.assertIn(f'id="candidate-{facebook.id}"'.encode(), planning_page.data)
+
+            creative_page = client.get("/creative-assets")
+            self.assertEqual(creative_page.status_code, 200)
+            self.assertIn(f'id="creative-job-{creative.job.id}"'.encode(), creative_page.data)
+
+            copy_review_response = client.post(
+                f"/planning/candidates/{facebook.id}/review",
+                data={"review_state": "needs_review", "revision_notes": "Still checking.", "reviewed_by": ""},
+                follow_redirects=False,
+            )
+            self.assertEqual(copy_review_response.status_code, 302)
+            self.assertTrue(copy_review_response.headers["Location"].endswith(f"/planning#candidate-{facebook.id}"))
+
+            creative_review_response = client.post(
+                f"/creative-assets/jobs/{creative.job.id}/review",
+                data={"review_state": "needs_review", "review_notes": "Still checking.", "reviewed_by": ""},
+                follow_redirects=False,
+            )
+            self.assertEqual(creative_review_response.status_code, 302)
+            self.assertTrue(creative_review_response.headers["Location"].endswith(f"/creative-assets#creative-job-{creative.job.id}"))
 
             export_response = client.post("/phase5-readiness/export")
             self.assertEqual(export_response.status_code, 200)

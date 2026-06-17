@@ -297,6 +297,7 @@ def _serialize_copy_candidate(candidate: GeneratedContentCandidateRecord | None)
         "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
         "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
         "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
+        "review_path": f"/planning#candidate-{candidate.id}",
     }
 
 
@@ -323,6 +324,7 @@ def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str
         "reviewed_at": job.reviewed_at.isoformat() if job.reviewed_at else None,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+        "review_path": f"/creative-assets#creative-job-{job.id}",
     }
 
 

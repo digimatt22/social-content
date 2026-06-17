@@ -553,7 +553,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash("Candidate review saved.")
             except ValueError as exc:
                 flash(str(exc))
-        return redirect(url_for("planning"))
+        return redirect(url_for("planning", _anchor=f"candidate-{candidate_id}"))
 
     @app.post("/planning/candidates/<int:candidate_id>/link-task")
     def link_planning_candidate_to_task(candidate_id: int) -> str:
@@ -621,7 +621,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash("Creative review saved.")
             except ValueError as exc:
                 flash(str(exc))
-        return redirect(url_for("creative_assets"))
+        return redirect(url_for("creative_assets", _anchor=f"creative-job-{job_id}"))
 
     @app.get("/calendar")
     def calendar() -> str:
@@ -842,8 +842,13 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     @app.get("/phase5-readiness")
     def phase5_readiness() -> str:
         with session_scope(factory) as session:
-            readiness = build_phase5_readiness(session)
-            return render_template("phase5_readiness.html", active="phase5_readiness", readiness=readiness)
+            packet = build_phase5_approval_packet(session)
+            return render_template(
+                "phase5_readiness.html",
+                active="phase5_readiness",
+                readiness=packet.readiness,
+                packet=serialize_phase5_approval_packet(packet),
+            )
 
     @app.post("/phase5-readiness/export")
     def export_phase5_approval_packet():

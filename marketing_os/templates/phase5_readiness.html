@@ -15,6 +15,48 @@
 </div>
 
 <section class="grid">
+  <article class="panel">
+    <div class="meta">
+      <span class="pill">Copy target</span>
+      {% if packet.copy_review %}
+        <span class="pill">{{ packet.copy_review.review_state.replace('_', ' ').title() }}</span>
+      {% else %}
+        <span class="pill blocked">Missing</span>
+      {% endif %}
+    </div>
+    <h3 style="margin-top: 10px;">Latest Facebook Copy</h3>
+    {% if packet.copy_review %}
+      <p class="subtle">Candidate #{{ packet.copy_review.id }} · Planned item #{{ packet.copy_review.planned_item_id }}</p>
+      <div class="copybox">{{ packet.copy_review.display_body }}</div>
+      <a class="button secondary" href="{{ packet.copy_review.review_path }}">Open copy review</a>
+    {% else %}
+      <p class="subtle">Run content production for a planned Facebook item before copy can be reviewed.</p>
+      <a class="button secondary" href="{{ url_for('planning') }}">Open Planning</a>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <div class="meta">
+      <span class="pill">Creative target</span>
+      {% if packet.creative_review %}
+        <span class="pill">{{ packet.creative_review.review_state.replace('_', ' ').title() }}</span>
+      {% else %}
+        <span class="pill blocked">Missing</span>
+      {% endif %}
+    </div>
+    <h3 style="margin-top: 10px;">Latest Generated Creative</h3>
+    {% if packet.creative_review %}
+      <p class="subtle">Job #{{ packet.creative_review.id }} · {{ packet.creative_review.provider }}{% if packet.creative_review.provider_job_id %} · {{ packet.creative_review.provider_job_id }}{% endif %}</p>
+      <div class="copybox">{{ packet.creative_review.prompt or 'No prompt recorded.' }}</div>
+      <a class="button secondary" href="{{ packet.creative_review.review_path }}">Open creative review</a>
+    {% else %}
+      <p class="subtle">Import a real Magnific/MCP output before generated creative can be reviewed.</p>
+      <a class="button secondary" href="{{ url_for('creative_assets') }}">Open Creative Assets</a>
+    {% endif %}
+  </article>
+</section>
+
+<section class="grid">
   {% for item in readiness.items %}
     <article class="panel">
       <div class="meta">

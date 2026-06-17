@@ -96,7 +96,7 @@
 <h3 style="margin-top: 22px;">Generation Jobs</h3>
 <section class="agenda">
   {% for job in jobs %}
-    <div class="panel">
+    <div class="panel" id="creative-job-{{ job.id }}">
       <div class="meta">
         <span class="pill">{{ job.provider }}</span>
         <span class="pill">{{ job.target_format }}</span>

@@ -118,15 +118,15 @@
         <h3 style="margin-top: 14px;">Candidates</h3>
         <div class="agenda">
           {% for candidate in item.candidates %}
-            <div class="task">
+            <div class="task" id="candidate-{{ candidate.id }}">
               <div class="meta">
                 <span class="pill">{{ candidate.candidate_type.replace('_', ' ').title() }}</span>
                 <span class="pill">{{ candidate.provider }}</span>
                 <span class="pill">{{ candidate.review_state.replace('_', ' ').title() }}</span>
               </div>
-              <pre class="copybox" id="candidate-{{ candidate.id }}">{{ candidate.display_body }}</pre>
+              <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.display_body }}</pre>
               <div class="button-group">
-                <button class="secondary" type="button" data-copy-target="#candidate-{{ candidate.id }}">Copy candidate</button>
+                <button class="secondary" type="button" data-copy-target="#candidate-copy-{{ candidate.id }}">Copy candidate</button>
               </div>
               <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
                 <div class="grid">

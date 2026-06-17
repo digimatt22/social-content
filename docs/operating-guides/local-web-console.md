@@ -154,7 +154,7 @@ Use Phase 5 Readiness to check the two final human-proof items before calling Ph
 - Matt-approved Facebook copy with reviewer evidence
 - Matt-approved generated creative with reviewer evidence and a file-backed candidate asset
 
-The page can export a Markdown approval packet that gathers the latest Facebook copy candidate, latest creative generation job, readiness status, and remaining review actions.
+The page links directly to the latest Facebook copy and generated creative review targets. It can also export a Markdown approval packet that gathers the latest Facebook copy candidate, latest creative generation job, readiness status, and remaining review actions.
 
 The same check can run from the command line:
 
