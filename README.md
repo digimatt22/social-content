@@ -55,6 +55,8 @@ Edit those files to update business facts, products, audiences, voice, goals, an
 
 ## Usage
 
+For a step-by-step local test flow, see [docs/getting-started.md](docs/getting-started.md).
+
 Check that business context loads:
 
 ```bash
@@ -107,4 +109,3 @@ Out of scope:
 - Automated content publishing
 
 The code includes adapter interfaces and mock implementations so future integrations can be added without rewriting the core planning logic.
-
