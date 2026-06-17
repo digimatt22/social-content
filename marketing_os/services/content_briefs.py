@@ -107,16 +107,25 @@ def planned_items_needing_production(
     channel: str | None = None,
     limit: int = 10,
 ) -> list[PlannedContentRecord]:
-    query = select(PlannedContentRecord).where(PlannedContentRecord.status == "planned").order_by(
+    query = select(PlannedContentRecord).order_by(
         PlannedContentRecord.calendar_date, PlannedContentRecord.id
     )
     if target_date is not None:
         query = query.where(PlannedContentRecord.calendar_date <= target_date)
-    items = list(session.scalars(query))
+    candidates = list(session.scalars(query))
+    items = [
+        item
+        for item in candidates
+        if item.status == "planned" or any(candidate.review_state == "rewrite_requested" for candidate in item.candidates)
+    ]
     if channel:
         normalized = channel.lower()
         items = [item for item in items if any(destination.lower() == normalized for destination in destinations_for(item))]
     return items[:limit]
+
+
+def has_rewrite_request(item: PlannedContentRecord) -> bool:
+    return any(candidate.review_state == "rewrite_requested" for candidate in item.candidates)
 
 
 def build_content_brief(session: Session, item: PlannedContentRecord, business_dir: str = "docs/business") -> dict[str, object]:

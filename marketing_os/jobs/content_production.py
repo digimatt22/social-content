@@ -11,6 +11,7 @@ from ..db import create_db_engine, init_db, session_factory, session_scope
 from ..db_models import PlannedContentRecord
 from ..services.content_briefs import (
     build_content_brief,
+    has_rewrite_request,
     planned_items_needing_production,
     produce_content_for_item,
     serialize_planned_content_item,
@@ -54,7 +55,8 @@ def run(
                         }
                     )
                     continue
-                result = produce_content_for_item(session, item, business_dir=business_dir, force=force)
+                rewrite_requested = has_rewrite_request(item)
+                result = produce_content_for_item(session, item, business_dir=business_dir, force=force or rewrite_requested)
                 summary["processed"] = int(summary["processed"]) + 1
                 summary["created"] = int(summary["created"]) + result.created
                 summary["skipped"] = int(summary["skipped"]) + result.skipped
@@ -65,6 +67,8 @@ def run(
                         "brief_status": item.brief_status,
                         "candidate_ids": [candidate.id for candidate in result.candidates],
                         "brief_export_path": brief_export_path,
+                        "rewrite_requested": rewrite_requested,
+                        "forced": bool(force or rewrite_requested),
                     }
                 )
     finally:

@@ -1014,6 +1014,42 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             health = data_health(session)
             self.assertTrue(any(row.area == "Content Production" and row.count >= 1 for row in health))
 
+    def test_phase5_content_production_picks_up_rewrite_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-rewrite.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 7, 1),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    audience="gift buyers",
+                )
+                result = produce_content_for_item(session, item)
+                facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                facebook.body = "stale draft that should be replaced"
+                record_candidate_review(session, facebook.id, "rewrite_requested", "Too generic; make it warmer.", reviewed_by="Matt")
+                item_id = item.id
+                candidate_id = facebook.id
+
+            summary = run_content_production_job(db_path=db_path)
+            self.assertEqual(summary["processed"], 1)
+            self.assertEqual(summary["created"], 0)
+            self.assertTrue(summary["items"][0]["rewrite_requested"])
+            self.assertTrue(summary["items"][0]["forced"])
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                rewritten = session.get(GeneratedContentCandidateRecord, candidate_id)
+                self.assertEqual(rewritten.review_state, "needs_review")
+                self.assertNotEqual(rewritten.body, "stale draft that should be replaced")
+                self.assertIn("Bingo Duck", rewritten.body)
+                self.assertNotIn(item_id, [item.id for item in planned_items_needing_production(session)])
+
     def test_phase5_copy_quality_score_flags_internal_notes_and_unsupported_terms(self) -> None:
         score = score_copy_against_voice(
             "Planning note: Keep it conversational. This rubber duck is a licensed official Disney guaranteed bestseller. #one #two #three #four",
