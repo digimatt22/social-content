@@ -264,6 +264,7 @@ class TaskRecord(Base):
     content_type: Mapped[str] = mapped_column(String(80), nullable=False)
     product_name: Mapped[str] = mapped_column(String(200), nullable=False)
     asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    generated_content_candidate_id: Mapped[int | None] = mapped_column(ForeignKey("generated_content_candidates.id"), nullable=True)
     draft_caption: Mapped[str] = mapped_column(Text, nullable=False)
     cta: Mapped[str] = mapped_column(Text, nullable=False)
     hashtags_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
@@ -291,6 +292,7 @@ class TaskRecord(Base):
     plan: Mapped[PlanRecord] = relationship(back_populates="tasks")
     calendar_item: Mapped[CalendarItemRecord | None] = relationship(back_populates="task")
     asset: Mapped[AssetRecord | None] = relationship()
+    generated_content_candidate: Mapped[GeneratedContentCandidateRecord | None] = relationship()
     metrics: Mapped[list["MetricRecord"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
@@ -309,6 +311,7 @@ class MetricRecord(Base):
     etsy_visits: Mapped[int | None] = mapped_column(Integer, nullable=True)
     etsy_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
     email_signups: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome_tags_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     collection_status: Mapped[str] = mapped_column(String(80), default="recorded", nullable=False)
     external_source: Mapped[str] = mapped_column(String(80), default="", nullable=False)

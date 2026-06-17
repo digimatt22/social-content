@@ -19,12 +19,14 @@ from .phase3 import (
     ensure_default_plan,
     generate_and_persist_plan,
     json_list,
+    link_generated_content_to_task,
     playbook_for,
     seed_database,
     status_counts,
     template_body,
     update_task_status,
 )
+from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
 from .phase4 import (
     OPERATOR_DEFAULT_ROLE,
     assign_asset_to_task,
@@ -172,6 +174,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     etsy_visits=_int_or_none(payload.get("etsy_visits")),
                     etsy_orders=_int_or_none(payload.get("etsy_orders")),
                     email_signups=_int_or_none(payload.get("email_signups")),
+                    outcome_tags=_tag_values(payload.get("outcome_tags")),
                     notes=str(payload.get("notes") or ""),
                 )
             except ValueError as exc:
@@ -185,9 +188,23 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                         "task_id": metric.task_id,
                         "recorded_on": metric.recorded_on.isoformat(),
                         "post_url": metric.post_url,
+                        "outcome_tags": outcome_tags(metric),
                     },
                 }
             )
+
+    @app.post("/api/tasks/<int:task_id>/generated-content")
+    def api_task_generated_content(task_id: int):
+        payload = request.get_json(silent=True) or {}
+        candidate_id = _int_or_none(payload.get("candidate_id"))
+        if candidate_id is None:
+            return jsonify({"error": "Choose a generated content candidate."}), 400
+        with session_scope(factory) as session:
+            try:
+                task = link_generated_content_to_task(session, task_id, candidate_id)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 404
+            return jsonify({"task": serialize_task_view(task_view(task))})
 
     @app.post("/api/tasks/<int:task_id>/asset")
     def api_task_asset(task_id: int):
@@ -217,6 +234,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
             return jsonify({"items": [serialize_data_health_item(item) for item in build_data_health(session, app.config["ASSET_LIBRARY_ROOT"])]})
+
+    @app.get("/api/insights")
+    def api_insights():
+        with session_scope(factory) as session:
+            return jsonify({"summary": serialize_learning_summary(build_learning_summary(session))})
 
     @app.post("/api/assets/library/scan")
     def api_scan_asset_library():
@@ -500,6 +522,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 metrics=metrics,
                 metric_fields=metric_fields,
                 show_metrics=show_metrics,
+                outcome_tags=outcome_tags,
             )
 
     @app.post("/tasks/<int:task_id>/status")
@@ -554,6 +577,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 etsy_visits=int_or_none("etsy_visits"),
                 etsy_orders=int_or_none("etsy_orders"),
                 email_signups=int_or_none("email_signups"),
+                outcome_tags=_tag_values(request.form.get("outcome_tags", "")),
                 notes=request.form.get("notes", ""),
             )
             flash("Metrics saved.")
@@ -662,7 +686,13 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def metrics() -> str:
         with session_scope(factory) as session:
             records = list(session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on.desc(), MetricRecord.id.desc())))
-            return render_template("metrics.html", active="metrics", metrics=records)
+            return render_template("metrics.html", active="metrics", metrics=records, outcome_tags=outcome_tags)
+
+    @app.get("/insights")
+    def insights() -> str:
+        with session_scope(factory) as session:
+            summary = build_learning_summary(session)
+            return render_template("insights.html", active="insights", summary=summary)
 
     @app.get("/data-health")
     def data_health() -> str:
@@ -752,6 +782,21 @@ def _int_or_none(value: object) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+def _tag_values(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        raw_values = value
+    else:
+        raw_values = str(value).replace("\n", ",").split(",")
+    tags: list[str] = []
+    for raw in raw_values:
+        tag = str(raw).strip().lower()
+        if tag and tag not in tags:
+            tags.append(tag)
+    return tags
 
 
 def main(argv: list[str] | None = None) -> int:

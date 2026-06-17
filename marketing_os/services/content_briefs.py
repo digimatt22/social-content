@@ -16,6 +16,7 @@ from ..db_models import (
 )
 from ..phase3 import json_list
 from .copywriter import generate_facebook_post
+from .insights import brief_performance_context
 
 
 DESTINATION_OPTIONS = ["Facebook", "Instagram", "Pinterest", "Blog post", "Etsy", "Website", "Email"]
@@ -126,6 +127,7 @@ def build_content_brief(session: Session, item: PlannedContentRecord, business_d
         "useful_phrases": context.useful_phrases[:5],
         "avoid": context.avoid[:5],
         "channels": context.channels,
+        "performance_context": brief_performance_context(session),
     }
 
 

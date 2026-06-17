@@ -30,6 +30,7 @@ from .db_models import (
     utc_now,
 )
 from .phase3 import ROLE_OPTIONS, TASK_STATUSES, json_list, slugify, update_task_status
+from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
 
 
 OPERATOR_DEFAULT_ROLE = "social operator"
@@ -196,6 +197,7 @@ def serialize_task_view(model: TaskView) -> JsonDict:
         "is_blocked": model.is_blocked,
         "asset_ready": model.asset_ready,
         "asset_id": task.asset_id,
+        "generated_content_candidate_id": task.generated_content_candidate_id,
         "metric_due": model.metric_due,
         "metric_followup_reason": model.metric_followup_reason,
         "metric_followup_label": model.metric_followup_label,
@@ -887,6 +889,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     generated_candidates = list(session.scalars(select(GeneratedContentCandidateRecord)))
     creative_jobs = list(session.scalars(select(CreativeGenerationJobRecord)))
     sync_metadata = list(session.scalars(select(SyncMetadata)))
+    learning_summary = build_learning_summary(session)
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
     sync_errors = [product for product in products if product.sync_error or product.sync_status == "error"]
@@ -968,6 +971,13 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             if planned_without_candidates or candidates_needing_review
             else "No planned content is waiting for production review.",
             "Open Planning.",
+        ),
+        DataHealthItem(
+            "Learning Loop",
+            "Needs data" if learning_summary.needs_more_data else "OK",
+            len(learning_summary.needs_more_data),
+            "Performance lessons need more linked outcomes." if learning_summary.needs_more_data else "Performance outcomes are feeding simple insights.",
+            "Open Insights.",
         ),
         DataHealthItem(
             "Etsy Sync",
@@ -1086,6 +1096,7 @@ def export_operating_data(session: Session, export_dir: str | Path = "data/expor
             _export_creative_generation_job(record)
             for record in session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.created_at, CreativeGenerationJobRecord.id))
         ],
+        "learning_summary": serialize_learning_summary(build_learning_summary(session)),
         "tasks": [_export_task(record) for record in session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id))],
         "metrics": [_export_metric(record) for record in session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on, MetricRecord.id))],
         "blog_posts": [_export_blog_post(record) for record in session.scalars(select(BlogPostRecord).order_by(BlogPostRecord.title, BlogPostRecord.id))],
@@ -1523,6 +1534,7 @@ def _export_task(record: TaskRecord) -> JsonDict:
         "content_type": record.content_type,
         "product_name": record.product_name,
         "asset_id": record.asset_id,
+        "generated_content_candidate_id": record.generated_content_candidate_id,
         "draft_caption": record.draft_caption,
         "cta": record.cta,
         "hashtags": json_list(record.hashtags_json),
@@ -1563,6 +1575,7 @@ def _export_metric(record: MetricRecord) -> JsonDict:
         "etsy_visits": record.etsy_visits,
         "etsy_orders": record.etsy_orders,
         "email_signups": record.email_signups,
+        "outcome_tags": outcome_tags(record),
         "notes": record.notes,
         "collection_status": record.collection_status,
         "external_source": record.external_source,

@@ -30,6 +30,7 @@ from marketing_os.phase3 import (
     ensure_default_plan,
     generate_and_persist_plan,
     json_list,
+    link_generated_content_to_task,
     seed_database,
     update_task_status,
 )
@@ -65,6 +66,7 @@ from marketing_os.services.content_briefs import (
 )
 from marketing_os.services.creative_generation import import_manual_generated_output
 from marketing_os.services.etsy_import import sync_etsy_read_only
+from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
 from marketing_os.web_app import create_app
@@ -967,6 +969,84 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 export_payload = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(len(export_payload["planned_content_items"]), 1)
                 self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
+
+    def test_phase5_learning_loop_links_generated_copy_to_outcomes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-learning.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name).limit(1)))
+                plan = ensure_default_plan(session, start_date=date(2026, 6, 17))
+                task = plan.tasks[0]
+                asset = session.scalar(select(AssetRecord).order_by(AssetRecord.id))
+                task.platform = "Facebook"
+                task.content_type = "post"
+                task.product_name = products[0].name
+                task.asset_id = asset.id if asset else None
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 26),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[products[0].id],
+                    audience="gift buyers",
+                )
+                result = produce_content_for_item(session, item)
+                facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                link_generated_content_to_task(session, task.id, facebook.id)
+                update_task_status(session, task.id, "posted", "Posted generated Facebook draft.")
+                add_metric(
+                    session,
+                    task.id,
+                    reach=420,
+                    likes=34,
+                    comments=8,
+                    etsy_orders=1,
+                    outcome_tags=["sold item", "got comments"],
+                    notes="Sold item after a good comment thread.",
+                )
+                task_id = task.id
+                candidate_id = facebook.id
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                summary = build_learning_summary(session)
+                payload = serialize_learning_summary(summary)
+                self.assertEqual(summary.metrics_count, 1)
+                self.assertEqual(summary.linked_metric_count, 1)
+                self.assertEqual(summary.generated_candidate_outcomes[0].candidate_id, candidate_id)
+                self.assertEqual(summary.generated_candidate_outcomes[0].product_name, products[0].name)
+                self.assertEqual(summary.generated_candidate_outcomes[0].asset_id, task.asset_id)
+                self.assertIn("sold item", summary.generated_candidate_outcomes[0].outcome_tags)
+                self.assertTrue(any("worked" in item for item in summary.what_worked))
+                self.assertIn("top_channels", payload)
+
+                health = data_health(session)
+                self.assertTrue(any(row.area == "Learning Loop" for row in health))
+
+                target = export_operating_data(session, Path(tmp) / "exports")
+                export_payload = json.loads(target.read_text(encoding="utf-8"))
+                task_export = next(record for record in export_payload["tasks"] if record["id"] == task_id)
+                self.assertEqual(task_export["generated_content_candidate_id"], candidate_id)
+                self.assertEqual(export_payload["metrics"][0]["outcome_tags"], ["sold item", "got comments"])
+                self.assertEqual(export_payload["learning_summary"]["linked_metric_count"], 1)
+
+            insights_response = client.get("/api/insights")
+            self.assertEqual(insights_response.status_code, 200)
+            self.assertEqual(insights_response.get_json()["summary"]["linked_metric_count"], 1)
+
+            insights_page = client.get("/insights")
+            self.assertEqual(insights_page.status_code, 200)
+            self.assertIn(b"Generated Content Outcomes", insights_page.data)
+
+            metric_response = client.post(
+                f"/api/tasks/{task_id}/metrics",
+                json={"reach": 5, "outcome_tags": ["no engagement"], "notes": "Second check was quiet."},
+            )
+            self.assertEqual(metric_response.status_code, 200)
+            self.assertEqual(metric_response.get_json()["metric"]["outcome_tags"], ["no engagement"])
 
     def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
         class FakeEtsyAdapter:

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Insights</h2>
+    <div class="subtle">{{ summary.metrics_count }} metric record(s) · {{ summary.linked_metric_count }} linked to generated content</div>
+  </div>
+  <a class="button secondary" href="{{ url_for('metrics') }}">Metric history</a>
+</div>
+
+<section class="grid">
+  <div class="panel">
+    <h3>What Worked</h3>
+    {% if summary.what_worked %}
+      <ul>{% for item in summary.what_worked %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="subtle">No positive pattern is strong enough yet.</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <h3>What To Improve</h3>
+    {% if summary.what_to_improve %}
+      <ul>{% for item in summary.what_to_improve %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="subtle">No weak pattern has been recorded yet.</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <h3>Needs More Data</h3>
+    {% if summary.needs_more_data %}
+      <ul>{% for item in summary.needs_more_data %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="subtle">The learning loop has enough basic signal to guide the next pass.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="grid" style="margin-top: 14px;">
+  <div class="panel">
+    <h3>Channels</h3>
+    {% for pattern in summary.top_channels %}
+      <div class="metric">{{ pattern.name }} · avg {{ pattern.average_score }} · {{ pattern.count }} record(s)</div>
+    {% else %}
+      <p class="subtle">No channel outcomes recorded.</p>
+    {% endfor %}
+  </div>
+  <div class="panel">
+    <h3>Products</h3>
+    {% for pattern in summary.top_products %}
+      <div class="metric">{{ pattern.name }} · avg {{ pattern.average_score }} · {{ pattern.count }} record(s)</div>
+    {% else %}
+      <p class="subtle">No product outcomes recorded.</p>
+    {% endfor %}
+  </div>
+  <div class="panel">
+    <h3>CTAs</h3>
+    {% for pattern in summary.top_ctas %}
+      <div class="metric">{{ pattern.name }} · avg {{ pattern.average_score }} · {{ pattern.count }} record(s)</div>
+    {% else %}
+      <p class="subtle">No CTA outcomes recorded.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel" style="margin-top: 14px;">
+  <h3>Generated Content Outcomes</h3>
+  {% if summary.generated_candidate_outcomes %}
+    <table>
+      <thead><tr><th>Candidate</th><th>Task</th><th>Channel</th><th>Product</th><th>Score</th><th>Outcome</th></tr></thead>
+      <tbody>
+        {% for outcome in summary.generated_candidate_outcomes %}
+          <tr>
+            <td>#{{ outcome.candidate_id }} · {{ outcome.candidate_type }}</td>
+            <td><a href="{{ url_for('task_detail', task_id=outcome.task_id) }}">{{ outcome.task_title }}</a></td>
+            <td>{{ outcome.channel }}</td>
+            <td>{{ outcome.product_name }}</td>
+            <td>{{ outcome.score }}</td>
+            <td>{% for tag in outcome.outcome_tags %}<span class="pill">{{ tag }}</span>{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="subtle">Link generated copy to a posted task, then record metrics or outcome notes.</p>
+  {% endif %}
+</section>
+{% endblock %}

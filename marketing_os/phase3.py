@@ -14,6 +14,7 @@ from .context import load_business_context
 from .db_models import (
     AssetRecord,
     CalendarItemRecord,
+    GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
     ProductRecord,
@@ -387,6 +388,7 @@ def add_metric(
     etsy_visits: int | None = None,
     etsy_orders: int | None = None,
     email_signups: int | None = None,
+    outcome_tags: list[str] | None = None,
     notes: str = "",
 ) -> MetricRecord:
     metric = MetricRecord(
@@ -400,6 +402,7 @@ def add_metric(
         etsy_visits=etsy_visits,
         etsy_orders=etsy_orders,
         email_signups=email_signups,
+        outcome_tags_json=json.dumps(_clean_text_list(outcome_tags or [])),
         notes=notes,
     )
     session.add(metric)
@@ -411,6 +414,20 @@ def add_metric(
             task.published_url = post_url
         task.metric_status = "complete"
     return metric
+
+
+def link_generated_content_to_task(session: Session, task_id: int, candidate_id: int) -> TaskRecord:
+    task = session.get(TaskRecord, task_id)
+    if task is None:
+        raise ValueError(f"Task not found: {task_id}")
+    candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
+    if candidate is None:
+        raise ValueError(f"Generated content candidate not found: {candidate_id}")
+    task.generated_content_candidate_id = candidate.id
+    task.draft_caption = _candidate_copy_body(candidate.body) or task.draft_caption
+    task.cta = _candidate_cta(candidate.body) or task.cta
+    task.status = "needs copy review" if task.status == "ready to post" else task.status
+    return task
 
 
 def update_task_status(session: Session, task_id: int, status: str, notes: str = "") -> TaskRecord:
@@ -463,6 +480,34 @@ def json_list(value: str) -> list[str]:
     except json.JSONDecodeError:
         return []
     return [str(item) for item in data] if isinstance(data, list) else []
+
+
+def _clean_text_list(values: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return cleaned
+
+
+def _candidate_copy_body(value: str) -> str:
+    try:
+        data = json.loads(value or "{}")
+    except json.JSONDecodeError:
+        return value.strip()
+    if isinstance(data, dict):
+        pieces = [str(data.get("hook") or "").strip(), str(data.get("body") or "").strip()]
+        return "\n\n".join(piece for piece in pieces if piece)
+    return value.strip()
+
+
+def _candidate_cta(value: str) -> str:
+    try:
+        data = json.loads(value or "{}")
+    except json.JSONDecodeError:
+        return ""
+    return str(data.get("cta") or "").strip() if isinstance(data, dict) else ""
 
 
 def template_body(template: TemplateRecord) -> dict[str, Any]:

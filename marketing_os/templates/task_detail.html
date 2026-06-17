@@ -141,6 +141,9 @@
           </label>
         {% endfor %}
       </div>
+      <label>Outcome tags <span>Comma-separated notes like sold item, got comments, no engagement, good story angle, bad image.</span>
+        <input name="outcome_tags" placeholder="sold item, got comments">
+      </label>
       <label>Metric Notes <textarea name="notes"></textarea></label>
       <button type="submit">Save metrics</button>
     </form>
@@ -153,6 +156,11 @@
     {% for metric in metrics %}
       <div class="metric">
         {{ metric.recorded_on }} · reach {{ metric.reach or 0 }} · likes {{ metric.likes or 0 }} · comments {{ metric.comments or 0 }}
+        {% if outcome_tags(metric) %}
+          <div class="meta" style="margin-top: 6px;">
+            {% for tag in outcome_tags(metric) %}<span class="pill">{{ tag }}</span>{% endfor %}
+          </div>
+        {% endif %}
         <div class="subtle">{{ metric.notes }}</div>
       </div>
     {% endfor %}

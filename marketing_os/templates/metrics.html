@@ -3,7 +3,7 @@
 <h2>Metrics</h2>
 <p class="subtle">Manual performance records. No external platform integration is used.</p>
 <table>
-  <thead><tr><th>Date</th><th>Task</th><th>Reach</th><th>Likes</th><th>Comments</th><th>Etsy</th><th>Notes</th></tr></thead>
+  <thead><tr><th>Date</th><th>Task</th><th>Reach</th><th>Likes</th><th>Comments</th><th>Etsy</th><th>Outcome</th><th>Notes</th></tr></thead>
   <tbody>
     {% for metric in metrics %}
       <tr>
@@ -13,6 +13,9 @@
         <td>{{ metric.likes or "" }}</td>
         <td>{{ metric.comments or "" }}</td>
         <td>{{ metric.etsy_visits or "" }} visits / {{ metric.etsy_orders or "" }} orders</td>
+        <td>
+          {% for tag in outcome_tags(metric) %}<span class="pill">{{ tag }}</span>{% endfor %}
+        </td>
         <td>{{ metric.notes }}</td>
       </tr>
     {% endfor %}
