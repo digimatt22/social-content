@@ -596,4 +596,12 @@ def _display_body(value: str) -> str:
     checklist = data.get("quality_checklist")
     if isinstance(checklist, list) and checklist:
         parts.append("Quality checklist: " + "; ".join(str(item) for item in checklist))
+    score = data.get("quality_score")
+    if isinstance(score, dict):
+        passed = score.get("passed")
+        warnings = score.get("warnings")
+        if isinstance(passed, list) and passed:
+            parts.append("Quality passed: " + "; ".join(str(item) for item in passed))
+        if isinstance(warnings, list) and warnings:
+            parts.append("Quality warnings: " + "; ".join(str(item) for item in warnings))
     return "\n\n".join(parts) or value

@@ -18,7 +18,7 @@ from ..db_models import (
     utc_now,
 )
 from ..phase3 import json_list, link_generated_content_to_task, owner_for, playbook_for
-from .copywriter import generate_facebook_post
+from .copywriter import generate_facebook_post, score_copy_against_voice
 from .insights import brief_performance_context
 
 
@@ -154,12 +154,18 @@ def produce_content_for_item(
 
     if "Facebook" in destinations_for(item):
         draft = generate_facebook_post(brief)
+        copy_text = "\n\n".join([draft.hook, draft.body])
+        quality_score = score_copy_against_voice(copy_text, brief)
         body = json.dumps(
             {
                 "hook": draft.hook,
                 "body": draft.body,
                 "cta": draft.cta,
                 "quality_checklist": draft.quality_checklist,
+                "quality_score": {
+                    "passed": quality_score.passed,
+                    "warnings": quality_score.warnings,
+                },
             },
             indent=2,
         )
@@ -522,4 +528,12 @@ def _display_body(value: str) -> str:
     checklist = data.get("quality_checklist")
     if isinstance(checklist, list) and checklist:
         parts.append("Quality checklist: " + "; ".join(str(item) for item in checklist))
+    score = data.get("quality_score")
+    if isinstance(score, dict):
+        passed = score.get("passed")
+        warnings = score.get("warnings")
+        if isinstance(passed, list) and passed:
+            parts.append("Quality passed: " + "; ".join(str(item) for item in passed))
+        if isinstance(warnings, list) and warnings:
+            parts.append("Quality warnings: " + "; ".join(str(item) for item in warnings))
     return "\n\n".join(parts) or value

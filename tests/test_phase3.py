@@ -67,6 +67,7 @@ from marketing_os.services.content_briefs import (
     produce_content_for_item,
     record_candidate_review,
 )
+from marketing_os.services.copywriter import score_copy_against_voice
 from marketing_os.services.creative_generation import import_manual_generated_output, review_creative_generation_job
 from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
@@ -994,6 +995,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertNotIn("..", facebook_body["body"])
             self.assertNotIn("Planning note:", facebook_body["body"])
             self.assertNotIn("Keep it conversational.", facebook_body["body"])
+            self.assertNotIn("Phase 5", facebook_body["body"])
+            self.assertNotIn("proof draft", facebook_body["body"].lower())
+            self.assertIn("quality_score", facebook_body)
+            self.assertTrue(facebook_body["quality_score"]["passed"])
+            self.assertFalse(
+                any("planning notes" in warning.lower() for warning in facebook_body["quality_score"]["warnings"])
+            )
             self.assertIn(products[0].name, facebook.source_facts_json)
             self.assertIn("Keep it conversational.", facebook.source_facts_json)
 
@@ -1005,6 +1013,22 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             health = data_health(session)
             self.assertTrue(any(row.area == "Content Production" and row.count >= 1 for row in health))
+
+    def test_phase5_copy_quality_score_flags_internal_notes_and_unsupported_terms(self) -> None:
+        score = score_copy_against_voice(
+            "Planning note: Keep it conversational. This rubber duck is a licensed official Disney guaranteed bestseller. #one #two #three #four",
+            {
+                "products": ["Mailman Duck"],
+                "notes": "Planning note: Keep it conversational.",
+                "avoid": ["licensed"],
+            },
+        )
+
+        self.assertTrue(any("planned product" in warning for warning in score.warnings))
+        self.assertTrue(any("planning notes" in warning for warning in score.warnings))
+        self.assertTrue(any("internal workflow" in warning for warning in score.warnings))
+        self.assertTrue(any("unsupported" in warning for warning in score.warnings))
+        self.assertTrue(any("hashtags" in warning.lower() for warning in score.warnings))
 
     def test_phase5_planned_intent_creates_posting_task_after_candidate_approval(self) -> None:
         tmp, factory = self.build_session()
