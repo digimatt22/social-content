@@ -7,12 +7,13 @@ Build Phase 1 of a Marketing Operating System for MattMadeMe.
 The authoritative business information is stored in:
 
 - `docs/business/company-profile.md`
+- `docs/business/business-goals.md`
 - `docs/business/products.md`
 - `docs/business/audiences.md`
 - `docs/business/brand-voice.md`
 - `docs/business/marketing-channels.md`
 
-Use these files as the sole source of truth for business context, products, audiences, brand voice, and marketing channels.
+Use these files as the sole source of truth for business context, business goals, products, audiences, brand voice, and marketing channels.
 
 Review and understand these files before creating an implementation plan.
 
@@ -28,6 +29,7 @@ The system should act as a marketing manager and planning assistant, not a fully
 
 - Load and use business information from the `docs/business` directory.
 - Allow business information to be updated without code changes.
+- Use business goals to evaluate whether generated tactics are strategically useful.
 
 ### 2. Content Generation
 
@@ -54,6 +56,7 @@ The system should act as a marketing manager and planning assistant, not a fully
 
 - Suggest high-impact marketing actions.
 - Prioritize recommendations by effort and expected impact.
+- Tie each recommendation to at least one business goal.
 
 ## Technical Constraints
 
@@ -102,6 +105,7 @@ The project is complete when:
 - Business context is loaded from `docs/business`.
 - No business information is hardcoded.
 - Changes to business files are reflected without code modifications.
+- Business goals are loaded from `docs/business/business-goals.md`.
 
 ### AC2 - Content Generation
 
@@ -123,6 +127,7 @@ The project is complete when:
 ### AC4 - Recommendations
 
 - Recommendations include:
+  - aligned business goal
   - impact estimate
   - effort estimate
   - rationale
