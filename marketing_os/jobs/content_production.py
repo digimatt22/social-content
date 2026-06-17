@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ def run(
     db_path: str | Path | None = None,
     business_dir: str = "docs/business",
     target_date: date | None = None,
+    days_ahead: int | None = None,
     channel: str | None = None,
     planned_item_id: int | None = None,
     limit: int = 10,
@@ -35,11 +36,14 @@ def run(
     summary: dict[str, object] = {"processed": 0, "created": 0, "skipped": 0, "items": []}
     try:
         with session_scope(factory) as session:
+            production_target_date = target_date
+            if production_target_date is None and days_ahead is not None:
+                production_target_date = date.today() + timedelta(days=days_ahead)
             if planned_item_id is not None:
                 item = session.get(PlannedContentRecord, planned_item_id)
                 items = [item] if item is not None else []
             else:
-                items = planned_items_needing_production(session, target_date=target_date, channel=channel, limit=limit)
+                items = planned_items_needing_production(session, target_date=production_target_date, channel=channel, limit=limit)
 
             for item in items:
                 brief_export_path = None
@@ -94,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db-path", default=None)
     parser.add_argument("--business-dir", default="docs/business")
     parser.add_argument("--date", dest="target_date", default=None)
+    parser.add_argument("--days-ahead", type=int, default=None)
     parser.add_argument("--channel", default=None)
     parser.add_argument("--planned-item-id", type=int, default=None)
     parser.add_argument("--limit", type=int, default=10)
@@ -106,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         db_path=args.db_path,
         business_dir=args.business_dir,
         target_date=date.fromisoformat(args.target_date) if args.target_date else None,
+        days_ahead=args.days_ahead,
         channel=args.channel,
         planned_item_id=args.planned_item_id,
         limit=args.limit,

@@ -5,7 +5,7 @@ import json
 import plistlib
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -1076,7 +1076,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         plist_path = repo_root / "docs" / "automation" / "com.mattmademe.marketing-os.content-production.plist"
 
         self.assertTrue(runner.is_file())
-        self.assertIn("marketing_os.jobs.content_production", runner.read_text(encoding="utf-8"))
+        runner_text = runner.read_text(encoding="utf-8")
+        self.assertIn("marketing_os.jobs.content_production", runner_text)
+        self.assertIn("--days-ahead", runner_text)
+        self.assertIn("MARKETING_OS_CONTENT_DAYS_AHEAD", runner_text)
         self.assertTrue(plist_path.is_file())
 
         plist = plistlib.loads(plist_path.read_bytes())
@@ -1085,6 +1088,37 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         self.assertIn("/Users/matt/Documents/marketing-os/scripts/run-content-production.sh", plist["ProgramArguments"])
         self.assertEqual(len(plist["StartCalendarInterval"]), 5)
         self.assertTrue(all(item["Hour"] == 2 and item["Minute"] == 30 for item in plist["StartCalendarInterval"]))
+
+    def test_phase5_content_production_days_ahead_limits_nightly_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-days-ahead.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            today = date.today()
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                near = create_planned_content_item(
+                    session,
+                    calendar_date=today + timedelta(days=7),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                )
+                far = create_planned_content_item(
+                    session,
+                    calendar_date=today + timedelta(days=30),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                )
+                near_id = near.id
+                far_id = far.id
+
+            dry_run = run_content_production_job(db_path=db_path, dry_run=True, days_ahead=14)
+            item_ids = [item["planned_item"]["id"] for item in dry_run["items"]]
+            self.assertIn(near_id, item_ids)
+            self.assertNotIn(far_id, item_ids)
 
     def test_phase5_copy_quality_score_flags_internal_notes_and_unsupported_terms(self) -> None:
         score = score_copy_against_voice(

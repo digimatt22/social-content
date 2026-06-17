@@ -122,7 +122,7 @@ python -m marketing_os.jobs.content_production --limit 10
 ./scripts/run-content-production.sh
 ```
 
-For a local weekday nightly schedule on this Mac, use the LaunchAgent template at `docs/automation/com.mattmademe.marketing-os.content-production.plist`.
+For a local weekday nightly schedule on this Mac, use the LaunchAgent template at `docs/automation/com.mattmademe.marketing-os.content-production.plist`. The wrapper defaults to planned items due within the next 14 days.
 
 To check Phase 5 final proof readiness or export a review packet:
 

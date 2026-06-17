@@ -118,6 +118,7 @@ python -m marketing_os.jobs.content_production --limit 10
 Useful options:
 
 - `--date YYYY-MM-DD`
+- `--days-ahead <n>`
 - `--channel facebook`
 - `--dry-run`
 - `--planned-item-id <id>`
@@ -154,6 +155,7 @@ Current local implementation:
 - manual-safe runner: `./scripts/run-content-production.sh`
 - macOS LaunchAgent template: `docs/automation/com.mattmademe.marketing-os.content-production.plist`
 - default schedule: weekdays at 2:30 AM local time
+- default item window: due within the next 14 days
 - brief export path: `data/exports/content-briefs`
 - log path: `data/logs/content-production.log`
 

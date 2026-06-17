@@ -65,6 +65,7 @@ Useful test options:
 python -m marketing_os.jobs.content_production --dry-run --limit 10
 python -m marketing_os.jobs.content_production --planned-item-id 1
 python -m marketing_os.jobs.content_production --channel facebook
+python -m marketing_os.jobs.content_production --days-ahead 14
 python -m marketing_os.jobs.content_production --export-briefs-dir data/exports/content-briefs
 ```
 
@@ -76,7 +77,7 @@ For the first local nightly schedule, use the wrapper script:
 ./scripts/run-content-production.sh
 ```
 
-The wrapper writes structured briefs to `data/exports/content-briefs` and appends job output to `data/logs/content-production.log`. To install the weekday 2:30 AM macOS LaunchAgent template:
+The wrapper writes structured briefs to `data/exports/content-briefs`, appends job output to `data/logs/content-production.log`, and defaults to planned items due within the next 14 days. Override the window with `MARKETING_OS_CONTENT_DAYS_AHEAD`. To install the weekday 2:30 AM macOS LaunchAgent template:
 
 ```bash
 mkdir -p data/logs
