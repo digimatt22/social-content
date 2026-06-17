@@ -1175,11 +1175,15 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "phase5-briefs.sqlite"
             export_dir = Path(tmp) / "briefs"
+            source_path = Path(tmp) / "bingo-source.jpg"
+            source_path.write_bytes(b"source image bytes")
             app = create_app(db_path)
             self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Bingo approved source")
+                review_asset(session, source.id, "approved", "Source approved for Codex brief.")
                 item = create_planned_content_item(
                     session,
                     calendar_date=date(2026, 6, 30),
@@ -1190,6 +1194,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                     notes="Use this for a Codex handoff test.",
                 )
                 item_id = item.id
+                source_id = source.id
 
             dry_run = run_content_production_job(
                 db_path=db_path,
@@ -1206,6 +1211,11 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(brief["planned_item_id"], item_id)
             self.assertIn("Facebook", brief["destinations"])
             self.assertIn("Bingo Duck", brief["products"])
+            self.assertEqual(brief["approved_source_asset_ids"], [source_id])
+            self.assertEqual(brief["missing_inputs"], [])
+            self.assertEqual(brief["source_assets"][0]["id"], source_id)
+            self.assertEqual(brief["source_assets"][0]["review_state"], "approved")
+            self.assertTrue(brief["source_assets"][0]["file_exists"])
             self.assertIn("performance_context", brief)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
@@ -1219,9 +1229,14 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(live_run["processed"], 1)
             self.assertEqual(live_run["created"], 2)
             self.assertEqual(Path(live_run["items"][0]["brief_export_path"]), brief_path)
+            self.assertTrue(all(candidate_id is not None for candidate_id in live_run["items"][0]["candidate_ids"]))
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
-                self.assertEqual(len(list(session.scalars(select(GeneratedContentCandidateRecord)))), 2)
+                candidates = list(session.scalars(select(GeneratedContentCandidateRecord)))
+                self.assertEqual(len(candidates), 2)
+                self.assertTrue(all(str(source_id) in json_list(candidate.source_asset_ids_json) for candidate in candidates))
+                prompt = next(candidate for candidate in candidates if candidate.candidate_type == "image_prompt_brief")
+                self.assertIn(str(source_id), prompt.body)
 
     def test_phase5_learning_loop_links_generated_copy_to_outcomes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
