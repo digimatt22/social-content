@@ -1573,6 +1573,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertIn("Bingo Duck", payload["copy_review"]["copy_text"])
                 self.assertNotIn("Quality checklist", payload["copy_review"]["copy_text"])
                 self.assertEqual(payload["creative_review"]["id"], creative.job.id)
+                self.assertEqual(payload["creative_review"]["source_asset"]["id"], source.id)
+                self.assertEqual(payload["creative_review"]["candidate_asset"]["id"], creative.candidate.id)
                 self.assertIn("Matt-approved Facebook copy", markdown)
                 self.assertIn("Matt-approved generated creative", markdown)
                 self.assertIn("Open Planning, review a Facebook candidate", markdown)
@@ -1595,6 +1597,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(page.status_code, 200)
             self.assertIn(f'href="/planning#candidate-{facebook.id}"'.encode(), page.data)
             self.assertIn(f'href="/creative-assets#creative-job-{creative.job.id}"'.encode(), page.data)
+            self.assertIn(b"Generated candidate", page.data)
+            self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), page.data)
+            self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), page.data)
             self.assertIn(b'action="/phase5-readiness/copy-review"', page.data)
             self.assertIn(b'action="/phase5-readiness/creative-review"', page.data)
 
@@ -1605,6 +1610,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             creative_page = client.get("/creative-assets")
             self.assertEqual(creative_page.status_code, 200)
             self.assertIn(f'id="creative-job-{creative.job.id}"'.encode(), creative_page.data)
+            self.assertIn(b"Generated candidate", creative_page.data)
+            self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), creative_page.data)
+            self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), creative_page.data)
 
             copy_review_response = client.post(
                 f"/planning/candidates/{facebook.id}/review",

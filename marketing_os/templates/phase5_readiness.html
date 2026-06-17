@@ -76,6 +76,24 @@
     <h3 style="margin-top: 10px;">Latest Generated Creative</h3>
     {% if packet.creative_review %}
       <p class="subtle">Job #{{ packet.creative_review.id }} · {{ packet.creative_review.provider }}{% if packet.creative_review.provider_job_id %} · {{ packet.creative_review.provider_job_id }}{% endif %}</p>
+      <div class="grid">
+        <div>
+          <p class="subtle">Source</p>
+          {% if packet.creative_review.source_asset and packet.creative_review.source_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=packet.creative_review.source_asset.id) }}" alt="{{ packet.creative_review.source_asset.name }}">
+          {% else %}
+            <div class="asset-missing">Source missing</div>
+          {% endif %}
+        </div>
+        <div>
+          <p class="subtle">Generated candidate</p>
+          {% if packet.creative_review.candidate_asset and packet.creative_review.candidate_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=packet.creative_review.candidate_asset.id) }}" alt="{{ packet.creative_review.candidate_asset.name }}">
+          {% else %}
+            <div class="asset-missing">Generated file missing</div>
+          {% endif %}
+        </div>
+      </div>
       <div class="copybox">{{ packet.creative_review.prompt or 'No prompt recorded.' }}</div>
       {% if packet.creative_review.output_path %}<p class="subtle">{{ packet.creative_review.output_path }}</p>{% endif %}
       <form method="post" action="{{ url_for('phase5_creative_review') }}" style="margin-top: 12px;">

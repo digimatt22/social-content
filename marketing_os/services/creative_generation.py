@@ -132,6 +132,8 @@ def serialize_creative_generation_job(record: CreativeGenerationJobRecord) -> di
         "id": record.id,
         "source_asset_id": record.source_asset_id,
         "candidate_asset_id": record.candidate_asset_id,
+        "source_asset": _serialize_asset_ref(record.source_asset),
+        "candidate_asset": _serialize_asset_ref(record.candidate_asset),
         "target_format": record.target_format,
         "provider": record.provider,
         "model_name": record.model_name,
@@ -149,6 +151,21 @@ def serialize_creative_generation_job(record: CreativeGenerationJobRecord) -> di
         "reviewed_at": record.reviewed_at.isoformat() if record.reviewed_at else None,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+    }
+
+
+def _serialize_asset_ref(asset: AssetRecord | None) -> dict[str, object] | None:
+    if asset is None:
+        return None
+    return {
+        "id": asset.id,
+        "name": asset.name,
+        "asset_type": asset.asset_type,
+        "source_path": asset.source_path,
+        "preview_path": asset.preview_path,
+        "file_exists": bool(asset.file_exists),
+        "review_state": asset.review_state,
+        "readiness_state": asset.readiness_state,
     }
 
 

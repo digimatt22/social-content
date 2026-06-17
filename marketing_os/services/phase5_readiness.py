@@ -510,6 +510,8 @@ def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str
         "id": job.id,
         "source_asset_id": job.source_asset_id,
         "candidate_asset_id": job.candidate_asset_id,
+        "source_asset": _serialize_source_asset(job.source_asset),
+        "candidate_asset": _serialize_source_asset(job.candidate_asset),
         "target_format": job.target_format,
         "provider": job.provider,
         "model_name": job.model_name,

@@ -128,6 +128,30 @@
         <span class="pill">{{ job.target_format }}</span>
         <span class="pill {{ 'complete' if job.review_state == 'approved' else 'blocked' if job.review_state == 'needs_review' else '' }}">{{ job.review_state.replace('_', ' ').title() }}</span>
       </div>
+      <div class="grid" style="margin-top: 12px;">
+        <div>
+          <p class="subtle">Source</p>
+          {% if job.source_asset and job.source_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=job.source_asset.id) }}" alt="{{ job.source_asset.name }}">
+          {% else %}
+            <div class="asset-missing">Source missing</div>
+          {% endif %}
+          {% if job.source_asset %}
+            <p class="subtle">#{{ job.source_asset.id }} · {{ job.source_asset.name }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <p class="subtle">Generated candidate</p>
+          {% if job.candidate_asset and job.candidate_asset.file_exists %}
+            <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=job.candidate_asset.id) }}" alt="{{ job.candidate_asset.name }}">
+          {% else %}
+            <div class="asset-missing">Generated file missing</div>
+          {% endif %}
+          {% if job.candidate_asset %}
+            <p class="subtle">#{{ job.candidate_asset.id }} · {{ job.candidate_asset.name }}</p>
+          {% endif %}
+        </div>
+      </div>
       <p class="subtle">Source asset #{{ job.source_asset_id }}{% if job.candidate_asset_id %} · Candidate asset #{{ job.candidate_asset_id }}{% endif %}</p>
       {% if job.provider_job_id %}<p class="subtle">Provider job: {{ job.provider_job_id }}</p>{% endif %}
       {% if job.output_path %}<p class="subtle">{{ job.output_path }}</p>{% endif %}

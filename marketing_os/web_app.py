@@ -474,7 +474,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             refresh_asset_file_state(session)
             plans = creative_asset_plans(session)
             source_assets = [plan.source_asset for plan in plans if plan.source_ready]
-            jobs = creative_generation_jobs(session)
+            jobs = [serialize_creative_generation_job(job) for job in creative_generation_jobs(session)]
             manual_import_defaults: dict[str, object] = {}
             if request.args.get("phase5_handoff") == "1":
                 packet = serialize_phase5_approval_packet(build_phase5_approval_packet(session))
