@@ -5,7 +5,13 @@
     <h2>Phase 5 Readiness</h2>
     <div class="subtle">{{ readiness.remaining_count }} final proof item(s) remaining</div>
   </div>
-  <a class="button secondary" href="{{ url_for('data_health') }}">Data Health</a>
+  <div class="actions">
+    <form method="post" action="{{ url_for('export_phase5_approval_packet') }}">
+      <button type="submit">Export Approval Packet</button>
+    </form>
+    <a class="button secondary" href="{{ url_for('api_phase5_approval_packet') }}">Packet JSON</a>
+    <a class="button secondary" href="{{ url_for('data_health') }}">Data Health</a>
+  </div>
 </div>
 
 <section class="grid">

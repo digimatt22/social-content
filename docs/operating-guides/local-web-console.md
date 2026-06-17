@@ -147,6 +147,15 @@ Use Data Health to see upkeep work that can make the planner less trustworthy:
 - manual overrides that protect local edits from imports
 - posted tasks waiting for metrics
 
+## Phase 5 Readiness
+
+Use Phase 5 Readiness to check the two final human-proof items before calling Phase 5 complete:
+
+- Matt-approved Facebook copy with reviewer evidence
+- Matt-approved generated creative with reviewer evidence and a file-backed candidate asset
+
+The page can export a Markdown approval packet that gathers the latest Facebook copy candidate, latest creative generation job, readiness status, and remaining review actions.
+
 ## API Boundary
 
 Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose JSON endpoints so a future frontend can reuse the same service logic:
@@ -157,6 +166,8 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/metrics-due`
 - `GET /api/assets`
 - `GET /api/data-health`
+- `GET /api/phase5-readiness`
+- `GET /api/phase5-approval-packet`
 - `GET /api/creative-assets`
 - `GET /api/planned-content`
 - `POST /api/creative-assets/manual-import`

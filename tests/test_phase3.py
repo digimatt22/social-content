@@ -71,7 +71,14 @@ from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
-from marketing_os.services.phase5_readiness import build_phase5_readiness, serialize_phase5_readiness
+from marketing_os.services.phase5_readiness import (
+    build_phase5_approval_packet,
+    build_phase5_readiness,
+    render_phase5_approval_packet_markdown,
+    serialize_phase5_approval_packet,
+    serialize_phase5_readiness,
+    write_phase5_approval_packet,
+)
 from marketing_os.web_app import create_app
 
 
@@ -1296,6 +1303,74 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 health = data_health(session)
                 self.assertTrue(any(item.area == "Phase 5 Readiness" and item.status == "OK" for item in health))
+
+    def test_phase5_approval_packet_exports_copy_and_creative_review_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-approval-packet.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            output_path = Path(tmp) / "generated.jpg"
+            source_path.write_bytes(b"source image bytes")
+            output_path.write_bytes(b"generated image bytes")
+
+            app = create_app(db_path)
+            app.config["EXPORT_DIR"] = Path(tmp) / "exports"
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Packet source")
+                review_asset(session, source.id, "approved", "Source approved.")
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 28),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    audience="gift buyers",
+                )
+                result = produce_content_for_item(session, item)
+                facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                creative = import_manual_generated_output(
+                    session,
+                    source.id,
+                    output_path,
+                    target_format="Facebook post image",
+                    prompt="Preserve product accuracy and make this ready for a Facebook post.",
+                    provider="magnific_manual",
+                    provider_job_id="packet-job",
+                )
+
+                packet = build_phase5_approval_packet(session)
+                payload = serialize_phase5_approval_packet(packet)
+                markdown = render_phase5_approval_packet_markdown(packet)
+                target = write_phase5_approval_packet(session, app.config["EXPORT_DIR"])
+
+                self.assertEqual(payload["readiness"]["remaining_count"], 2)
+                self.assertEqual(payload["copy_review"]["id"], facebook.id)
+                self.assertEqual(payload["creative_review"]["id"], creative.job.id)
+                self.assertIn("Matt-approved Facebook copy", markdown)
+                self.assertIn("Matt-approved generated creative", markdown)
+                self.assertIn("Open Planning, review a Facebook candidate", markdown)
+                self.assertIn("Import a real Magnific/MCP output", markdown)
+                self.assertIn("Bingo Duck", markdown)
+                self.assertIn("packet-job", markdown)
+                self.assertTrue(target.is_file())
+                self.assertIn("Phase 5 Approval Packet", target.read_text(encoding="utf-8"))
+
+            api_response = client.get("/api/phase5-approval-packet")
+            self.assertEqual(api_response.status_code, 200)
+            api_payload = api_response.get_json()["packet"]
+            self.assertFalse(api_payload["readiness"]["complete"])
+            self.assertEqual(api_payload["copy_review"]["candidate_type"], "facebook_post")
+            self.assertEqual(api_payload["creative_review"]["provider_job_id"], "packet-job")
+
+            export_response = client.post("/phase5-readiness/export")
+            self.assertEqual(export_response.status_code, 200)
+            self.assertIn("text/markdown", export_response.content_type)
+            self.assertIn(b"Phase 5 Approval Packet", export_response.data)
+            self.assertIn(b"Final Actions", export_response.data)
+            export_response.close()
 
     def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
         class FakeEtsyAdapter:

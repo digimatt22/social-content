@@ -31,6 +31,9 @@ Live readiness gate:
 
 - `/phase5-readiness`
 - `/api/phase5-readiness`
+- `/api/phase5-approval-packet`
+
+The readiness page can also export a Markdown approval packet into the configured runtime export folder. The packet packages the latest Facebook copy candidate, latest creative generation job, readiness status, and final human-review actions.
 
 ## Doneness Criteria Audit
 
@@ -74,13 +77,15 @@ Live readiness gate:
 
 1. Run a real Freepik/Magnific or MCP generation/import pass using an approved source asset, then visually review and approve one generated creative candidate.
 2. Have Matt review the Facebook proof post or a live generated task draft for voice/taste; adjust the copywriter if it still needs heavy rewrite.
-3. Re-run the full completion audit after those artifacts exist.
+3. Use `/phase5-readiness` to export the Phase 5 approval packet if Matt needs one review artifact for the remaining copy and creative decisions.
+4. Re-run the full completion audit after those artifacts exist.
 
 ## Closed After Initial Audit
 
 - Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
 - Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, and approving a job approves the file-backed candidate asset.
 - Phase 5 readiness gate: `/phase5-readiness`, `/api/phase5-readiness`, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_readiness_tracks_remaining_human_proof_items`.
+- Phase 5 approval packet export: `/api/phase5-approval-packet`, `/phase5-readiness` export action, and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_approval_packet_exports_copy_and_creative_review_actions`.
 
 ## Notes
 

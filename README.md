@@ -148,7 +148,7 @@ Current active planning docs:
 - [Phase 5 operator workflow proof](docs/reviews/phase5-operator-workflow-proof.md)
 - [Phase 5 completion audit](docs/reviews/phase5-completion-audit.md)
 
-Phase 5 final proof readiness is visible in the local app at `/phase5-readiness` and as JSON at `/api/phase5-readiness`.
+Phase 5 final proof readiness is visible in the local app at `/phase5-readiness` and as JSON at `/api/phase5-readiness`. The readiness page can export a Markdown approval packet, and the same packet is available as JSON at `/api/phase5-approval-packet`.
 
 Out of scope:
 
