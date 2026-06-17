@@ -11,7 +11,7 @@ from sqlalchemy import select
 from werkzeug.utils import secure_filename
 
 from .db import DEFAULT_DB_PATH, create_db_engine, init_db, session_factory, session_scope
-from .db_models import AssetRecord, MetricRecord, PlanRecord, ProductRecord, TaskRecord, TemplateRecord
+from .db_models import AssetRecord, MetricRecord, PlanRecord, PlannedContentRecord, ProductRecord, TaskRecord, TemplateRecord
 from .phase3 import (
     ROLE_OPTIONS,
     TASK_STATUSES,
@@ -57,6 +57,14 @@ from .phase4 import (
     task_asset_options,
     today_view,
     week_agenda,
+)
+from .services.content_briefs import (
+    DESTINATION_OPTIONS,
+    GOAL_OPTIONS,
+    create_planned_content_item,
+    planned_content_items,
+    produce_content_for_item,
+    serialize_planned_content_item,
 )
 
 
@@ -207,6 +215,52 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             refresh_asset_file_state(session)
             return jsonify({"plans": [serialize_creative_asset_plan(plan) for plan in creative_asset_plans(session)]})
 
+    @app.get("/api/planned-content")
+    def api_planned_content():
+        with session_scope(factory) as session:
+            return jsonify({"planned_items": [serialize_planned_content_item(session, item) for item in planned_content_items(session)]})
+
+    @app.post("/api/planned-content")
+    def api_create_planned_content():
+        payload = request.get_json(silent=True) or {}
+        try:
+            calendar_date = date.fromisoformat(str(payload.get("calendar_date") or date.today().isoformat()))
+            product_ids = [int(value) for value in payload.get("product_ids", [])]
+        except (TypeError, ValueError):
+            return jsonify({"error": "Use a valid date and product IDs."}), 400
+        with session_scope(factory) as session:
+            try:
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=calendar_date,
+                    destinations=[str(value) for value in payload.get("destinations", [])],
+                    goals=[str(value) for value in payload.get("goals", [])],
+                    product_ids=product_ids,
+                    audience=str(payload.get("audience") or ""),
+                    occasion=str(payload.get("occasion") or ""),
+                    promotion=str(payload.get("promotion") or ""),
+                    notes=str(payload.get("notes") or ""),
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"planned_item": serialize_planned_content_item(session, item)}), 201
+
+    @app.post("/api/planned-content/<int:item_id>/produce")
+    def api_produce_planned_content(item_id: int):
+        payload = request.get_json(silent=True) or {}
+        with session_scope(factory) as session:
+            item = session.get(PlannedContentRecord, item_id)
+            if item is None:
+                return jsonify({"error": "Planned content item not found."}), 404
+            result = produce_content_for_item(session, item, business_dir=business_dir, force=bool(payload.get("force")))
+            return jsonify(
+                {
+                    "planned_item": serialize_planned_content_item(session, item),
+                    "created": result.created,
+                    "skipped": result.skipped,
+                }
+            )
+
     @app.get("/")
     def dashboard() -> str:
         role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
@@ -260,6 +314,53 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             plans = creative_asset_plans(session)
             return render_template("creative_assets.html", active="creative_assets", plans=plans)
 
+    @app.get("/planning")
+    def planning() -> str:
+        with session_scope(factory) as session:
+            products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            items = planned_content_items(session)
+            return render_template(
+                "plan_intent.html",
+                active="planning",
+                products=products,
+                planned_items=[serialize_planned_content_item(session, item) for item in items],
+                destinations=DESTINATION_OPTIONS,
+                goals=GOAL_OPTIONS,
+            )
+
+    @app.post("/planning")
+    def create_planning_item() -> str:
+        try:
+            calendar_date = date.fromisoformat(request.form.get("calendar_date", date.today().isoformat()))
+            product_ids = [int(value) for value in request.form.getlist("product_ids")]
+            with session_scope(factory) as session:
+                create_planned_content_item(
+                    session,
+                    calendar_date=calendar_date,
+                    destinations=request.form.getlist("destinations"),
+                    goals=request.form.getlist("goals"),
+                    product_ids=product_ids,
+                    audience=request.form.get("audience", ""),
+                    occasion=request.form.get("occasion", ""),
+                    promotion=request.form.get("promotion", ""),
+                    notes=request.form.get("notes", ""),
+                )
+                flash("Planned marketing item saved.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("planning"))
+
+    @app.post("/planning/<int:item_id>/produce")
+    def produce_planning_item(item_id: int) -> str:
+        with session_scope(factory) as session:
+            item = session.get(PlannedContentRecord, item_id)
+            if item is None:
+                flash("Planned content item not found.")
+                return redirect(url_for("planning"))
+            result = produce_content_for_item(session, item, business_dir=business_dir, force=request.form.get("force") == "1")
+            flash(f"Prepared {len(result.candidates)} candidate(s): {result.created} new, {result.skipped} already present.")
+        return redirect(url_for("planning"))
+
     @app.post("/creative-assets/register")
     def creative_assets_register() -> str:
         source_asset_id = int(request.form.get("source_asset_id", "0"))
@@ -280,7 +381,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc())).first()
             tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.plan_id == plan.id).order_by(TaskRecord.due_date))) if plan else []
-            return render_template("calendar.html", active="calendar", plan=plan, tasks=[task_view(task) for task in tasks])
+            planned_items = [serialize_planned_content_item(session, item) for item in planned_content_items(session)]
+            return render_template("calendar.html", active="calendar", plan=plan, tasks=[task_view(task) for task in tasks], planned_items=planned_items)
 
     @app.get("/plans")
     def plans() -> str:

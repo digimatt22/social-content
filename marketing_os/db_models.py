@@ -148,6 +148,50 @@ class CalendarItemRecord(Base):
     task: Mapped["TaskRecord | None"] = relationship(back_populates="calendar_item")
 
 
+class PlannedContentRecord(Base):
+    __tablename__ = "planned_content_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    calendar_date: Mapped[date] = mapped_column(Date, nullable=False)
+    destinations_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    goals_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    audience: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    occasion: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    promotion: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(80), default="planned", nullable=False)
+    brief_status: Mapped[str] = mapped_column(String(80), default="pending", nullable=False)
+    last_production_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    production_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    candidates: Mapped[list["GeneratedContentCandidateRecord"]] = relationship(
+        back_populates="planned_item", cascade="all, delete-orphan", order_by="GeneratedContentCandidateRecord.created_at"
+    )
+
+
+class GeneratedContentCandidateRecord(Base):
+    __tablename__ = "generated_content_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    planned_item_id: Mapped[int] = mapped_column(ForeignKey("planned_content_items.id"), nullable=False)
+    candidate_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), default="codex", nullable=False)
+    body: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    source_facts_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    source_asset_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    review_state: Mapped[str] = mapped_column(String(80), default="needs_review", nullable=False)
+    revision_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    planned_item: Mapped[PlannedContentRecord] = relationship(back_populates="candidates")
+
+    __table_args__ = (UniqueConstraint("planned_item_id", "candidate_type", "provider", name="uq_candidate_planned_type_provider"),)
+
+
 class TaskRecord(Base):
     __tablename__ = "tasks"
 

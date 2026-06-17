@@ -21,6 +21,8 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - source-photo upload into the local product asset inventory
 - manual source-photo registration from a local file path
 - creative asset planning, generation manifests, and generated-output review registration
+- high-level Planning page for destination, goal, and multi-product calendar intent
+- scriptable content-production job for Codex-assisted copy and image-brief candidates
 - read-only Etsy CSV listing import foundation
 - manual override fields that protect local edits from future imports
 - data health view for stale, missing, or unreviewed records
@@ -101,6 +103,12 @@ To write JSON exports somewhere else:
 
 ```bash
 MARKETING_OS_EXPORT_DIR=/path/to/exports python run_local.py
+```
+
+To prepare review candidates for planned marketing items:
+
+```bash
+python -m marketing_os.jobs.content_production --limit 10
 ```
 
 Do not expose this local app to the public internet.

@@ -17,8 +17,10 @@ from sqlalchemy.orm import Session
 from .db_models import (
     AssetRecord,
     CalendarItemRecord,
+    GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
+    PlannedContentRecord,
     ProductRecord,
     SyncMetadata,
     TaskRecord,
@@ -879,6 +881,8 @@ def data_health(session: Session) -> list[DataHealthItem]:
     assets = list(session.scalars(select(AssetRecord)))
     templates = list(session.scalars(select(TemplateRecord)))
     metric_tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.status.in_(METRIC_RELEVANT_STATUS))))
+    planned_items = list(session.scalars(select(PlannedContentRecord)))
+    generated_candidates = list(session.scalars(select(GeneratedContentCandidateRecord)))
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
     sync_errors = [product for product in products if product.sync_error or product.sync_status == "error"]
@@ -890,6 +894,8 @@ def data_health(session: Session) -> list[DataHealthItem]:
     missing_assets = [asset for asset in assets if not asset.file_exists]
     unreviewed_assets = [asset for asset in assets if asset.review_state in {"needs review", "unreviewed"}]
     metrics_due = [task for task in metric_tasks if task.metric_status != "complete"]
+    planned_without_candidates = [item for item in planned_items if item.status == "planned" and not item.candidates]
+    candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]
     template_types = {template.template_type for template in templates}
     missing_template_types = [kind for kind in ["platform", "copy", "graphic"] if kind not in template_types]
 
@@ -944,6 +950,15 @@ def data_health(session: Session) -> list[DataHealthItem]:
             len(metrics_due),
             "Posted tasks still need metrics or final review." if metrics_due else "No posted tasks are waiting for metric follow-up.",
             "Open Metrics Due.",
+        ),
+        DataHealthItem(
+            "Content Production",
+            "Needs review" if planned_without_candidates or candidates_needing_review else "OK",
+            len(planned_without_candidates) + len(candidates_needing_review),
+            "Planned content needs candidates or generated candidates need review."
+            if planned_without_candidates or candidates_needing_review
+            else "No planned content is waiting for production review.",
+            "Open Planning.",
         ),
     ]
 
@@ -1019,6 +1034,13 @@ def export_operating_data(session: Session, export_dir: str | Path = "data/expor
         "assets": [_export_asset(record) for record in session.scalars(select(AssetRecord).order_by(AssetRecord.name))],
         "plans": [_export_plan(record) for record in session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at, PlanRecord.id))],
         "calendar_items": [_export_calendar_item(record) for record in session.scalars(select(CalendarItemRecord).order_by(CalendarItemRecord.date, CalendarItemRecord.id))],
+        "planned_content_items": [
+            _export_planned_content_item(record) for record in session.scalars(select(PlannedContentRecord).order_by(PlannedContentRecord.calendar_date, PlannedContentRecord.id))
+        ],
+        "generated_content_candidates": [
+            _export_generated_content_candidate(record)
+            for record in session.scalars(select(GeneratedContentCandidateRecord).order_by(GeneratedContentCandidateRecord.created_at, GeneratedContentCandidateRecord.id))
+        ],
         "tasks": [_export_task(record) for record in session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id))],
         "metrics": [_export_metric(record) for record in session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on, MetricRecord.id))],
         "sync_metadata": [_export_sync(record) for record in session.scalars(select(SyncMetadata).order_by(SyncMetadata.source_name))],
@@ -1336,6 +1358,42 @@ def _export_calendar_item(record: CalendarItemRecord) -> JsonDict:
         "effort_estimate": record.effort_estimate,
         "expected_impact": record.expected_impact,
         "success_metric": record.success_metric,
+    }
+
+
+def _export_planned_content_item(record: PlannedContentRecord) -> JsonDict:
+    return {
+        "id": record.id,
+        "calendar_date": _date_text(record.calendar_date),
+        "destinations": json_list(record.destinations_json),
+        "goals": json_list(record.goals_json),
+        "product_ids": json_list(record.product_ids_json),
+        "audience": record.audience,
+        "occasion": record.occasion,
+        "promotion": record.promotion,
+        "notes": record.notes,
+        "status": record.status,
+        "brief_status": record.brief_status,
+        "last_production_run_at": _date_text(record.last_production_run_at),
+        "production_error": record.production_error,
+        "created_at": _date_text(record.created_at),
+        "updated_at": _date_text(record.updated_at),
+    }
+
+
+def _export_generated_content_candidate(record: GeneratedContentCandidateRecord) -> JsonDict:
+    return {
+        "id": record.id,
+        "planned_item_id": record.planned_item_id,
+        "candidate_type": record.candidate_type,
+        "provider": record.provider,
+        "body": record.body,
+        "source_facts": _json_dict(record.source_facts_json),
+        "source_asset_ids": json_list(record.source_asset_ids_json),
+        "review_state": record.review_state,
+        "revision_notes": record.revision_notes,
+        "created_at": _date_text(record.created_at),
+        "updated_at": _date_text(record.updated_at),
     }
 
 

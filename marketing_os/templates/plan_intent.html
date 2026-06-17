@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Planning</h2>
+    <div class="subtle">Create high-level calendar intent for Codex-assisted content production.</div>
+  </div>
+</div>
+
+<section class="panel">
+  <h3>New Planned Item</h3>
+  <form method="post" action="{{ url_for('create_planning_item') }}">
+    <div class="grid">
+      <label>
+        Calendar date
+        <input type="date" name="calendar_date" value="{{ today.isoformat() }}" required>
+      </label>
+      <label>
+        Audience
+        <input name="audience" placeholder="Collectors, gift buyers, repeat customers">
+      </label>
+      <label>
+        Occasion
+        <input name="occasion" placeholder="Launch, seasonal moment, gift idea">
+      </label>
+      <label>
+        Promotion
+        <input name="promotion" placeholder="Optional offer or timing note">
+      </label>
+    </div>
+
+    <h3>Destinations</h3>
+    <div class="grid">
+      {% for destination in destinations %}
+        <label><input type="checkbox" name="destinations" value="{{ destination }}"> {{ destination }}</label>
+      {% endfor %}
+    </div>
+
+    <h3>Goals</h3>
+    <div class="grid">
+      {% for goal in goals %}
+        <label><input type="checkbox" name="goals" value="{{ goal }}"> {{ goal }}</label>
+      {% endfor %}
+    </div>
+
+    <h3>Product Focus</h3>
+    <div class="grid">
+      {% for product in products %}
+        <label><input type="checkbox" name="product_ids" value="{{ product.id }}"> {{ product.name }}</label>
+      {% endfor %}
+    </div>
+
+    <label>
+      Notes
+      <textarea name="notes" placeholder="What should Codex know before drafting copy or image briefs?"></textarea>
+    </label>
+    <button type="submit">Save planned item</button>
+  </form>
+</section>
+
+<h3 style="margin-top: 22px;">Planned Calendar Intent</h3>
+<section class="agenda">
+  {% for item in planned_items %}
+    <div class="panel">
+      <div class="meta">
+        <span class="pill">{{ item.calendar_date }}</span>
+        <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
+        <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
+      </div>
+      <h3>{{ item.destinations|join(', ') or 'No destination' }} for {{ item.goals|join(', ') or 'No goal' }}</h3>
+      <div class="subtle">
+        Products:
+        {{ item.products|map(attribute='name')|join(', ') or 'No products selected' }}
+      </div>
+      {% if item.audience or item.occasion or item.promotion %}
+        <div class="meta" style="margin-top: 8px;">
+          {% if item.audience %}<span class="pill">{{ item.audience }}</span>{% endif %}
+          {% if item.occasion %}<span class="pill">{{ item.occasion }}</span>{% endif %}
+          {% if item.promotion %}<span class="pill">{{ item.promotion }}</span>{% endif %}
+        </div>
+      {% endif %}
+      {% if item.notes %}<p class="subtle">{{ item.notes }}</p>{% endif %}
+
+      <div class="button-group">
+        <form method="post" action="{{ url_for('produce_planning_item', item_id=item.id) }}">
+          <button class="secondary" type="submit">Prepare candidates</button>
+        </form>
+        <form method="post" action="{{ url_for('produce_planning_item', item_id=item.id) }}">
+          <input type="hidden" name="force" value="1">
+          <button class="secondary" type="submit">Regenerate</button>
+        </form>
+      </div>
+
+      {% if item.candidates %}
+        <h3 style="margin-top: 14px;">Candidates</h3>
+        <div class="agenda">
+          {% for candidate in item.candidates %}
+            <div class="task">
+              <div class="meta">
+                <span class="pill">{{ candidate.candidate_type.replace('_', ' ').title() }}</span>
+                <span class="pill">{{ candidate.provider }}</span>
+                <span class="pill">{{ candidate.review_state.replace('_', ' ').title() }}</span>
+              </div>
+              <pre class="copybox" id="candidate-{{ candidate.id }}">{{ candidate.body }}</pre>
+              <div class="button-group">
+                <button class="secondary" type="button" data-copy-target="#candidate-{{ candidate.id }}">Copy candidate</button>
+              </div>
+              {% if candidate.revision_notes %}<div class="subtle">{{ candidate.revision_notes }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="panel">No planned marketing intent yet.</div>
+  {% endfor %}
+</section>
+{% endblock %}

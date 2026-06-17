@@ -15,4 +15,24 @@
     <div class="panel">No plan tasks found.</div>
   {% endfor %}
 </section>
+
+<h3 style="margin-top: 22px;">Planned Intent</h3>
+<section class="grid">
+  {% for item in planned_items %}
+    <div class="panel">
+      <div class="meta">
+        <span class="pill">{{ item.calendar_date }}</span>
+        <span class="pill">{{ item.status.replace('_', ' ').title() }}</span>
+        <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
+      </div>
+      <h3>{{ item.destinations|join(', ') }} for {{ item.goals|join(', ') }}</h3>
+      <div class="subtle">{{ item.products|map(attribute='name')|join(', ') }}</div>
+      <div class="button-group" style="margin-top: 10px;">
+        <a class="button secondary" href="{{ url_for('planning') }}">Review in Planning</a>
+      </div>
+    </div>
+  {% else %}
+    <div class="panel">No high-level planned intent has been added yet.</div>
+  {% endfor %}
+</section>
 {% endblock %}

@@ -102,6 +102,20 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "manual_override_state": "VARCHAR(80) NOT NULL DEFAULT ''",
             "manual_override_note": "TEXT NOT NULL DEFAULT ''",
         },
+        "planned_content_items": {
+            "audience": "VARCHAR(200) NOT NULL DEFAULT ''",
+            "occasion": "VARCHAR(200) NOT NULL DEFAULT ''",
+            "promotion": "VARCHAR(200) NOT NULL DEFAULT ''",
+            "notes": "TEXT NOT NULL DEFAULT ''",
+            "status": "VARCHAR(80) NOT NULL DEFAULT 'planned'",
+            "brief_status": "VARCHAR(80) NOT NULL DEFAULT 'pending'",
+            "last_production_run_at": "DATETIME",
+            "production_error": "TEXT NOT NULL DEFAULT ''",
+        },
+        "generated_content_candidates": {
+            "source_asset_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+            "revision_notes": "TEXT NOT NULL DEFAULT ''",
+        },
     }
 
     inspector = inspect(engine)

@@ -36,6 +36,39 @@ Restart the web app after editing template files so the database sync can refres
 
 Use `Posting Guides` for operator-facing platform help. It shows the same platform template knowledge in beginner language without source paths or JSON.
 
+## Planning Intent
+
+Use Planning when Matt or the social operator knows what marketing should happen but does not want to write final copy during planning.
+
+The Planning page saves lightweight calendar intent:
+
+- destination such as Facebook, Instagram, Pinterest, blog post, Etsy, website, or email
+- goal such as sales growth, repeat customers, followers, product awareness, email signup, blog traffic, seasonal launch, or engagement
+- one or more product focuses
+- optional audience, occasion, promotion, and notes
+
+Planned items start as `planned`. Use `Prepare candidates` to create review-only copy and image-prompt candidates immediately, or let the content-production job process them later.
+
+Generated candidates start in `needs_review`. They are not posted automatically.
+
+## Content Production Job
+
+The first Phase 5 content-production job is scriptable and idempotent:
+
+```bash
+python -m marketing_os.jobs.content_production --limit 10
+```
+
+Useful test options:
+
+```bash
+python -m marketing_os.jobs.content_production --dry-run --limit 10
+python -m marketing_os.jobs.content_production --planned-item-id 1
+python -m marketing_os.jobs.content_production --channel facebook
+```
+
+The job finds planned items, builds structured briefs from business/product context, creates review candidates, and writes them back to Marketing OS. Rerunning the job does not duplicate existing candidates unless `--force` is used.
+
 ## Assets
 
 Use Assets to review local product photos and generated graphics.
@@ -106,9 +139,12 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/assets`
 - `GET /api/data-health`
 - `GET /api/creative-assets`
+- `GET /api/planned-content`
 - `POST /api/tasks/<task_id>/finish`
 - `POST /api/tasks/<task_id>/metrics`
 - `POST /api/tasks/<task_id>/asset`
+- `POST /api/planned-content`
+- `POST /api/planned-content/<item_id>/produce`
 
 These endpoints are local-first and unauthenticated, like the rest of the app. Do not expose them to the public internet.
 

@@ -10,7 +10,17 @@ from pathlib import Path
 from sqlalchemy import select
 
 from marketing_os.db import create_db_engine, init_db, session_factory, session_scope
-from marketing_os.db_models import AssetRecord, MetricRecord, PlanRecord, ProductRecord, TaskRecord, TemplateRecord
+from marketing_os.db_models import (
+    AssetRecord,
+    GeneratedContentCandidateRecord,
+    MetricRecord,
+    PlanRecord,
+    PlannedContentRecord,
+    ProductRecord,
+    TaskRecord,
+    TemplateRecord,
+)
+from marketing_os.jobs.content_production import run as run_content_production_job
 from marketing_os.phase3 import (
     TASK_STATUSES,
     add_metric,
@@ -44,6 +54,11 @@ from marketing_os.phase4 import (
     task_asset_options,
     today_view,
     week_agenda,
+)
+from marketing_os.services.content_briefs import (
+    create_planned_content_item,
+    planned_items_needing_production,
+    produce_content_for_item,
 )
 from marketing_os.web_app import create_app
 
@@ -683,6 +698,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertTrue(payload["tasks"])
             self.assertIn("metrics", payload)
             self.assertIn("sync_metadata", payload)
+            self.assertIn("planned_content_items", payload)
+            self.assertIn("generated_content_candidates", payload)
             self.assertIn("external_source", payload["products"][0])
             self.assertIn("manual_override_state", payload["products"][0])
             self.assertIn("metric_status", payload["tasks"][0])
@@ -734,6 +751,109 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             complete_task_status(session, task_id, "complete", notes="Done.")
             completed = completed_tasks(session, role="all")
             self.assertTrue(any(model.task.id == task_id for model in completed))
+
+    def test_phase5_planning_intent_generates_review_candidates_idempotently(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name).limit(2)))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 25),
+                destinations=["Facebook", "Pinterest"],
+                goals=["Sales growth", "Followers"],
+                product_ids=[product.id for product in products],
+                audience="gift buyers",
+                occasion="summer launch",
+                notes="Keep it conversational.",
+            )
+            self.assertEqual(item.status, "planned")
+            self.assertEqual(len(planned_items_needing_production(session)), 1)
+
+            result = produce_content_for_item(session, item)
+            self.assertEqual(result.created, 2)
+            self.assertEqual(item.status, "needs_review")
+            self.assertEqual(item.brief_status, "ready")
+            self.assertTrue(all(candidate.review_state == "needs_review" for candidate in result.candidates))
+            facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+            self.assertIn("body", json.loads(facebook.body))
+            self.assertIn(products[0].name, facebook.source_facts_json)
+
+            rerun = produce_content_for_item(session, item)
+            self.assertEqual(rerun.created, 0)
+            self.assertEqual(rerun.skipped, 2)
+            candidates = session.scalars(select(GeneratedContentCandidateRecord)).all()
+            self.assertEqual(len(candidates), 2)
+
+            health = data_health(session)
+            self.assertTrue(any(row.area == "Content Production" and row.count >= 1 for row in health))
+
+    def test_phase5_web_planning_api_and_job_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-web.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name).limit(2)))
+                product_ids = [product.id for product in products]
+
+            planning_page = client.get("/planning")
+            self.assertEqual(planning_page.status_code, 200)
+            self.assertIn(b"New Planned Item", planning_page.data)
+            self.assertIn(b"Product Focus", planning_page.data)
+
+            response = client.post(
+                "/api/planned-content",
+                json={
+                    "calendar_date": "2026-06-26",
+                    "destinations": ["Facebook"],
+                    "goals": ["Sales growth"],
+                    "product_ids": product_ids,
+                    "audience": "repeat customers",
+                    "notes": "Use a warm voice.",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+            item_id = response.get_json()["planned_item"]["id"]
+
+            produce_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
+            self.assertEqual(produce_response.status_code, 200)
+            payload = produce_response.get_json()
+            self.assertEqual(payload["created"], 2)
+            self.assertEqual(payload["planned_item"]["status"], "needs_review")
+            self.assertTrue(any(candidate["candidate_type"] == "facebook_post" for candidate in payload["planned_item"]["candidates"]))
+
+            rendered_review = client.get("/planning")
+            self.assertEqual(rendered_review.status_code, 200)
+            self.assertIn(b"Facebook Post", rendered_review.data)
+            self.assertIn(b"Copy candidate", rendered_review.data)
+
+            calendar_page = client.get("/calendar")
+            self.assertEqual(calendar_page.status_code, 200)
+            self.assertIn(b"Planned Intent", calendar_page.data)
+            self.assertIn(b"Review in Planning", calendar_page.data)
+
+            second_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
+            self.assertEqual(second_response.status_code, 200)
+            self.assertEqual(second_response.get_json()["created"], 0)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                item = session.get(PlannedContentRecord, item_id)
+                item.status = "planned"
+
+            summary = run_content_production_job(db_path=db_path, planned_item_id=item_id)
+            self.assertEqual(summary["processed"], 1)
+            self.assertEqual(summary["created"], 0)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                target = export_operating_data(session, Path(tmp) / "exports")
+                export_payload = json.loads(target.read_text(encoding="utf-8"))
+                self.assertEqual(len(export_payload["planned_content_items"]), 1)
+                self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
 
 
 if __name__ == "__main__":
