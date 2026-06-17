@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
@@ -107,6 +107,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     app.config["ASSETS_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSETS_ROOT", "assets/products"))
     app.config["ASSET_LIBRARY_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSET_ROOT", "/Volumes/MarketingAssets"))
     app.config["EXPORT_DIR"] = Path(os.environ.get("MARKETING_OS_EXPORT_DIR", "data/exports"))
+    app.config["GENERATED_OUTPUT_ROOT"] = Path(os.environ.get("MARKETING_OS_GENERATED_OUTPUT_ROOT", "outputs/magnific"))
 
     @app.context_processor
     def inject_helpers() -> dict[str, object]:
@@ -607,11 +608,15 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def creative_assets_manual_import() -> str:
         try:
             source_asset_id = int(request.form.get("source_asset_id", "0"))
+            output_path = request.form.get("output_path", "").strip()
+            upload = request.files.get("output_file")
+            if upload is not None and upload.filename:
+                output_path = _save_generated_output_upload(upload, app.config["GENERATED_OUTPUT_ROOT"]).as_posix()
             with session_scope(factory) as session:
                 result = import_manual_generated_output(
                     session,
                     source_asset_id=source_asset_id,
-                    output_path=request.form.get("output_path", "").strip(),
+                    output_path=output_path,
                     target_format=request.form.get("target_format", "Generated output").strip(),
                     prompt=request.form.get("prompt", "").strip(),
                     provider=request.form.get("provider", "magnific_manual").strip(),
@@ -1009,6 +1014,17 @@ def _int_or_none(value: object) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+def _save_generated_output_upload(upload, output_root: Path) -> Path:
+    filename = secure_filename(upload.filename or "")
+    if not filename:
+        raise ValueError("Choose a generated output file with a valid filename.")
+    output_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    target = output_root / f"{stamp}-{filename}"
+    upload.save(target)
+    return target
 
 
 def _tag_values(value: object) -> list[str]:

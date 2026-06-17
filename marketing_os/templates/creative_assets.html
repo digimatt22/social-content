@@ -71,7 +71,7 @@
       </div>
     {% endif %}
   {% endif %}
-  <form method="post" action="{{ url_for('creative_assets_manual_import') }}">
+  <form method="post" action="{{ url_for('creative_assets_manual_import') }}" enctype="multipart/form-data">
     <div class="grid">
       <label>Approved source asset
         <select name="source_asset_id" required>
@@ -82,7 +82,10 @@
         </select>
       </label>
       <label>Output file path
-        <input name="output_path" value="{{ manual_import_defaults.output_path or '' }}" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg" required>
+        <input name="output_path" value="{{ manual_import_defaults.output_path or '' }}" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg">
+      </label>
+      <label>Upload generated file
+        <input type="file" name="output_file" accept="image/*">
       </label>
       <label>Target format
         <input name="target_format" value="{{ manual_import_defaults.target_format or '' }}" placeholder="Facebook post image" required>

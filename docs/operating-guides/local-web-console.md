@@ -124,7 +124,7 @@ Generated assets should not be used in normal tasks until approved. The first Ph
 
 After approval, open the relevant task, use `Change asset` in the `Prepare` section, and assign the approved file-backed asset.
 
-Use `Import Magnific / MCP Output` after generating or upscaling an image outside the app. The source asset must already be approved, the output file must exist locally, and the imported generated candidate starts in `needs review`. Review and approve it from Assets before assigning it to a task.
+Use `Import Magnific / MCP Output` after generating or upscaling an image outside the app. The source asset must already be approved. You can either upload the downloaded generated file or enter an existing local output path; uploaded files are saved under `MARKETING_OS_GENERATED_OUTPUT_ROOT` or `outputs/magnific` by default. The imported generated candidate starts in `needs review`. Review and approve it from Assets before assigning it to a task.
 
 ## Metrics Due
 
@@ -154,7 +154,7 @@ Use Phase 5 Readiness to check the two final human-proof items before calling Ph
 - Matt-approved Facebook copy with reviewer evidence
 - Matt-approved generated creative with reviewer evidence and a file-backed candidate asset
 
-The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset preview and Magnific/MCP prompt handoff with copy controls, and it can open Creative Assets with the import form prefilled. It can export either a full Markdown approval packet or a focused creative handoff file.
+The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset preview and Magnific/MCP prompt handoff with copy controls, and it can open Creative Assets with the import form prefilled for either file upload or path-based import. It can export either a full Markdown approval packet or a focused creative handoff file.
 
 The same check can run from the command line:
 

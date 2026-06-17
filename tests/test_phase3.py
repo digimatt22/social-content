@@ -825,6 +825,59 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(review_payload["reviewed_by"], "Matt")
             self.assertIsNotNone(review_payload["reviewed_at"])
 
+    def test_phase5_web_generated_output_upload_imports_for_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-upload.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            generated_root = Path(tmp) / "generated"
+            source_path.write_bytes(b"source image bytes")
+
+            app = create_app(db_path)
+            app.config["GENERATED_OUTPUT_ROOT"] = generated_root
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Mailman Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Upload source")
+                review_asset(session, source.id, "approved", "Source approved.")
+                source_id = source.id
+
+            page = client.get("/creative-assets")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"Upload generated file", page.data)
+
+            response = client.post(
+                "/creative-assets/manual-import",
+                data={
+                    "source_asset_id": str(source_id),
+                    "output_file": (io.BytesIO(b"generated image bytes"), "magnific-output.png"),
+                    "target_format": "Facebook post image",
+                    "prompt": "Preserve product accuracy.",
+                    "provider": "magnific_mcp",
+                    "model_name": "Magnific MCP",
+                    "provider_job_id": "upload-job-1",
+                    "requested_dimensions": "1080x1080",
+                    "notes": "Uploaded generated output for review.",
+                },
+                content_type="multipart/form-data",
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 302)
+
+            saved_files = list(generated_root.glob("*-magnific-output.png"))
+            self.assertEqual(len(saved_files), 1)
+            self.assertEqual(saved_files[0].read_bytes(), b"generated image bytes")
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                jobs = session.scalars(select(CreativeGenerationJobRecord)).all()
+                self.assertEqual(len(jobs), 1)
+                self.assertEqual(jobs[0].provider, "magnific_mcp")
+                self.assertEqual(jobs[0].provider_job_id, "upload-job-1")
+                self.assertEqual(jobs[0].review_state, "needs_review")
+                self.assertEqual(jobs[0].output_path, saved_files[0].as_posix())
+                self.assertIsNotNone(jobs[0].candidate_asset_id)
+
     def test_phase4_sqlite_backup_copies_database_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "phase4.sqlite"

@@ -109,6 +109,12 @@ To write JSON exports somewhere else:
 MARKETING_OS_EXPORT_DIR=/path/to/exports python run_local.py
 ```
 
+To store uploaded generated outputs somewhere else:
+
+```bash
+MARKETING_OS_GENERATED_OUTPUT_ROOT=/path/to/generated python run_local.py
+```
+
 To prepare review candidates for planned marketing items:
 
 ```bash
