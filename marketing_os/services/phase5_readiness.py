@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -199,7 +200,9 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
                     "",
                     f"- Recommended source asset ID: {source_asset['id'] if source_asset else 'not available'}",
                     f"- Source file: {source_asset['source_path'] if source_asset else 'not available'}",
+                    f"- Absolute source file: {source_asset['absolute_source_path'] if source_asset else 'not available'}",
                     f"- Import generated output at: {creative_handoff['manual_import_path']}",
+                    f"- Suggested absolute output file: {creative_handoff['import_defaults']['absolute_output_path']}",
                     "",
                     "### Prompt",
                     "",
@@ -305,6 +308,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
                 f"- Name: {source_asset['name']}",
                 f"- Type: {source_asset['asset_type']}",
                 f"- Local path: {source_asset['source_path']}",
+                f"- Absolute local path: {source_asset['absolute_source_path'] or 'not available'}",
                 f"- File exists: {source_asset['file_exists']}",
                 f"- External source: {source_asset['external_source'] or 'local'}",
                 f"- Canonical URL: {source_asset['canonical_url'] or 'not recorded'}",
@@ -328,6 +332,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
             "- Set provider to `magnific_mcp` or the actual provider/tool used.",
             "- Paste the prompt above into the Prompt field.",
             f"- Suggested output path: {import_defaults['output_path'] or 'choose a local path that Marketing OS can read'}",
+            f"- Suggested absolute output path: {import_defaults['absolute_output_path'] or 'choose a local path that Marketing OS can read'}",
             "- Import the output as `Facebook post image` and leave it in `needs_review` until Matt approves it.",
             "",
         ]
@@ -578,9 +583,11 @@ def _serialize_creative_handoff(
 def _creative_import_defaults(prompt_candidate: GeneratedContentCandidateRecord | None, source_asset: AssetRecord | None) -> dict[str, object]:
     source_id = source_asset.id if source_asset else ""
     source_slug = _slug(source_asset.name) if source_asset else "phase5"
+    output_path = f"outputs/magnific/{source_slug}-facebook-post-image.png" if source_asset else ""
     return {
         "source_asset_id": source_id,
-        "output_path": f"outputs/magnific/{source_slug}-facebook-post-image.png" if source_asset else "",
+        "output_path": output_path,
+        "absolute_output_path": _absolute_local_path(output_path),
         "target_format": "Facebook post image",
         "provider": "magnific_mcp",
         "model_name": "Magnific MCP",
@@ -614,6 +621,7 @@ def _serialize_source_asset(asset: AssetRecord | None) -> dict[str, object] | No
         "product_id": asset.product_id,
         "asset_type": asset.asset_type,
         "source_path": asset.source_path,
+        "absolute_source_path": _absolute_local_path(asset.source_path),
         "external_source": asset.external_source,
         "external_id": asset.external_id,
         "canonical_url": asset.canonical_url,
@@ -641,6 +649,7 @@ def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str
         "provider_error": job.provider_error,
         "output_url": job.output_url,
         "output_path": job.output_path,
+        "absolute_output_path": _absolute_local_path(job.output_path),
         "review_state": job.review_state,
         "review_notes": job.review_notes,
         "reviewed_by": job.reviewed_by,
@@ -659,6 +668,7 @@ def _creative_asset_reference_lines(creative_review: dict[str, object]) -> list[
             [
                 f"- Source asset: #{source_asset.get('id')} · {source_asset.get('name') or 'unnamed'}",
                 f"- Source file: {source_asset.get('source_path') or 'not recorded'}",
+                f"- Absolute source file: {source_asset.get('absolute_source_path') or 'not recorded'}",
                 f"- Source file exists: {source_asset.get('file_exists')}",
                 f"- Source review state: {source_asset.get('review_state') or 'not recorded'}",
             ]
@@ -669,6 +679,7 @@ def _creative_asset_reference_lines(creative_review: dict[str, object]) -> list[
             [
                 f"- Candidate asset: #{candidate_asset.get('id')} · {candidate_asset.get('name') or 'unnamed'}",
                 f"- Candidate file: {candidate_asset.get('source_path') or 'not recorded'}",
+                f"- Absolute candidate file: {candidate_asset.get('absolute_source_path') or 'not recorded'}",
                 f"- Candidate file exists: {candidate_asset.get('file_exists')}",
                 f"- Candidate review state: {candidate_asset.get('review_state') or 'not recorded'}",
             ]
@@ -721,6 +732,18 @@ def _slug(value: str) -> str:
             chars.append("-")
             previous_dash = True
     return "".join(chars).strip("-") or "phase5"
+
+
+def _absolute_local_path(value: str | None) -> str:
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.scheme != "file":
+        return ""
+    raw = Path(parsed.path if parsed.scheme == "file" else value).expanduser()
+    if raw.is_absolute():
+        return raw.resolve(strict=False).as_posix()
+    return (Path.cwd() / raw).resolve(strict=False).as_posix()
 
 
 def _candidate_product_ids(candidate: GeneratedContentCandidateRecord | None) -> list[int]:

@@ -137,6 +137,15 @@ Creative approval checklist:
           {% endif %}
           <div class="copybox" id="phase5-source-path">{{ packet.creative_handoff.source_asset.source_path }}</div>
           <button class="secondary" type="button" data-copy-target="#phase5-source-path">Copy source path</button>
+          {% if packet.creative_handoff.source_asset.absolute_source_path %}
+            <div class="copybox" id="phase5-absolute-source-path">{{ packet.creative_handoff.source_asset.absolute_source_path }}</div>
+            <button class="secondary" type="button" data-copy-target="#phase5-absolute-source-path">Copy absolute source path</button>
+          {% endif %}
+        {% endif %}
+        {% if packet.creative_handoff.import_defaults.absolute_output_path %}
+          <p class="subtle">Suggested output file</p>
+          <div class="copybox" id="phase5-output-path">{{ packet.creative_handoff.import_defaults.absolute_output_path }}</div>
+          <button class="secondary" type="button" data-copy-target="#phase5-output-path">Copy output path</button>
         {% endif %}
         {% if packet.creative_handoff.prompt %}
           <details open>
