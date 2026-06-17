@@ -1,0 +1,13 @@
+[project]
+name = "mattmademe-marketing-os"
+version = "0.1.0"
+description = "Local-first Phase 1 Marketing Operating System for MattMadeMe"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+marketing-os = "marketing_os.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
