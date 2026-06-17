@@ -88,6 +88,20 @@ Set `MARKETING_OS_ASSETS_ROOT` before startup if the local product photo invento
 
 Phase 5 is expected to move the durable asset source to the external-drive asset library described in `docs/architecture/local-asset-library-agent-access-plan.md`. Until that is implemented, keep repo-local product photos treated as working data and out of git.
 
+## Local Asset Library
+
+Set `MARKETING_OS_ASSET_ROOT` to the stable external-drive or local asset-library root, such as `/Volumes/MarketingAssets`.
+
+Use Settings -> `Scan asset library` to index files under that root. The scanner:
+
+- indexes product, brand, campaign, video, template, and generated asset files
+- stores relative path, role, MIME type, file size, dimensions, rights, brand-safety review state, and indexed timestamp
+- generates image thumbnails under `_index/thumbnails`
+- writes `_index/assets-manifest.json`
+- keeps original files out of git
+
+If the configured root is missing, Data Health shows `Local Asset Library` as needing attention.
+
 ## Creative Assets
 
 Use Creative Assets after a real product source photo exists and has been approved.
@@ -124,6 +138,7 @@ Use Data Health to see upkeep work that can make the planner less trustworthy:
 
 - stale imported products
 - Etsy and website sync status
+- local asset-library mount/index status
 - missing asset files
 - unreviewed source or generated assets
 - manual overrides that protect local edits from imports
@@ -148,6 +163,7 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `POST /api/planned-content/<item_id>/produce`
 - `POST /api/integrations/etsy/sync`
 - `POST /api/integrations/website/sync`
+- `POST /api/assets/library/scan`
 
 These endpoints are local-first and unauthenticated, like the rest of the app. Do not expose them to the public internet.
 

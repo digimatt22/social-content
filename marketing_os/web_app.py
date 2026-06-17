@@ -67,6 +67,7 @@ from .services.content_briefs import (
     serialize_planned_content_item,
 )
 from .services.etsy_import import sync_etsy_read_only
+from .services.local_assets import scan_asset_root
 from .services.mattmademe_website_import import sync_mattmademe_website
 
 
@@ -85,6 +86,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     app.config["BUSINESS_DIR"] = business_dir
     app.config["DB_PATH"] = Path(os.environ.get("MARKETING_OS_DB_PATH", db_path or DEFAULT_DB_PATH))
     app.config["ASSETS_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSETS_ROOT", "assets/products"))
+    app.config["ASSET_LIBRARY_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSET_ROOT", "/Volumes/MarketingAssets"))
     app.config["EXPORT_DIR"] = Path(os.environ.get("MARKETING_OS_EXPORT_DIR", "data/exports"))
 
     @app.context_processor
@@ -209,7 +211,13 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def api_data_health():
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
-            return jsonify({"items": [serialize_data_health_item(item) for item in build_data_health(session)]})
+            return jsonify({"items": [serialize_data_health_item(item) for item in build_data_health(session, app.config["ASSET_LIBRARY_ROOT"])]})
+
+    @app.post("/api/assets/library/scan")
+    def api_scan_asset_library():
+        with session_scope(factory) as session:
+            summary = scan_asset_root(session, app.config["ASSET_LIBRARY_ROOT"])
+            return jsonify(summary.__dict__), 200 if not summary.missing_root else 400
 
     @app.post("/api/integrations/etsy/sync")
     def api_sync_etsy():
@@ -602,7 +610,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def data_health() -> str:
         with session_scope(factory) as session:
             refresh_asset_file_state(session)
-            items = build_data_health(session)
+            items = build_data_health(session, app.config["ASSET_LIBRARY_ROOT"])
             return render_template("data_health.html", active="data_health", items=items)
 
     @app.post("/imports/etsy-csv")
@@ -642,6 +650,16 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 )
         return redirect(url_for("data_health"))
 
+    @app.post("/assets/library/scan")
+    def scan_asset_library() -> str:
+        with session_scope(factory) as session:
+            summary = scan_asset_root(session, app.config["ASSET_LIBRARY_ROOT"])
+            if summary.missing_root:
+                flash(f"Asset library root not found: {summary.root_path}.")
+            else:
+                flash(f"Indexed {summary.indexed} asset library file(s). Manifest: {summary.manifest_path}.")
+        return redirect(url_for("assets"))
+
     @app.get("/settings")
     def settings() -> str:
         return render_template(
@@ -650,6 +668,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             business_dir=business_dir,
             db_path=app.config["DB_PATH"],
             assets_root=app.config["ASSETS_ROOT"],
+            asset_library_root=app.config["ASSET_LIBRARY_ROOT"],
             export_dir=app.config["EXPORT_DIR"],
         )
 

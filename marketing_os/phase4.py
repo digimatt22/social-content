@@ -877,7 +877,7 @@ def asset_path(asset: AssetRecord, base_dir: str | Path = ".") -> Path:
     return Path(base_dir) / raw
 
 
-def data_health(session: Session) -> list[DataHealthItem]:
+def data_health(session: Session, asset_library_root: str | Path | None = None) -> list[DataHealthItem]:
     products = list(session.scalars(select(ProductRecord)))
     assets = list(session.scalars(select(AssetRecord)))
     templates = list(session.scalars(select(TemplateRecord)))
@@ -900,6 +900,8 @@ def data_health(session: Session) -> list[DataHealthItem]:
     candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]
     etsy_sync = next((record for record in sync_metadata if record.source_name == "etsy_api"), None)
     website_sync = next((record for record in sync_metadata if record.source_name == "mattmademe_website"), None)
+    local_asset_sync = next((record for record in sync_metadata if record.source_name == "local_asset_library"), None)
+    asset_library_missing = bool(asset_library_root and not Path(asset_library_root).expanduser().exists())
     template_types = {template.template_type for template in templates}
     missing_template_types = [kind for kind in ["platform", "copy", "graphic"] if kind not in template_types]
 
@@ -977,6 +979,15 @@ def data_health(session: Session) -> list[DataHealthItem]:
             0 if website_sync and "error:" not in website_sync.notes and "missing_credentials" not in website_sync.notes else 1,
             _sync_message(website_sync, "MattMadeMe website API has not been synced yet."),
             "Configure website API credentials in .env or run sync from Settings.",
+        ),
+        DataHealthItem(
+            "Local Asset Library",
+            "Needs attention" if asset_library_missing or _sync_status_label(local_asset_sync) != "OK" else "OK",
+            1 if asset_library_missing or _sync_status_label(local_asset_sync) != "OK" else 0,
+            f"Configured asset root is missing: {asset_library_root}."
+            if asset_library_missing
+            else _sync_message(local_asset_sync, "Local asset library has not been indexed yet."),
+            "Mount the asset drive and run Local Asset Library scan from Settings.",
         ),
     ]
 
@@ -1349,6 +1360,15 @@ def _export_asset(record: AssetRecord) -> JsonDict:
         "file_checked_at": _date_text(record.file_checked_at),
         "file_modified_at": _date_text(record.file_modified_at),
         "file_checksum": record.file_checksum,
+        "file_size_bytes": record.file_size_bytes,
+        "mime_type": record.mime_type,
+        "width": record.width,
+        "height": record.height,
+        "relative_path": record.relative_path,
+        "asset_role": record.asset_role,
+        "rights": record.rights,
+        "brand_safe": record.brand_safe,
+        "indexed_at": _date_text(record.indexed_at),
         "review_state": record.review_state,
         "approval_notes": record.approval_notes,
         "generated_prompt": record.generated_prompt,

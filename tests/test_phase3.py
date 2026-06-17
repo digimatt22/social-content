@@ -63,6 +63,7 @@ from marketing_os.services.content_briefs import (
     produce_content_for_item,
 )
 from marketing_os.services.etsy_import import sync_etsy_read_only
+from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
 from marketing_os.web_app import create_app
 
@@ -1006,6 +1007,92 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             website_response = client.post("/api/integrations/website/sync")
             self.assertEqual(website_response.status_code, 400)
             self.assertIn("token", website_response.get_json()["errors"][0])
+
+    def test_phase5_local_asset_library_scan_indexes_external_root(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        from PIL import Image
+
+        asset_root = Path(tmp.name) / "MarketingAssets"
+        product_dir = asset_root / "products" / "bingo-duck" / "source"
+        product_dir.mkdir(parents=True)
+        source_path = product_dir / "bingo-source.jpg"
+        Image.new("RGB", (900, 700), "#0f766e").save(source_path)
+
+        brand_dir = asset_root / "brand" / "logos"
+        brand_dir.mkdir(parents=True)
+        logo_path = brand_dir / "logo.png"
+        Image.new("RGB", (300, 120), "#ffffff").save(logo_path)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            summary = scan_asset_root(session, asset_root)
+            self.assertFalse(summary.missing_root)
+            self.assertEqual(summary.indexed, 2)
+            self.assertTrue(Path(summary.manifest_path).exists())
+
+            product_asset = session.scalar(
+                select(AssetRecord).where(
+                    AssetRecord.external_source == "local_asset_library",
+                    AssetRecord.relative_path == "products/bingo-duck/source/bingo-source.jpg",
+                )
+            )
+            self.assertIsNotNone(product_asset)
+            self.assertEqual(product_asset.asset_role, "product_photo")
+            self.assertEqual(product_asset.width, 900)
+            self.assertEqual(product_asset.height, 700)
+            self.assertTrue(product_asset.preview_path)
+            self.assertTrue(Path(product_asset.preview_path).exists())
+            self.assertEqual(product_asset.review_state, "needs review")
+
+            logo_asset = session.scalar(select(AssetRecord).where(AssetRecord.asset_role == "logo"))
+            self.assertIsNotNone(logo_asset)
+            self.assertEqual(logo_asset.asset_type, "logo")
+
+            target = export_operating_data(session, Path(tmp.name) / "exports")
+            payload = json.loads(target.read_text(encoding="utf-8"))
+            exported = next(item for item in payload["assets"] if item["relative_path"] == "products/bingo-duck/source/bingo-source.jpg")
+            self.assertEqual(exported["width"], 900)
+            self.assertEqual(exported["asset_role"], "product_photo")
+
+            health = data_health(session, asset_library_root=asset_root)
+            self.assertTrue(any(item.area == "Local Asset Library" and item.status == "OK" for item in health))
+
+    def test_phase5_local_asset_library_missing_root_is_visible(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        missing_root = Path(tmp.name) / "MissingAssets"
+        with session_scope(factory) as session:
+            seed_database(session)
+            summary = scan_asset_root(session, missing_root)
+            self.assertTrue(summary.missing_root)
+            health = data_health(session, asset_library_root=missing_root)
+            row = next(item for item in health if item.area == "Local Asset Library")
+            self.assertEqual(row.status, "Needs attention")
+            self.assertIn("missing", row.message)
+
+    def test_phase5_web_asset_library_scan_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-assets.sqlite"
+            asset_root = Path(tmp) / "MarketingAssets"
+            product_dir = asset_root / "products" / "bingo-duck" / "source"
+            product_dir.mkdir(parents=True)
+            (product_dir / "photo.jpg").write_bytes(b"fake image bytes")
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            app.config["ASSET_LIBRARY_ROOT"] = asset_root
+            client = app.test_client()
+
+            settings = client.get("/settings")
+            self.assertEqual(settings.status_code, 200)
+            self.assertIn(b"Scan asset library", settings.data)
+
+            response = client.post("/api/assets/library/scan")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()["indexed"], 1)
 
 
 if __name__ == "__main__":

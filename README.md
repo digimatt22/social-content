@@ -18,6 +18,7 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - metrics due workflow for follow-up after posting
 - completed-task review and operator-facing posting guides
 - local asset scanning with file checks and review states
+- local/external asset-library scan with thumbnails and manifest metadata
 - source-photo upload into the local product asset inventory
 - manual source-photo registration from a local file path
 - creative asset planning, generation manifests, and generated-output review registration
