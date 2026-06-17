@@ -1173,6 +1173,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Review evidence", rendered_review.data)
             self.assertIn(b"Edit post copy", rendered_review.data)
             self.assertIn(b"Save review", rendered_review.data)
+            self.assertIn(b"Required when approving generated copy", rendered_review.data)
             self.assertIn(b"Attach to task", rendered_review.data)
 
             calendar_page = client.get("/calendar")
@@ -1629,6 +1630,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Creative approval checklist", page.data)
             self.assertIn(b"No invented markings", page.data)
             self.assertIn(b"Rewrite Requested", page.data)
+            self.assertIn(b"Required when approving for Phase 5 proof", page.data)
             self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), page.data)
             self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), page.data)
             self.assertIn(b'action="/phase5-readiness/copy-review"', page.data)
@@ -1643,6 +1645,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(f'id="creative-job-{creative.job.id}"'.encode(), creative_page.data)
             self.assertIn(b"Generated candidate", creative_page.data)
             self.assertIn(b"Creative approval checklist", creative_page.data)
+            self.assertIn(b"Required when approving generated creative", creative_page.data)
             self.assertIn(b"No invented markings", creative_page.data)
             self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), creative_page.data)
             self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), creative_page.data)
