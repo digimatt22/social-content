@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_models import CreativeGenerationJobRecord, GeneratedContentCandidateRecord, utc_now
+from ..db_models import AssetRecord, CreativeGenerationJobRecord, GeneratedContentCandidateRecord, utc_now
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,8 @@ class Phase5ApprovalPacket:
     readiness: Phase5Readiness
     copy_candidate: GeneratedContentCandidateRecord | None
     creative_job: CreativeGenerationJobRecord | None
+    creative_prompt_candidate: GeneratedContentCandidateRecord | None
+    creative_source_asset: AssetRecord | None
 
 
 def build_phase5_readiness(session: Session) -> Phase5Readiness:
@@ -71,6 +73,8 @@ def build_phase5_approval_packet(session: Session) -> Phase5ApprovalPacket:
         readiness=build_phase5_readiness(session),
         copy_candidate=_latest_facebook_candidate(session),
         creative_job=_latest_creative_job(session),
+        creative_prompt_candidate=_latest_image_prompt_candidate(session),
+        creative_source_asset=_recommended_creative_source_asset(session),
     )
 
 
@@ -80,6 +84,7 @@ def serialize_phase5_approval_packet(packet: Phase5ApprovalPacket) -> dict[str, 
         "readiness": serialize_phase5_readiness(packet.readiness),
         "copy_review": _serialize_copy_candidate(packet.copy_candidate),
         "creative_review": _serialize_creative_job(packet.creative_job),
+        "creative_handoff": _serialize_creative_handoff(packet.creative_prompt_candidate, packet.creative_source_asset),
         "final_actions": _final_actions(packet.readiness),
     }
 
@@ -89,6 +94,7 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
     readiness = payload["readiness"]
     copy_review = payload["copy_review"]
     creative_review = payload["creative_review"]
+    creative_handoff = payload["creative_handoff"]
     final_actions = payload["final_actions"]
 
     lines = [
@@ -166,6 +172,22 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
         )
     else:
         lines.extend(["No generated creative job exists yet.", ""])
+        if creative_handoff:
+            source_asset = creative_handoff["source_asset"]
+            lines.extend(
+                [
+                    "### Creative Handoff",
+                    "",
+                    f"- Recommended source asset ID: {source_asset['id'] if source_asset else 'not available'}",
+                    f"- Source file: {source_asset['source_path'] if source_asset else 'not available'}",
+                    f"- Import generated output at: {creative_handoff['manual_import_path']}",
+                    "",
+                    "### Prompt",
+                    "",
+                    str(creative_handoff["prompt"] or "").strip() or "No prompt candidate recorded.",
+                    "",
+                ]
+            )
 
     lines.extend(["## Final Actions", ""])
     for action in final_actions:
@@ -279,6 +301,33 @@ def _latest_creative_job(session: Session) -> CreativeGenerationJobRecord | None
     return session.scalar(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.updated_at.desc(), CreativeGenerationJobRecord.id.desc()))
 
 
+def _latest_image_prompt_candidate(session: Session) -> GeneratedContentCandidateRecord | None:
+    return session.scalar(
+        select(GeneratedContentCandidateRecord)
+        .where(GeneratedContentCandidateRecord.candidate_type == "image_prompt_brief")
+        .order_by(GeneratedContentCandidateRecord.updated_at.desc(), GeneratedContentCandidateRecord.id.desc())
+    )
+
+
+def _recommended_creative_source_asset(session: Session) -> AssetRecord | None:
+    prompt_candidate = _latest_image_prompt_candidate(session)
+    product_ids = _candidate_product_ids(prompt_candidate)
+    query = (
+        select(AssetRecord)
+        .where(
+            AssetRecord.review_state == "approved",
+            AssetRecord.file_exists == 1,
+            AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]),
+        )
+        .order_by(AssetRecord.product_id.is_(None), AssetRecord.id)
+    )
+    if product_ids:
+        matched = session.scalar(query.where(AssetRecord.product_id.in_(product_ids)))
+        if matched:
+            return matched
+    return session.scalar(query)
+
+
 def _serialize_copy_candidate(candidate: GeneratedContentCandidateRecord | None) -> dict[str, object] | None:
     if candidate is None:
         return None
@@ -298,6 +347,54 @@ def _serialize_copy_candidate(candidate: GeneratedContentCandidateRecord | None)
         "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
         "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
         "review_path": f"/planning#candidate-{candidate.id}",
+    }
+
+
+def _serialize_creative_handoff(
+    prompt_candidate: GeneratedContentCandidateRecord | None,
+    source_asset: AssetRecord | None,
+) -> dict[str, object] | None:
+    if prompt_candidate is None and source_asset is None:
+        return None
+    return {
+        "prompt_candidate_id": prompt_candidate.id if prompt_candidate else None,
+        "source_prompt": prompt_candidate.body if prompt_candidate else "",
+        "prompt": _creative_handoff_prompt(prompt_candidate, source_asset),
+        "prompt_review_state": prompt_candidate.review_state if prompt_candidate else "",
+        "prompt_review_path": f"/planning#candidate-{prompt_candidate.id}" if prompt_candidate else "",
+        "source_asset": _serialize_source_asset(source_asset),
+        "manual_import_path": "/creative-assets",
+        "next_step": "Generate a real Magnific/MCP output from the recommended source asset, save it locally, then import it through Creative Assets.",
+    }
+
+
+def _creative_handoff_prompt(prompt_candidate: GeneratedContentCandidateRecord | None, source_asset: AssetRecord | None) -> str:
+    base_prompt = prompt_candidate.body.strip() if prompt_candidate else ""
+    source_name = source_asset.name if source_asset else "the approved source asset"
+    return (
+        f"Use {source_name} as the reference image. Create one product-accurate Facebook-ready image for MattMadeMe. "
+        "Preserve the duck's shape, color, printed details, proportions, and 3D-printed collectible feel. "
+        "Do not invent new markings, characters, logos, text overlays, or packaging. "
+        "Use a clean, warm product-photo composition suitable for a Facebook post. "
+        "Leave the output unapproved until Matt reviews it in Marketing OS."
+        + (f"\n\nPlanning prompt context: {base_prompt}" if base_prompt else "")
+    )
+
+
+def _serialize_source_asset(asset: AssetRecord | None) -> dict[str, object] | None:
+    if asset is None:
+        return None
+    return {
+        "id": asset.id,
+        "name": asset.name,
+        "product_id": asset.product_id,
+        "asset_type": asset.asset_type,
+        "source_path": asset.source_path,
+        "external_source": asset.external_source,
+        "external_id": asset.external_id,
+        "canonical_url": asset.canonical_url,
+        "file_exists": bool(asset.file_exists),
+        "review_state": asset.review_state,
     }
 
 
@@ -352,6 +449,22 @@ def _json_list(value: str) -> list[object]:
     except json.JSONDecodeError:
         return []
     return data if isinstance(data, list) else []
+
+
+def _candidate_product_ids(candidate: GeneratedContentCandidateRecord | None) -> list[int]:
+    if candidate is None:
+        return []
+    facts = _json_dict(candidate.source_facts_json)
+    ids: list[int] = []
+    product_facts = facts.get("product_facts")
+    if isinstance(product_facts, list):
+        for item in product_facts:
+            if isinstance(item, dict):
+                try:
+                    ids.append(int(item.get("id")))
+                except (TypeError, ValueError):
+                    continue
+    return ids
 
 
 def _display_body(value: str) -> str:

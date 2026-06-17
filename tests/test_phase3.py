@@ -1440,6 +1440,49 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Final Actions", export_response.data)
             export_response.close()
 
+    def test_phase5_readiness_surfaces_creative_handoff_when_no_job_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-creative-handoff.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            source_path.write_bytes(b"source image bytes")
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Mailman Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Mailman source")
+                review_asset(session, source.id, "approved", "Source approved for creative handoff.")
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 30),
+                    destinations=["Facebook"],
+                    goals=["Product awareness"],
+                    product_ids=[product.id],
+                    audience="postal worker gift buyers",
+                    notes="Internal reviewer setup note.",
+                )
+                produce_content_for_item(session, item)
+                source_id = source.id
+
+            api_response = client.get("/api/phase5-approval-packet")
+            self.assertEqual(api_response.status_code, 200)
+            packet = api_response.get_json()["packet"]
+            self.assertIsNone(packet["creative_review"])
+            self.assertIsNotNone(packet["creative_handoff"])
+            self.assertEqual(packet["creative_handoff"]["source_asset"]["id"], source_id)
+            self.assertIn("Mailman Duck", packet["creative_handoff"]["prompt"])
+            self.assertIn("Preserve the duck's shape", packet["creative_handoff"]["prompt"])
+            self.assertIn("Planning prompt context", packet["creative_handoff"]["prompt"])
+            self.assertEqual(packet["creative_handoff"]["manual_import_path"], "/creative-assets")
+
+            page = client.get("/phase5-readiness")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"Magnific/MCP prompt handoff", page.data)
+            self.assertIn(b"Mailman Duck", page.data)
+            self.assertIn(b"Import in Creative Assets", page.data)
+
     def test_phase5_readiness_job_reports_and_exports_packet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "phase5-readiness-job.sqlite"

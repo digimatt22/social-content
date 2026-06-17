@@ -94,7 +94,20 @@
       </form>
     {% else %}
       <p class="subtle">Import a real Magnific/MCP output before generated creative can be reviewed.</p>
-      <a class="button secondary" href="{{ url_for('creative_assets') }}">Open Creative Assets</a>
+      {% if packet.creative_handoff %}
+        {% if packet.creative_handoff.source_asset %}
+          <p class="subtle">Recommended source asset #{{ packet.creative_handoff.source_asset.id }} · {{ packet.creative_handoff.source_asset.name }}</p>
+          <div class="copybox">{{ packet.creative_handoff.source_asset.source_path }}</div>
+        {% endif %}
+        {% if packet.creative_handoff.prompt %}
+          <details open>
+            <summary class="subtle">Magnific/MCP prompt handoff</summary>
+            <div class="copybox">{{ packet.creative_handoff.prompt }}</div>
+          </details>
+        {% endif %}
+        <p class="subtle">{{ packet.creative_handoff.next_step }}</p>
+      {% endif %}
+      <a class="button secondary" href="{{ url_for('creative_assets') }}">Import in Creative Assets</a>
     {% endif %}
   </article>
 </section>
