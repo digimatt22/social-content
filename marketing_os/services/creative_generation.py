@@ -7,8 +7,11 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_models import AssetRecord, CreativeGenerationJobRecord
-from ..phase4 import refresh_asset_file_state, register_generated_asset_candidate
+from ..db_models import AssetRecord, CreativeGenerationJobRecord, utc_now
+from ..phase4 import refresh_asset_file_state, register_generated_asset_candidate, review_asset
+
+
+CREATIVE_REVIEW_STATES = {"needs_review", "approved", "rejected"}
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,38 @@ def creative_generation_jobs(session: Session) -> list[CreativeGenerationJobReco
     return list(session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.created_at.desc(), CreativeGenerationJobRecord.id.desc())))
 
 
+def review_creative_generation_job(
+    session: Session,
+    job_id: int,
+    review_state: str,
+    review_notes: str = "",
+    reviewed_by: str = "",
+) -> CreativeGenerationJobRecord:
+    if review_state not in CREATIVE_REVIEW_STATES:
+        raise ValueError(f"Unsupported creative review state: {review_state}")
+    refresh_asset_file_state(session)
+    job = session.get(CreativeGenerationJobRecord, job_id)
+    if job is None:
+        raise ValueError(f"Creative generation job not found: {job_id}")
+    if review_state == "approved":
+        if job.candidate_asset is None:
+            raise ValueError("Creative generation job has no candidate asset to approve.")
+        if not job.candidate_asset.file_exists:
+            raise ValueError("Generated output file must exist before approval.")
+        review_asset(session, job.candidate_asset.id, "approved", review_notes or "Generated output approved.")
+    elif review_state == "rejected" and job.candidate_asset is not None:
+        review_asset(session, job.candidate_asset.id, "rejected", review_notes or "Generated output rejected.")
+
+    job.review_state = review_state
+    if review_notes.strip():
+        job.review_notes = review_notes.strip()
+    if reviewed_by.strip():
+        job.reviewed_by = reviewed_by.strip()
+    if review_state != "needs_review" or reviewed_by.strip():
+        job.reviewed_at = utc_now()
+    return job
+
+
 def serialize_creative_generation_job(record: CreativeGenerationJobRecord) -> dict[str, object]:
     return {
         "id": record.id,
@@ -110,6 +145,8 @@ def serialize_creative_generation_job(record: CreativeGenerationJobRecord) -> di
         "response_metadata": _json_dict(record.response_metadata_json),
         "review_state": record.review_state,
         "review_notes": record.review_notes,
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": record.reviewed_at.isoformat() if record.reviewed_at else None,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "updated_at": record.updated_at.isoformat() if record.updated_at else None,
     }
@@ -121,4 +158,3 @@ def _json_dict(value: str) -> dict[str, object]:
     except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
-

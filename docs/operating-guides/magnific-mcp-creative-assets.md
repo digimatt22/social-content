@@ -220,6 +220,18 @@ Suggested metadata for generated assets:
 | `review_state` | `needs_review`, `approved`, or `rejected`. |
 | `review_notes` | Product-accuracy notes. |
 
+## Review Evidence In Marketing OS
+
+After importing a Magnific/MCP output through Creative Assets:
+
+1. Open `Creative Assets`.
+2. Find the generation job.
+3. Set review state to `approved` or `rejected`.
+4. Enter `Reviewed by` as Matt when Matt is the visual reviewer.
+5. Record product-accuracy and composition notes.
+
+Approving a creative generation job records `reviewed_by` and `reviewed_at`, and approves the file-backed candidate asset only after Marketing OS confirms the output file exists.
+
 ## Open Questions
 
 - Confirm exactly how Codex Desktop exposes remote streamable HTTP MCP server configuration in this install.

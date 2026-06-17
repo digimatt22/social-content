@@ -137,6 +137,8 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "output_url": "VARCHAR(500) NOT NULL DEFAULT ''",
             "response_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
             "review_notes": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_by": "VARCHAR(120) NOT NULL DEFAULT ''",
+            "reviewed_at": "DATETIME",
         },
     }
 

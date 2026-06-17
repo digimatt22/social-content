@@ -110,6 +110,27 @@
         <div class="copybox">{{ job.prompt }}</div>
         {% if job.review_notes %}<p class="subtle">{{ job.review_notes }}</p>{% endif %}
       </details>
+      <form method="post" action="{{ url_for('creative_assets_job_review', job_id=job.id) }}" style="margin-top: 12px;">
+        <div class="grid">
+          <label>Review state
+            <select name="review_state">
+              {% for state in ["needs_review", "approved", "rejected"] %}
+                <option value="{{ state }}" {{ 'selected' if job.review_state == state else '' }}>{{ state.replace('_', ' ').title() }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Reviewed by
+            <input name="reviewed_by" value="{{ job.reviewed_by }}" placeholder="Matt">
+          </label>
+        </div>
+        <label>Review notes
+          <textarea name="review_notes" placeholder="Product accuracy, composition, and approval notes.">{{ job.review_notes }}</textarea>
+        </label>
+        <button class="secondary" type="submit">Save creative review</button>
+      </form>
+      {% if job.reviewed_by or job.reviewed_at %}
+        <p class="subtle">Reviewed{% if job.reviewed_by %} by {{ job.reviewed_by }}{% endif %}{% if job.reviewed_at %} at {{ job.reviewed_at }}{% endif %}</p>
+      {% endif %}
     </div>
   {% else %}
     <div class="panel">No creative generation jobs have been imported yet.</div>

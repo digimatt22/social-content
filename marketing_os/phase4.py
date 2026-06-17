@@ -1498,6 +1498,8 @@ def _export_creative_generation_job(record: CreativeGenerationJobRecord) -> Json
         "response_metadata": _json_dict(record.response_metadata_json),
         "review_state": record.review_state,
         "review_notes": record.review_notes,
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": _date_text(record.reviewed_at),
         "created_at": _date_text(record.created_at),
         "updated_at": _date_text(record.updated_at),
     }

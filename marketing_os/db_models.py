@@ -246,6 +246,8 @@ class CreativeGenerationJobRecord(Base):
     response_metadata_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     review_state: Mapped[str] = mapped_column(String(80), default="needs_review", nullable=False)
     review_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reviewed_by: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 

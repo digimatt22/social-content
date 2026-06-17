@@ -58,7 +58,7 @@ Latest browser/UI evidence:
 | Matt/operator can plan future marketing without final copy upfront | Proven | Planning UI and planned content records. |
 | Codex can enrich planned items asynchronously while app remains review/posting tool | Proven | Content-production job and review workflow. |
 | At least one product has source images discoverable through local asset library path | Proven fixture-backed | Local asset library scan test and asset library metadata. |
-| At least one generated creative candidate from improved workflow is good enough to approve after review | Not fully proven | Manual/Magnific import path and approval gate exist, but no real Magnific/Freepik output has been visually approved in this repo. |
+| At least one generated creative candidate from improved workflow is good enough to approve after review | Not fully proven | Manual/Magnific import path, approval gate, and creative reviewer/timestamp fields exist, but no real Magnific/Freepik output has been visually approved in this repo. |
 | At least one Facebook post reads like MattMadeMe and is ready without heavy rewrite | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; generated candidate reviews now store reviewer and timestamp, but still needs Matt's actual taste approval. |
 | Future recommendation influenced by performance/outcome notes | Proven fixture-backed | Insights service feeds `performance_context` into content briefs. |
 | Data Health gives actionable next steps | Proven | Data Health rows cover syncs, assets, content production, learning loop, credentials, and review states. |
@@ -74,6 +74,7 @@ Latest browser/UI evidence:
 ## Closed After Initial Audit
 
 - Local-app operator workflow proof: `docs/reviews/phase5-operator-workflow-proof.md` and `tests/test_phase3.py::Phase3LocalWebConsoleTests::test_phase5_web_operator_workflow_posts_generated_copy_and_records_outcome`.
+- Creative approval evidence capture: creative generation jobs now store `reviewed_by` and `reviewed_at`, and approving a job approves the file-backed candidate asset.
 
 ## Notes
 

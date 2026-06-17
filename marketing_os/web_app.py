@@ -74,6 +74,7 @@ from .services.content_briefs import (
 from .services.creative_generation import (
     creative_generation_jobs,
     import_manual_generated_output,
+    review_creative_generation_job,
     serialize_creative_generation_job,
 )
 from .services.etsy_import import sync_etsy_read_only
@@ -294,6 +295,22 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 return jsonify({"job": serialize_creative_generation_job(result.job), "candidate_id": result.candidate.id}), 201
         except (TypeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
+
+    @app.post("/api/creative-assets/jobs/<int:job_id>/review")
+    def api_creative_assets_job_review(job_id: int):
+        payload = request.get_json(silent=True) or {}
+        with session_scope(factory) as session:
+            try:
+                job = review_creative_generation_job(
+                    session,
+                    job_id,
+                    review_state=str(payload.get("review_state") or "needs_review"),
+                    review_notes=str(payload.get("review_notes") or ""),
+                    reviewed_by=str(payload.get("reviewed_by") or ""),
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"job": serialize_creative_generation_job(job)})
 
     @app.get("/api/planned-content")
     def api_planned_content():
@@ -571,6 +588,22 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(f"Imported generated candidate #{result.candidate.id}. Review it in Assets before use.")
         except ValueError as exc:
             flash(str(exc))
+        return redirect(url_for("creative_assets"))
+
+    @app.post("/creative-assets/jobs/<int:job_id>/review")
+    def creative_assets_job_review(job_id: int) -> str:
+        with session_scope(factory) as session:
+            try:
+                review_creative_generation_job(
+                    session,
+                    job_id,
+                    review_state=request.form.get("review_state", "needs_review"),
+                    review_notes=request.form.get("review_notes", ""),
+                    reviewed_by=request.form.get("reviewed_by", ""),
+                )
+                flash("Creative review saved.")
+            except ValueError as exc:
+                flash(str(exc))
         return redirect(url_for("creative_assets"))
 
     @app.get("/calendar")

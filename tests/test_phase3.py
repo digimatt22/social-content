@@ -66,7 +66,7 @@ from marketing_os.services.content_briefs import (
     produce_content_for_item,
     record_candidate_review,
 )
-from marketing_os.services.creative_generation import import_manual_generated_output
+from marketing_os.services.creative_generation import import_manual_generated_output, review_creative_generation_job
 from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
 from marketing_os.services.local_assets import scan_asset_root
@@ -729,13 +729,25 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(result.candidate.external_source, "magnific_manual")
             self.assertEqual(result.candidate.external_id, "job-123")
 
-            health = data_health(session)
-            self.assertTrue(any(item.area == "Creative Generation" and item.count >= 1 for item in health))
+            health_before_review = data_health(session)
+            self.assertTrue(any(item.area == "Creative Generation" and item.count >= 1 for item in health_before_review))
+
+            reviewed_job = review_creative_generation_job(
+                session,
+                result.job.id,
+                "approved",
+                review_notes="Matt approved the generated output for product accuracy.",
+                reviewed_by="Matt",
+            )
+            self.assertEqual(reviewed_job.review_state, "approved")
+            self.assertEqual(reviewed_job.reviewed_by, "Matt")
+            self.assertIsNotNone(reviewed_job.reviewed_at)
+            self.assertEqual(result.candidate.review_state, "approved")
+
+            health_after_review = data_health(session)
+            self.assertTrue(any(item.area == "Creative Generation" and item.status == "OK" for item in health_after_review))
 
             task = next(task for task in plan.tasks if task.product_name == "Bingo Duck")
-            with self.assertRaises(ValueError):
-                assign_asset_to_task(session, task.id, result.candidate.id)
-            review_asset(session, result.candidate.id, "approved", "Generated output preserves product.")
             assign_asset_to_task(session, task.id, result.candidate.id)
             self.assertEqual(task.asset_id, result.candidate.id)
 
@@ -743,6 +755,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual(len(payload["creative_generation_jobs"]), 1)
             self.assertEqual(payload["creative_generation_jobs"][0]["provider_job_id"], "job-123")
+            self.assertEqual(payload["creative_generation_jobs"][0]["reviewed_by"], "Matt")
+            self.assertIsNotNone(payload["creative_generation_jobs"][0]["reviewed_at"])
 
     def test_phase5_web_manual_creative_import_endpoint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -784,6 +798,21 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 jobs = session.scalars(select(CreativeGenerationJobRecord)).all()
                 self.assertEqual(len(jobs), 1)
                 self.assertEqual(jobs[0].provider_job_id, "api-job-1")
+                job_id = jobs[0].id
+
+            review_response = client.post(
+                f"/api/creative-assets/jobs/{job_id}/review",
+                json={
+                    "review_state": "approved",
+                    "review_notes": "Matt approved the generated candidate.",
+                    "reviewed_by": "Matt",
+                },
+            )
+            self.assertEqual(review_response.status_code, 200)
+            review_payload = review_response.get_json()["job"]
+            self.assertEqual(review_payload["review_state"], "approved")
+            self.assertEqual(review_payload["reviewed_by"], "Matt")
+            self.assertIsNotNone(review_payload["reviewed_at"])
 
     def test_phase4_sqlite_backup_copies_database_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
