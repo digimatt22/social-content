@@ -17,4 +17,5 @@ data/*.sqlite
 data/*.sqlite-*
 data/backups/
 data/exports/
+data/logs/
 instance/

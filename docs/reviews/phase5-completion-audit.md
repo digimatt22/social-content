@@ -66,7 +66,7 @@ The readiness page can record final copy and creative reviews directly, links to
 | Matt can see source facts from Etsy/MattMadeMe and sync timing | Proven fixture-backed | Product, asset, blog, and sync metadata fields plus Settings/Data Health/API views. |
 | Operator can start the day without caring whether product facts came from local docs, Etsy, or website | Mostly proven | Local records are normalized; live credential-backed sync not yet exercised. |
 | Matt/operator can plan future marketing without final copy upfront | Proven | Planning UI and planned content records. |
-| Codex can enrich planned items asynchronously while app remains review/posting tool | Proven | Content-production job and review workflow. |
+| Codex can enrich planned items asynchronously while app remains review/posting tool | Proven | Content-production job, review workflow, local runner script, and macOS LaunchAgent template. |
 | At least one product has source images discoverable through local asset library path | Proven fixture-backed | Local asset library scan test and asset library metadata. |
 | At least one generated creative candidate from improved workflow is good enough to approve after review | Not fully proven | Manual/Magnific import path, approval gate, and creative reviewer/timestamp fields exist, but no real Magnific/Freepik output has been visually approved in this repo. |
 | At least one Facebook post reads like MattMadeMe and is ready without heavy rewrite | Mostly proven | `docs/reviews/phase5-facebook-post-proof.md`; generated candidate reviews now store reviewer and timestamp, but still needs Matt's actual taste approval. |

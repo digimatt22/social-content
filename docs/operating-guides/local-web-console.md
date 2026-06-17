@@ -70,6 +70,23 @@ python -m marketing_os.jobs.content_production --export-briefs-dir data/exports/
 
 The job finds planned items, builds structured briefs from business/product context, creates review candidates, and writes them back to Marketing OS. Use `--export-briefs-dir` when Codex or another model-assisted worker needs a file handoff before or during generation. Brief filenames are stable by planned item ID, so rerunning the job updates the handoff instead of creating duplicate files. Rerunning the job does not duplicate existing candidates unless `--force` is used. Candidates marked `rewrite_requested` are picked up by the normal job and refreshed back into `needs_review`; exported briefs include the rewrite notes and prior copy so the next pass can address the critique.
 
+For the first local nightly schedule, use the wrapper script:
+
+```bash
+./scripts/run-content-production.sh
+```
+
+The wrapper writes structured briefs to `data/exports/content-briefs` and appends job output to `data/logs/content-production.log`. To install the weekday 2:30 AM macOS LaunchAgent template:
+
+```bash
+mkdir -p data/logs
+cp docs/automation/com.mattmademe.marketing-os.content-production.plist ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.mattmademe.marketing-os.content-production.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.mattmademe.marketing-os.content-production.plist
+```
+
+Keep manual runs available even after scheduling. If the nightly job creates candidates, they still start in `needs_review`; the schedule should never approve, post, or mark Phase 5 complete.
+
 ## Assets
 
 Use Assets to review local product photos and generated graphics.

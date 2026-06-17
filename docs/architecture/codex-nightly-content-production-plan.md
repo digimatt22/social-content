@@ -149,6 +149,14 @@ Recommended first schedule:
 - only process planned items due within the next 7 to 14 days
 - skip items already in review, approved, posted, or skipped
 
+Current local implementation:
+
+- manual-safe runner: `./scripts/run-content-production.sh`
+- macOS LaunchAgent template: `docs/automation/com.mattmademe.marketing-os.content-production.plist`
+- default schedule: weekdays at 2:30 AM local time
+- brief export path: `data/exports/content-briefs`
+- log path: `data/logs/content-production.log`
+
 Manual runs should remain available because scheduled automation is harder to debug than a direct command.
 
 ## Human Review Rules

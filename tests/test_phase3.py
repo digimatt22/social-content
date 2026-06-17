@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import plistlib
 import tempfile
 import unittest
 from datetime import date
@@ -1068,6 +1069,22 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertIn("Bingo Duck", rewritten.body)
                 self.assertIn("Too generic; make it warmer.", rewritten.source_facts_json)
                 self.assertNotIn(item_id, [item.id for item in planned_items_needing_production(session)])
+
+    def test_phase5_content_production_runner_and_launchagent_template(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        runner = repo_root / "scripts" / "run-content-production.sh"
+        plist_path = repo_root / "docs" / "automation" / "com.mattmademe.marketing-os.content-production.plist"
+
+        self.assertTrue(runner.is_file())
+        self.assertIn("marketing_os.jobs.content_production", runner.read_text(encoding="utf-8"))
+        self.assertTrue(plist_path.is_file())
+
+        plist = plistlib.loads(plist_path.read_bytes())
+        self.assertEqual(plist["Label"], "com.mattmademe.marketing-os.content-production")
+        self.assertEqual(plist["WorkingDirectory"], "/Users/matt/Documents/marketing-os")
+        self.assertIn("/Users/matt/Documents/marketing-os/scripts/run-content-production.sh", plist["ProgramArguments"])
+        self.assertEqual(len(plist["StartCalendarInterval"]), 5)
+        self.assertTrue(all(item["Hour"] == 2 and item["Minute"] == 30 for item in plist["StartCalendarInterval"]))
 
     def test_phase5_copy_quality_score_flags_internal_notes_and_unsupported_terms(self) -> None:
         score = score_copy_against_voice(
