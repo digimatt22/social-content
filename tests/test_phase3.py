@@ -1050,6 +1050,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             dry_run = run_content_production_job(db_path=db_path, dry_run=True, export_briefs_dir=Path(tmp) / "briefs")
             self.assertEqual(len(dry_run["items"]), 1)
+            self.assertEqual(dry_run["filters"]["dry_run"], True)
+            self.assertEqual(dry_run["filters"]["export_briefs_dir"], str(Path(tmp) / "briefs"))
             brief_path = Path(dry_run["items"][0]["brief_export_path"])
             rewrite_brief = json.loads(brief_path.read_text(encoding="utf-8"))
             self.assertEqual(rewrite_brief["rewrite_requests"][0]["candidate_id"], candidate_id)
@@ -1059,6 +1061,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             summary = run_content_production_job(db_path=db_path, export_briefs_dir=Path(tmp) / "briefs")
             self.assertEqual(summary["processed"], 1)
             self.assertEqual(summary["created"], 0)
+            self.assertEqual(summary["filters"]["export_briefs_dir"], str(Path(tmp) / "briefs"))
             self.assertTrue(summary["items"][0]["rewrite_requested"])
             self.assertTrue(summary["items"][0]["forced"])
 
@@ -1123,6 +1126,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             dry_run = run_content_production_job(db_path=db_path, dry_run=True, days_ahead=14)
             item_ids = [item["planned_item"]["id"] for item in dry_run["items"]]
+            self.assertEqual(dry_run["filters"]["days_ahead"], 14)
+            self.assertEqual(dry_run["filters"]["target_date"], (today + timedelta(days=14)).isoformat())
             self.assertIn(near_id, item_ids)
             self.assertNotIn(far_id, item_ids)
 
@@ -1288,6 +1293,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             summary = run_content_production_job(db_path=db_path, planned_item_id=item_id)
             self.assertEqual(summary["processed"], 1)
             self.assertEqual(summary["created"], 0)
+            self.assertEqual(summary["filters"]["planned_item_id"], item_id)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 target = export_operating_data(session, Path(tmp) / "exports")
@@ -1333,6 +1339,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(dry_run["processed"], 0)
             self.assertEqual(len(dry_run["items"]), 1)
+            self.assertEqual(dry_run["filters"]["planned_item_id"], item_id)
+            self.assertEqual(dry_run["filters"]["dry_run"], True)
+            self.assertEqual(dry_run["filters"]["export_briefs_dir"], str(export_dir))
             brief_path = Path(dry_run["items"][0]["brief_export_path"])
             self.assertEqual(brief_path, export_dir / f"planned-item-{item_id}-content-brief.json")
             self.assertTrue(brief_path.is_file())
@@ -1357,6 +1366,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(live_run["processed"], 1)
             self.assertEqual(live_run["created"], 2)
+            self.assertEqual(live_run["filters"]["planned_item_id"], item_id)
+            self.assertEqual(live_run["filters"]["export_briefs_dir"], str(export_dir))
             self.assertEqual(Path(live_run["items"][0]["brief_export_path"]), brief_path)
             self.assertTrue(all(candidate_id is not None for candidate_id in live_run["items"][0]["candidate_ids"]))
 

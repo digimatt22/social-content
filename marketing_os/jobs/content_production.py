@@ -39,6 +39,16 @@ def run(
             production_target_date = target_date
             if production_target_date is None and days_ahead is not None:
                 production_target_date = date.today() + timedelta(days=days_ahead)
+            summary["filters"] = {
+                "target_date": production_target_date.isoformat() if production_target_date else None,
+                "days_ahead": days_ahead,
+                "channel": channel,
+                "planned_item_id": planned_item_id,
+                "limit": limit,
+                "force": force,
+                "dry_run": dry_run,
+                "export_briefs_dir": str(export_briefs_dir) if export_briefs_dir is not None else None,
+            }
             if planned_item_id is not None:
                 item = session.get(PlannedContentRecord, planned_item_id)
                 items = [item] if item is not None else []
