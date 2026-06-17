@@ -29,7 +29,7 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - editable platform, copy, and graphic templates under `docs/templates`
 - manual metric entry after posting
 
-The Phase 2 planner remains active behind the web app. Old Phase 1/2 executable entry points are archived under `archive/phase1-phase2-executables`.
+The Phase 2 planner remains active behind the web app. Old Phase 1/2 executable entry points are archived under `archive/phase1-phase2-executables`, and executed planning docs are archived under `docs/archive`.
 
 ## Installation
 
@@ -67,7 +67,7 @@ Edit those files to update business facts, products, audiences, voice, goals, an
 
 ## Usage
 
-For a step-by-step local test flow, see [docs/getting-started.md](docs/getting-started.md).
+For a step-by-step local test flow, see [docs/getting-started.md](docs/getting-started.md). For the current operator guide, see [docs/operating-guides/local-web-console.md](docs/operating-guides/local-web-console.md).
 
 Run the local web console:
 
@@ -95,6 +95,8 @@ To use a different local product-photo inventory:
 MARKETING_OS_ASSETS_ROOT=/path/to/assets/products python run_local.py
 ```
 
+Phase 5 planning uses `MARKETING_OS_ASSET_ROOT` for the future external-drive asset library. The current Phase 4 app still accepts `MARKETING_OS_ASSETS_ROOT` for the repo-local product-photo inventory.
+
 To write JSON exports somewhere else:
 
 ```bash
@@ -117,11 +119,19 @@ python -m unittest discover -s tests
 
 The Marketing OS is a local planning and operator assistant. It does not publish content or connect to external analytics.
 
-Phase 4 keeps the Python/Flask/SQLAlchemy/SQLite stack while adding service boundaries and integration-ready fields so a future richer frontend can attach without replacing the planning core.
+Current implementation keeps the Python/Flask/SQLAlchemy/SQLite stack while adding service boundaries and integration-ready fields so a future richer frontend can attach without replacing the planning core.
+
+Current active planning docs:
+
+- [Phase 5 goal](docs/goals/phase5-integrations-and-creative-quality.md)
+- [Phase 4 current-state premortem](docs/reviews/phase4-current-state-premortem.md)
+- [Etsy read-only integration plan](docs/architecture/etsy-read-only-integration-plan.md)
+- [MattMadeMe website integration plan](docs/architecture/mattmademe-website-integration-plan.md)
+- [Local asset library agent access plan](docs/architecture/local-asset-library-agent-access-plan.md)
+- [Freepik/Magnific creative integration plan](docs/architecture/freepik-magnific-creative-integration-plan.md)
 
 Out of scope:
 
-- Etsy API integration
 - Instagram API integration
 - Facebook API integration
 - Google Analytics integration

@@ -53,11 +53,13 @@ Generated graphics should stay in `needs review` until a human approves them.
 
 Set `MARKETING_OS_ASSETS_ROOT` before startup if the local product photo inventory should live somewhere other than `assets/products`.
 
+Phase 5 is expected to move the durable asset source to the external-drive asset library described in `docs/architecture/local-asset-library-agent-access-plan.md`. Until that is implemented, keep repo-local product photos treated as working data and out of git.
+
 ## Creative Assets
 
 Use Creative Assets after a real product source photo exists and has been approved.
 
-The workflow is:
+The current workflow is:
 
 1. Add a product photo under `assets/products`.
 2. Use Assets to scan local files.
@@ -68,10 +70,10 @@ The workflow is:
    - Reel Cover
    - Carousel Slide
 6. Use `Prepare generation run` to create `needs review` asset records and a JSON manifest under `outputs/graphics/manifests`.
-7. Use the manifest in the image-generation pass, or manually place image files at the planned output paths.
+7. Use the manifest in a higher-quality image-generation pass, or manually place image files at the planned output paths.
 8. Return to Assets and approve only outputs that exist on disk and preserve product shape, color, printed details, and proportions.
 
-Generated assets should not be used in normal tasks until approved.
+Generated assets should not be used in normal tasks until approved. The first Phase 4 generated images did not meet the product-quality bar; use the Freepik/Magnific plan before treating this workflow as production-ready.
 
 After approval, open the relevant task, use `Change asset` in the `Prepare` section, and assign the approved file-backed asset.
 
