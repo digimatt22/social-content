@@ -65,6 +65,7 @@ from .services.content_briefs import (
     DESTINATION_OPTIONS,
     GOAL_OPTIONS,
     create_planned_content_item,
+    create_task_from_planned_content,
     planned_content_items,
     produce_content_for_item,
     record_candidate_review,
@@ -340,6 +341,22 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 }
             )
 
+    @app.post("/api/planned-content/<int:item_id>/task")
+    def api_create_task_from_planned_content(item_id: int):
+        payload = request.get_json(silent=True) or {}
+        candidate_id = _int_or_none(payload.get("candidate_id"))
+        with session_scope(factory) as session:
+            try:
+                result = create_task_from_planned_content(
+                    session,
+                    item_id,
+                    destination=str(payload.get("destination") or "") or None,
+                    candidate_id=candidate_id,
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"task": serialize_task_view(task_view(result.task)), "candidate_id": result.candidate.id if result.candidate else None}), 201
+
     @app.post("/api/generated-content/<int:candidate_id>/review")
     def api_review_generated_content(candidate_id: int):
         payload = request.get_json(silent=True) or {}
@@ -458,6 +475,23 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 return redirect(url_for("planning"))
             result = produce_content_for_item(session, item, business_dir=business_dir, force=request.form.get("force") == "1")
             flash(f"Prepared {len(result.candidates)} candidate(s): {result.created} new, {result.skipped} already present.")
+        return redirect(url_for("planning"))
+
+    @app.post("/planning/<int:item_id>/create-task")
+    def create_task_from_planning_item(item_id: int) -> str:
+        candidate_id = _int_or_none(request.form.get("candidate_id"))
+        with session_scope(factory) as session:
+            try:
+                result = create_task_from_planned_content(
+                    session,
+                    item_id,
+                    destination=request.form.get("destination", ""),
+                    candidate_id=candidate_id,
+                )
+                flash(f"Created posting task: {result.task.title}.")
+                return redirect(url_for("task_detail", task_id=result.task.id))
+            except ValueError as exc:
+                flash(str(exc))
         return redirect(url_for("planning"))
 
     @app.post("/planning/candidates/<int:candidate_id>/review")

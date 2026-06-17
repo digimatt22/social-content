@@ -423,6 +423,8 @@ def link_generated_content_to_task(session: Session, task_id: int, candidate_id:
     candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
     if candidate is None:
         raise ValueError(f"Generated content candidate not found: {candidate_id}")
+    if candidate.review_state != "approved":
+        raise ValueError("Generated content must be approved before it can be attached to a task.")
     task.generated_content_candidate_id = candidate.id
     task.draft_caption = _candidate_copy_body(candidate.body) or task.draft_caption
     task.cta = _candidate_cta(candidate.body) or task.cta

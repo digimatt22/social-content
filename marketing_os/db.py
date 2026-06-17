@@ -87,6 +87,7 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "source_asset_id": "INTEGER",
         },
         "tasks": {
+            "planned_content_item_id": "INTEGER",
             "generated_content_candidate_id": "INTEGER",
             "published_url": "VARCHAR(500) NOT NULL DEFAULT ''",
             "platform_post_id": "VARCHAR(160) NOT NULL DEFAULT ''",

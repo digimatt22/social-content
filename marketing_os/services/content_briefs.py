@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 
 from ..context import load_business_context
 from ..db_models import (
+    AssetRecord,
     GeneratedContentCandidateRecord,
+    PlanRecord,
     PlannedContentRecord,
     ProductRecord,
+    TaskRecord,
     utc_now,
 )
-from ..phase3 import json_list
+from ..phase3 import json_list, link_generated_content_to_task, owner_for, playbook_for
 from .copywriter import generate_facebook_post
 from .insights import brief_performance_context
 
@@ -40,6 +43,12 @@ class ContentProductionResult:
     candidates: list[GeneratedContentCandidateRecord]
     created: int
     skipped: int
+
+
+@dataclass(frozen=True)
+class PlannedTaskResult:
+    task: TaskRecord
+    candidate: GeneratedContentCandidateRecord | None
 
 
 def create_planned_content_item(
@@ -296,6 +305,68 @@ def record_candidate_review(session: Session, candidate_id: int, review_state: s
     return candidate
 
 
+def create_task_from_planned_content(
+    session: Session,
+    item_id: int,
+    destination: str | None = None,
+    candidate_id: int | None = None,
+) -> PlannedTaskResult:
+    item = session.get(PlannedContentRecord, item_id)
+    if item is None:
+        raise ValueError(f"Planned content item not found: {item_id}")
+
+    selected_destination = _selected_destination(item, destination)
+    content_type = _content_type_for_destination(selected_destination)
+    products = products_for_item(session, item)
+    product_name = ", ".join(product.name for product in products) if products else "Planned product focus"
+    primary_product = products[0] if products else None
+    asset = _best_task_asset(session, primary_product)
+    playbook = playbook_for(selected_destination, content_type)
+    plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc(), PlanRecord.id.desc())).first()
+    if plan is None:
+        raise ValueError("Create or seed a plan before creating posting tasks.")
+
+    candidate = session.get(GeneratedContentCandidateRecord, candidate_id) if candidate_id else _approved_candidate_for_item(item)
+    draft_caption = item.notes or f"Draft a {selected_destination} {content_type} for {product_name}."
+    cta = _cta_for_goals(goals_for(item))
+    if candidate is not None:
+        if candidate.planned_item_id != item.id:
+            raise ValueError("Candidate does not belong to this planned item.")
+        if candidate.review_state != "approved":
+            raise ValueError("Approve the generated candidate before creating a posting task from it.")
+        candidate_copy = _candidate_copy_body(candidate.body)
+        if candidate_copy:
+            draft_caption = candidate_copy
+        cta = _candidate_cta(candidate.body) or cta
+
+    task = TaskRecord(
+        plan_id=plan.id,
+        planned_content_item_id=item.id,
+        due_date=item.calendar_date,
+        title=_task_title(item, selected_destination, product_name),
+        owner_role=owner_for(selected_destination, content_type),
+        platform=selected_destination,
+        content_type=content_type,
+        product_name=product_name,
+        asset_id=asset.id if asset else None,
+        draft_caption=draft_caption,
+        cta=cta,
+        hashtags_json="[]",
+        posting_steps_json=json.dumps(playbook["steps"]),
+        preview_checklist_json=json.dumps(playbook["checklist"]),
+        metric_instruction=_metric_instruction(selected_destination, goals_for(item), playbook),
+        metric_status="not due",
+        status="ready to post" if asset else "needs asset",
+        notes=_task_notes(item),
+    )
+    session.add(task)
+    session.flush()
+    if candidate is not None:
+        link_generated_content_to_task(session, task.id, candidate.id)
+    item.status = "approved" if candidate is not None else "brief_ready"
+    return PlannedTaskResult(task=task, candidate=candidate)
+
+
 def _valid_choices(values: list[str], allowed: list[str]) -> list[str]:
     allowed_lookup = {value.lower(): value for value in allowed}
     result: list[str] = []
@@ -304,6 +375,95 @@ def _valid_choices(values: list[str], allowed: list[str]) -> list[str]:
         if canonical and canonical not in result:
             result.append(canonical)
     return result
+
+
+def _selected_destination(item: PlannedContentRecord, destination: str | None) -> str:
+    destinations = destinations_for(item)
+    if destination:
+        for value in destinations:
+            if value.lower() == destination.strip().lower():
+                return value
+        raise ValueError("Choose one of the planned destinations.")
+    if not destinations:
+        raise ValueError("Planned item has no destination.")
+    return destinations[0]
+
+
+def _content_type_for_destination(destination: str) -> str:
+    lookup = {
+        "Facebook": "post",
+        "Instagram": "post",
+        "Pinterest": "pin",
+        "Blog post": "blog topic",
+        "Website": "blog topic",
+        "Etsy": "promotion",
+        "Email": "email",
+    }
+    return lookup.get(destination, "post")
+
+
+def _approved_candidate_for_item(item: PlannedContentRecord) -> GeneratedContentCandidateRecord | None:
+    for candidate in item.candidates:
+        if candidate.review_state == "approved" and candidate.candidate_type in {"facebook_post", "blog_outline"}:
+            return candidate
+    return None
+
+
+def _best_task_asset(session: Session, product: ProductRecord | None) -> AssetRecord | None:
+    if product is None:
+        return None
+    return session.scalar(
+        select(AssetRecord)
+        .where(AssetRecord.product_id == product.id)
+        .where(AssetRecord.review_state.in_(["approved", "complete", "needs review", "unreviewed"]))
+        .order_by(AssetRecord.file_exists.desc(), AssetRecord.review_state, AssetRecord.id)
+    )
+
+
+def _candidate_copy_body(value: str) -> str:
+    data = _json_dict(value)
+    if not data:
+        return value.strip()
+    pieces = [str(data.get("hook") or "").strip(), str(data.get("body") or "").strip()]
+    return "\n\n".join(piece for piece in pieces if piece)
+
+
+def _candidate_cta(value: str) -> str:
+    data = _json_dict(value)
+    return str(data.get("cta") or "").strip() if data else ""
+
+
+def _cta_for_goals(goals: list[str]) -> str:
+    if any(goal.lower() == "sales growth" for goal in goals):
+        return "Take a look at the shop listing when you are ready."
+    if any(goal.lower() == "followers" for goal in goals):
+        return "Follow along for the next tiny build."
+    if any(goal.lower() == "email signup" for goal in goals):
+        return "Join the email list for new releases and behind-the-scenes notes."
+    return "Reply with what you want to see next."
+
+
+def _metric_instruction(destination: str, goals: list[str], playbook: dict[str, object]) -> str:
+    goal_text = ", ".join(goals) if goals else "planned goal"
+    return f"Track {destination} outcome for {goal_text}: {playbook.get('metric') or 'record reach, engagement, and notes later.'}"
+
+
+def _task_title(item: PlannedContentRecord, destination: str, product_name: str) -> str:
+    occasion = f" - {item.occasion}" if item.occasion else ""
+    return f"{destination} planned post for {product_name}{occasion}"
+
+
+def _task_notes(item: PlannedContentRecord) -> str:
+    parts = []
+    if item.audience:
+        parts.append(f"Audience: {item.audience}")
+    if item.occasion:
+        parts.append(f"Occasion: {item.occasion}")
+    if item.promotion:
+        parts.append(f"Promotion: {item.promotion}")
+    if item.notes:
+        parts.append(f"Planning notes: {item.notes}")
+    return "\n".join(parts)
 
 
 def _product_facts(product: ProductRecord) -> dict[str, object]:

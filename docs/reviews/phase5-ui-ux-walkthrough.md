@@ -22,7 +22,7 @@ Screens checked:
 
 Live route smoke was run against the local Flask server at `http://127.0.0.1:8000`.
 
-The local runtime database did not contain planned candidates during the live smoke, so candidate review controls were verified through the automated web-flow test that creates planned content and renders the Planning review state.
+The local runtime database did not contain planned items or candidates during the live smoke, so candidate review and planned-item task creation controls were verified through the automated web-flow test that creates planned content and renders the Planning review state.
 
 ## Result
 
@@ -74,6 +74,23 @@ Fix:
 - Added learning-summary export data.
 - Added performance context to generated content briefs.
 
+### Planned Intent Did Not Become A Posting Task
+
+Problem:
+
+Planned content could generate candidates, and approved copy could be attached to an existing task, but the operator still had to reuse an older task or manually create the actual posting work.
+
+Why it would cause non-use:
+
+Planning and production would feel disconnected from the daily posting queue.
+
+Fix:
+
+- Added a "Create posting task" action from Planning.
+- Added an API endpoint for planned-item task creation.
+- Tasks created from planned intent carry the planned item ID, selected destination, product focus, approved generated copy, source asset when available, posting checklist, and metric guidance.
+- Candidate assignment now requires approval before a generated draft can become task copy.
+
 ## Route Smoke Evidence
 
 All checked routes returned HTTP 200:
@@ -92,14 +109,6 @@ All checked routes returned HTTP 200:
 - `/api/planned-content`
 
 ## Remaining UX Risks
-
-### Planning Still Does Not Create Posting Tasks Automatically
-
-Planned content can generate copy candidates, and candidates can be attached to existing tasks, but the app does not yet create a posting task directly from a planned item.
-
-Recommendation:
-
-Add a "Create posting task" action from Planning that carries destination, product focus, generated copy, source assets, and metric follow-up into a task.
 
 ### Candidate Review Is Functional But Not Yet Comfortable
 
@@ -139,7 +148,6 @@ This walkthrough moved Phase 5 closer to done by addressing the most immediate r
 
 Still not complete:
 
-- automatic task creation from planned intent
 - browser screenshot-based mobile/desktop QA
 - final Phase 5 completion audit
 - stronger generated image quality proof from the Freepik/Magnific path

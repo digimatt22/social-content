@@ -257,6 +257,7 @@ class TaskRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"), nullable=False)
     calendar_item_id: Mapped[int | None] = mapped_column(ForeignKey("calendar_items.id"), nullable=True)
+    planned_content_item_id: Mapped[int | None] = mapped_column(ForeignKey("planned_content_items.id"), nullable=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
     title: Mapped[str] = mapped_column(String(260), nullable=False)
     owner_role: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -291,6 +292,7 @@ class TaskRecord(Base):
 
     plan: Mapped[PlanRecord] = relationship(back_populates="tasks")
     calendar_item: Mapped[CalendarItemRecord | None] = relationship(back_populates="task")
+    planned_content_item: Mapped[PlannedContentRecord | None] = relationship()
     asset: Mapped[AssetRecord | None] = relationship()
     generated_content_candidate: Mapped[GeneratedContentCandidateRecord | None] = relationship()
     metrics: Mapped[list["MetricRecord"]] = relationship(back_populates="task", cascade="all, delete-orphan")

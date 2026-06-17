@@ -91,6 +91,29 @@
         </form>
       </div>
 
+      <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 12px;">
+        <div class="grid">
+          <label>Create posting task for
+            <select name="destination">
+              {% for destination in item.destinations %}
+                <option value="{{ destination }}">{{ destination }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Approved candidate
+            <select name="candidate_id">
+              <option value="">No approved copy yet</option>
+              {% for candidate in item.candidates %}
+                {% if candidate.review_state == 'approved' %}
+                  <option value="{{ candidate.id }}">#{{ candidate.id }} · {{ candidate.candidate_type.replace('_', ' ').title() }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <button class="secondary" type="submit">Create posting task</button>
+      </form>
+
       {% if item.candidates %}
         <h3 style="margin-top: 14px;">Candidates</h3>
         <div class="agenda">

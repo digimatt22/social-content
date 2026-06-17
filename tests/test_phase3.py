@@ -61,8 +61,10 @@ from marketing_os.phase4 import (
 )
 from marketing_os.services.content_briefs import (
     create_planned_content_item,
+    create_task_from_planned_content,
     planned_items_needing_production,
     produce_content_for_item,
+    record_candidate_review,
 )
 from marketing_os.services.creative_generation import import_manual_generated_output
 from marketing_os.services.etsy_import import sync_etsy_read_only
@@ -905,6 +907,40 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             health = data_health(session)
             self.assertTrue(any(row.area == "Content Production" and row.count >= 1 for row in health))
 
+    def test_phase5_planned_intent_creates_posting_task_after_candidate_approval(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            ensure_default_plan(session, start_date=date(2026, 6, 17))
+            product = session.scalar(select(ProductRecord).order_by(ProductRecord.name))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 27),
+                destinations=["Facebook"],
+                goals=["Sales growth"],
+                product_ids=[product.id],
+                audience="gift buyers",
+                occasion="new batch",
+            )
+            result = produce_content_for_item(session, item)
+            facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+
+            with self.assertRaisesRegex(ValueError, "Approve"):
+                create_task_from_planned_content(session, item.id, destination="Facebook", candidate_id=facebook.id)
+
+            record_candidate_review(session, facebook.id, "approved", "Ready for task creation.")
+            task_result = create_task_from_planned_content(session, item.id, destination="Facebook", candidate_id=facebook.id)
+
+            self.assertEqual(task_result.task.planned_content_item_id, item.id)
+            self.assertEqual(task_result.task.generated_content_candidate_id, facebook.id)
+            self.assertEqual(task_result.task.platform, "Facebook")
+            self.assertEqual(task_result.task.content_type, "post")
+            self.assertEqual(task_result.task.product_name, product.name)
+            self.assertIn(product.name, task_result.task.draft_caption)
+            self.assertEqual(item.status, "approved")
+
     def test_phase5_web_planning_api_and_job_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "phase5-web.sqlite"
@@ -970,6 +1006,16 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(review_response.status_code, 200)
             self.assertEqual(review_response.get_json()["candidate"]["review_state"], "approved")
 
+            task_response = client.post(
+                f"/api/planned-content/{item_id}/task",
+                json={"destination": "Facebook", "candidate_id": candidate_id},
+            )
+            self.assertEqual(task_response.status_code, 201)
+            task_payload = task_response.get_json()["task"]
+            self.assertEqual(task_payload["platform"], "Facebook")
+            self.assertEqual(task_payload["planned_content_item_id"], item_id)
+            self.assertEqual(task_payload["generated_content_candidate_id"], candidate_id)
+
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
                 item.status = "planned"
@@ -983,6 +1029,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 export_payload = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(len(export_payload["planned_content_items"]), 1)
                 self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
+                planned_task = next(record for record in export_payload["tasks"] if record["planned_content_item_id"] == item_id)
+                self.assertEqual(planned_task["generated_content_candidate_id"], candidate_id)
 
     def test_phase5_learning_loop_links_generated_copy_to_outcomes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1010,6 +1058,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 )
                 result = produce_content_for_item(session, item)
                 facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                record_candidate_review(session, facebook.id, "approved", "Approved for learning-loop test.")
                 link_generated_content_to_task(session, task.id, facebook.id)
                 update_task_status(session, task.id, "posted", "Posted generated Facebook draft.")
                 add_metric(
