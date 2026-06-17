@@ -4,11 +4,11 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from .context import load_business_context
-from .phase2 import build_phase2_plan
-from .render import render_plan_markdown
-from .render_phase2 import render_phase2_plan_markdown
-from .workflow import build_plan
+from marketing_os.context import load_business_context
+from marketing_os.phase2 import build_phase2_plan
+from marketing_os.render import render_plan_markdown
+from marketing_os.render_phase2 import render_phase2_plan_markdown
+from marketing_os.workflow import build_plan
 
 
 def main(argv: list[str] | None = None) -> int:

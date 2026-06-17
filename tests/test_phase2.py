@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -153,34 +151,6 @@ class Phase2MarketingPlannerTests(unittest.TestCase):
         self.assertIn("## Weekly Action List", markdown)
         self.assertIn("## Manual Weekly Review Template", markdown)
         self.assertNotIn("as a Add a duck to your flock", markdown)
-
-    def test_phase2_cli_and_demo_execute(self) -> None:
-        cli = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "marketing_os.cli",
-                "--phase",
-                "2",
-                "--mode",
-                "standard",
-                "--start-date",
-                "2026-06-17",
-                "--output",
-                "outputs/test-phase2-standard.md",
-            ],
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        self.assertEqual(cli.returncode, 0, cli.stderr)
-        self.assertTrue(Path("outputs/test-phase2-standard.md").exists())
-
-        demo = subprocess.run([sys.executable, "demo_phase2.py"], check=False, text=True, capture_output=True)
-        self.assertEqual(demo.returncode, 0, demo.stderr)
-        self.assertIn("Phase 2 demo workflows completed successfully", demo.stdout)
-        self.assertTrue(Path("outputs/demo-phase2-standard.md").exists())
-        self.assertTrue(Path("outputs/demo-phase2-launch.md").exists())
 
 
 if __name__ == "__main__":

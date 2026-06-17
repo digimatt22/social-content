@@ -2,40 +2,21 @@
 
 Local-first Marketing Operating System for MattMadeMe.
 
-The app helps a solo business owner generate marketing plans, content ideas, weekly reports, and prioritized recommendations from the business knowledge stored in `docs/business`.
+The app helps a solo business owner generate and execute marketing plans from a browser-based local web console. Business knowledge is stored in `docs/business`; day-to-day plans, tasks, templates, assets, notes, and metrics are stored in local SQLite.
 
 ## What It Does
 
 - Loads business context from Markdown files in `docs/business`.
 - Loads structured product metadata from `docs/business/product-catalog.json`.
-- Generates a 30-day marketing calendar.
-- Generates:
-  - 30 Instagram post ideas
-  - 30 Facebook post ideas
-  - 10 Instagram Reel ideas
-  - 10 Etsy promotion ideas
-  - 10 blog topic ideas
-  - 10 email newsletter ideas
-- Generates a weekly marketing report.
-- Generates prioritized marketing recommendations with aligned business goals, impact, effort, rationale, and next steps.
-- Runs fully locally with Python stdlib only.
-
-Phase 2 adds:
-
-- planning modes: `light`, `standard`, `launch`, `holiday`, and `event`
-- validated calendar items
-- ready-to-edit content drafts
-- asset briefs and production notes
-- weekly action list
-- manual weekly review template
-
-Phase 3 adds:
-
-- a local browser-based operator console
+- Runs a local browser-based operator console.
+- Binds to the local network by default for trusted household/shop devices.
 - SQLite persistence through SQLAlchemy
 - database-backed plans, tasks, assets, templates, and metrics
 - beginner-friendly task pages for Instagram, Facebook, Etsy, and website work
 - editable platform, copy, and graphic templates under `docs/templates`
+- manual metric entry after posting
+
+The Phase 2 planner remains active behind the web app. Old Phase 1/2 executable entry points are archived under `archive/phase1-phase2-executables`.
 
 ## Installation
 
@@ -75,73 +56,29 @@ Edit those files to update business facts, products, audiences, voice, goals, an
 
 For a step-by-step local test flow, see [docs/getting-started.md](docs/getting-started.md).
 
-Check that business context loads:
-
-```bash
-python -m marketing_os.cli --check-context
-```
-
-Generate a marketing plan to stdout:
-
-```bash
-python -m marketing_os.cli --start-date 2026-06-17
-```
-
-Generate a Markdown plan file:
-
-```bash
-python -m marketing_os.cli --start-date 2026-06-17 --output outputs/marketing-plan.md
-```
-
-Generate a Phase 2 standard-week plan:
-
-```bash
-python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-standard.md
-```
-
-Generate a Phase 2 launch-week plan:
-
-```bash
-python -m marketing_os.cli --phase 2 --mode launch --start-date 2026-06-17 --output outputs/phase2-launch.md
-```
-
-Run the end-to-end demo:
-
-```bash
-python demo.py
-```
-
-Run the Phase 2 demos:
-
-```bash
-python demo_phase2.py
-```
-
-Run the Phase 3 local web console:
+Run the local web console:
 
 ```bash
 python run_local.py
 ```
 
-Open:
+On the same machine, open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-To make the app available on a trusted local network:
+On another trusted device on the same network, open `http://<this-computer-ip>:8000`.
+
+To bind to localhost only, override the host:
 
 ```bash
-python run_local.py --host 0.0.0.0 --port 8000
+python run_local.py --host 127.0.0.1
 ```
 
 Do not expose this local app to the public internet.
 
-The demo writes:
-
-```text
-outputs/demo-marketing-plan.md
-```
+Archived Phase 1/2 executable references live in `archive/phase1-phase2-executables`.
 
 ## Testing
 
@@ -164,4 +101,4 @@ Out of scope:
 - Search Console integration
 - Automated content publishing
 
-The code includes adapter interfaces and mock implementations so future integrations can be added without rewriting the core planning logic.
+The code includes local-first extension points so future integrations can be added without rewriting the core planning logic.

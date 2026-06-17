@@ -9,7 +9,6 @@ dependencies = [
 ]
 
 [project.scripts]
-marketing-os = "marketing_os.cli:main"
 marketing-os-web = "marketing_os.web_app:main"
 
 [tool.pytest.ini_options]

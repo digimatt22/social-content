@@ -11,6 +11,7 @@ Phase 3 moves the Marketing OS from generated Markdown into a local web console 
 - `docs/business` remains the editable business source input.
 - `docs/templates` contains editable platform, copy, and graphic template source files.
 - `data/marketing_os.sqlite` is the default local working database and is ignored by git.
+- The default server bind is `0.0.0.0` so trusted local-network devices can reach the console.
 
 ## Local Database
 
@@ -41,4 +42,4 @@ The existing CLI and Phase 2 planner remain intact. Phase 3 calls the Phase 2 pl
 
 ## Operating Boundary
 
-The app is intended for a trusted local machine or trusted local network. It does not implement internet-facing authentication and should not be exposed publicly.
+The app is intended for a trusted local machine or trusted local network. It binds to `0.0.0.0` by default for local-network access, does not implement internet-facing authentication, and should not be exposed publicly.

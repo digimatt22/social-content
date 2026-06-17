@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 import tempfile
 import unittest
 from datetime import date
@@ -91,18 +89,6 @@ class Phase1MarketingOsTests(unittest.TestCase):
         self.assertTrue(report.recommended_actions)
         self.assertTrue(report.opportunities)
         self.assertTrue(report.seasonal_opportunities)
-
-    def test_demo_workflow_executes_successfully(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "demo.py"],
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Demo workflow completed successfully", result.stdout)
-        self.assertTrue(Path("outputs/demo-marketing-plan.md").exists())
 
 
 if __name__ == "__main__":

@@ -1,225 +1,20 @@
 # Getting Started
 
-Use this guide to test the MattMadeMe Marketing OS locally.
+Use this guide to test the current MattMadeMe Marketing OS web console locally.
 
 ## Requirements
 
 - Python 3.11 or newer
 - Terminal access from the repository root
-
-Check Python:
-
-```bash
-python --version
-```
+- A trusted local network if opening the app from another device
 
 ## 1. Open The Project
-
-From the repository root:
 
 ```bash
 cd /Users/matt/Documents/marketing-os
 ```
 
-Check the repo is clean:
-
-```bash
-git status --short --branch
-```
-
-Expected output:
-
-```text
-## main
-```
-
-## 2. Verify Business Context Loads
-
-Run:
-
-```bash
-python -m marketing_os.cli --check-context
-```
-
-Expected output should look like:
-
-```text
-Loaded 6 business files
-Products: 36
-Structured products: 12
-Audiences: 5
-Goals: 5
-```
-
-This confirms the app is reading from `docs/business`.
-
-## 3. Generate A Marketing Plan
-
-Run:
-
-```bash
-python -m marketing_os.cli --start-date 2026-06-17 --output outputs/test-marketing-plan.md
-```
-
-Expected output:
-
-```text
-Wrote marketing plan to outputs/test-marketing-plan.md
-```
-
-Open the generated plan:
-
-```bash
-open outputs/test-marketing-plan.md
-```
-
-The file should include:
-
-- 30-day content calendar
-- 30 Instagram post ideas
-- 30 Facebook post ideas
-- 10 Instagram Reel ideas
-- 10 Etsy promotion ideas
-- 10 blog topic ideas
-- 10 email newsletter ideas
-- prioritized recommendations
-- weekly marketing report
-
-## 4. Run The End-To-End Demo
-
-Run:
-
-```bash
-python demo.py
-```
-
-Expected output:
-
-```text
-Demo workflow completed successfully.
-Output: outputs/demo-marketing-plan.md
-```
-
-Open the demo output:
-
-```bash
-open outputs/demo-marketing-plan.md
-```
-
-## 5. Generate A Phase 2 Plan
-
-Phase 2 produces a more operational weekly plan with validation, ready-to-edit content, asset briefs, recommendations, action lists, and manual metrics tracking.
-
-Generate a standard-week plan:
-
-```bash
-python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-standard.md
-```
-
-Generate a launch-week plan:
-
-```bash
-python -m marketing_os.cli --phase 2 --mode launch --start-date 2026-06-17 --output outputs/phase2-launch.md
-```
-
-Open a plan:
-
-```bash
-open outputs/phase2-standard.md
-```
-
-The Phase 2 output should include:
-
-- validation report
-- 30-day calendar
-- ready-to-edit content drafts
-- asset briefs
-- production notes
-- recommendations
-- weekly action list
-- manual weekly review template
-
-Run the Phase 2 demo:
-
-```bash
-python demo_phase2.py
-```
-
-Expected output:
-
-```text
-Phase 2 demo workflows completed successfully.
-Standard output: outputs/demo-phase2-standard.md
-Launch output: outputs/demo-phase2-launch.md
-```
-
-## 6. Run The Tests
-
-Run:
-
-```bash
-python -m unittest discover -s tests
-```
-
-Expected output:
-
-```text
-.....................
-----------------------------------------------------------------------
-Ran 21 tests
-
-OK
-```
-
-## 7. Confirm Business Docs Update Without Code Changes
-
-Open `docs/business/products.md` and temporarily add a new duck under `Current Public Ducks And Themes`:
-
-```markdown
-- Test Launch Duck
-```
-
-Then run:
-
-```bash
-python -m marketing_os.cli --check-context
-```
-
-The product count should increase.
-
-Generate another plan:
-
-```bash
-python -m marketing_os.cli --start-date 2026-06-17 --output outputs/test-updated-context-plan.md
-```
-
-Then search for the new product:
-
-```bash
-rg "Test Launch Duck" outputs/test-updated-context-plan.md
-```
-
-Remove the temporary product from `docs/business/products.md` when finished.
-
-## 8. Test Structured Product Metadata
-
-Phase 2 uses structured product metadata from:
-
-```text
-docs/business/product-catalog.json
-```
-
-Temporarily edit one product's `sales_momentum_note`, then regenerate a Phase 2 plan:
-
-```bash
-python -m marketing_os.cli --phase 2 --mode standard --start-date 2026-06-17 --output outputs/phase2-updated-product.md
-```
-
-The plan should reflect the updated product metadata without code changes.
-
-## 9. Install Phase 3 Dependencies
-
-Run:
+## 2. Install Dependencies
 
 ```bash
 python -m pip install -e .
@@ -227,29 +22,40 @@ python -m pip install -e .
 
 This installs Flask and SQLAlchemy for the local web console.
 
-## 10. Start The Local Web Console
-
-Run:
+## 3. Start The Web Console
 
 ```bash
 python run_local.py
 ```
 
-Open:
+The server binds to `0.0.0.0` by default so trusted devices on the same network can reach it.
+
+On the same machine, open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-The app will initialize `data/marketing_os.sqlite`, sync business context and templates, and create a default standard plan if no plan exists.
+From another device on the same network, open:
 
-For trusted local-network testing:
-
-```bash
-python run_local.py --host 0.0.0.0 --port 8000
+```text
+http://<this-computer-ip>:8000
 ```
 
-## 11. Test The Operator Workflow
+Use this only on a trusted local network. The app is not meant to be exposed to the public internet.
+
+## 4. Confirm Startup Worked
+
+On first run, the app will:
+
+- initialize `data/marketing_os.sqlite`
+- sync business context from `docs/business`
+- sync templates from `docs/templates`
+- create a default standard plan if no plan exists
+
+You should land on the Today dashboard with an active plan and task cards.
+
+## 5. Test The Operator Workflow
 
 In the browser:
 
@@ -261,30 +67,46 @@ In the browser:
 6. Enter a test metric.
 7. Open Metrics and confirm the metric appears.
 
-## 12. Generate A Database-Backed Plan
+## 6. Generate A New Plan
 
 Open Plans, choose a mode, and generate a new plan.
 
 The new plan is stored in SQLite and appears in the calendar and task views.
 
-## 13. Common Commands
-
-Print a plan to the terminal:
+## 7. Run Tests
 
 ```bash
-python -m marketing_os.cli --start-date 2026-06-17
+python -m unittest discover -s tests
 ```
 
-Write a plan for today:
+Expected output:
 
-```bash
-python -m marketing_os.cli --output outputs/today-marketing-plan.md
+```text
+...................
+----------------------------------------------------------------------
+Ran 19 tests
+
+OK
 ```
 
-Use a different business-docs folder:
+## Useful Commands
+
+Run the console on another port:
 
 ```bash
-python -m marketing_os.cli --business-dir docs/business --check-context
+python run_local.py --port 8080
+```
+
+Restrict the console to this computer only:
+
+```bash
+python run_local.py --host 127.0.0.1
+```
+
+Start through the installed script:
+
+```bash
+marketing-os-web
 ```
 
 ## Troubleshooting
@@ -303,25 +125,30 @@ Expected:
 /Users/matt/Documents/marketing-os
 ```
 
-### Output Files Dirty The Repo
-
-Generated files in `outputs/` are ignored by git. They are safe to create while testing.
-
-The Phase 3 SQLite database in `data/` is also ignored by git.
-
-### Business Context Fails To Load
-
-Confirm these files exist:
+Then install the project:
 
 ```bash
-ls docs/business
+python -m pip install -e .
 ```
 
-Required files:
+### The App Is Not Reachable From Another Device
 
-- `company-profile.md`
-- `business-goals.md`
-- `products.md`
-- `audiences.md`
-- `brand-voice.md`
-- `marketing-channels.md`
+Confirm the server is running and bound to `0.0.0.0`.
+
+Confirm both devices are on the same trusted network.
+
+Use the computer's local network IP address, not `127.0.0.1`, from the other device.
+
+### Database Files Dirty The Repo
+
+The Phase 3 SQLite database in `data/` is ignored by git.
+
+### Historical CLI Or Demo Commands
+
+Phase 1 and Phase 2 executable entry points are archived in:
+
+```text
+archive/phase1-phase2-executables
+```
+
+The current supported entry point is the web console.

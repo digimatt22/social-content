@@ -169,7 +169,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the MattMadeMe Marketing OS local web console")
-    parser.add_argument("--host", default=os.environ.get("MARKETING_OS_HOST", "127.0.0.1"))
+    parser.add_argument("--host", default=os.environ.get("MARKETING_OS_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("MARKETING_OS_PORT", "8000")))
     parser.add_argument("--db-path", default=os.environ.get("MARKETING_OS_DB_PATH", "data/marketing_os.sqlite"))
     parser.add_argument("--business-dir", default=os.environ.get("MARKETING_OS_BUSINESS_DIR", "docs/business"))
