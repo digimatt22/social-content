@@ -2,8 +2,14 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Today’s Tasks</h2>
-    <div class="subtle">Open a task, follow the plain-English steps, then save status and metrics.</div>
+    <h2>Today</h2>
+    <div class="subtle">
+      {% if today_model.attention_count %}
+        {{ today_model.attention_count }} item{{ '' if today_model.attention_count == 1 else 's' }} need attention.
+      {% else %}
+        Nothing urgent for this role.
+      {% endif %}
+    </div>
   </div>
   <form class="inline" method="get" action="{{ url_for('dashboard') }}">
     <select name="role">
@@ -16,30 +22,51 @@
   </form>
 </div>
 
-{% if plan %}
-  <section class="panel" style="margin-bottom: 14px;">
-    <h3>Active Plan</h3>
-    <div class="subtle">{{ plan.mode }} plan starting {{ plan.start_date }}. {{ plan.weekly_theme }}</div>
-    <div class="meta" style="margin-top: 10px;">
-      {% for status, count in status_counts.items() if count %}
-        <span class="pill {{ 'complete' if status == 'complete' else 'blocked' if status == 'blocked' else 'ready' if status == 'ready to post' else '' }}">{{ status }}: {{ count }}</span>
-      {% endfor %}
+{% if today_model.recommended %}
+  {% set model = today_model.recommended %}
+  {% set task = model.task %}
+  <section class="hero-task">
+    <div>
+      <div class="subtle">Recommended next action</div>
+      <h3>{{ model.action_title }}</h3>
     </div>
+    <div class="meta">
+      <span class="pill">{{ task.due_date }}</span>
+      <span class="pill">{{ task.platform }} {{ task.content_type }}</span>
+      <span class="pill {{ model.status_tone }}">{{ model.status_label }}</span>
+      {% if model.metric_due %}<span class="pill ready">Metrics due</span>{% endif %}
+    </div>
+    <div class="subtle">{{ task.product_name or "Owner/admin task" }}</div>
+    <div class="button-group">
+      <a class="button" href="{{ url_for('task_detail', task_id=task.id) }}">Start task</a>
+      <a class="button secondary" href="{{ url_for('week', role=selected_role) }}">See this week</a>
+    </div>
+  </section>
+{% else %}
+  <section class="hero-task">
+    <h3>All clear for now</h3>
+    <p class="subtle">No open tasks are due today for this role. Check the week if you want to look ahead.</p>
+    <a class="button secondary" href="{{ url_for('week', role=selected_role) }}">Open this week</a>
   </section>
 {% endif %}
 
-<section class="grid">
-  {% for task in today_tasks %}
-    {% include "_task_card.html" %}
-  {% else %}
-    <div class="panel">No open tasks due today. Check the calendar for what is coming next.</div>
-  {% endfor %}
-</section>
+{% if today_model.remaining %}
+  <h3 style="margin-top: 22px;">Also Today</h3>
+  <section class="grid">
+    {% for model in today_model.remaining %}
+      {% set task = model.task %}
+      {% include "_task_card.html" %}
+    {% endfor %}
+  </section>
+{% endif %}
 
-<h3 style="margin-top: 22px;">This Week</h3>
-<section class="grid">
-  {% for task in week_tasks %}
-    {% include "_task_card.html" %}
-  {% endfor %}
-</section>
+{% if today_model.upcoming %}
+  <h3 style="margin-top: 22px;">Coming Up</h3>
+  <section class="grid">
+    {% for model in today_model.upcoming %}
+      {% set task = model.task %}
+      {% include "_task_card.html" %}
+    {% endfor %}
+  </section>
+{% endif %}
 {% endblock %}

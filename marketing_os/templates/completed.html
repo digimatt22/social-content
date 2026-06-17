@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Completed</h2>
+    <div class="subtle">Recent completed or skipped tasks for the selected role.</div>
+  </div>
+  <form class="inline" method="get" action="{{ url_for('completed') }}">
+    <select name="role">
+      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
+      {% for role in roles %}
+        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
+      {% endfor %}
+    </select>
+    <button class="secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+<section class="grid">
+  {% for model in tasks %}
+    {% set task = model.task %}
+    {% include "_task_card.html" %}
+  {% else %}
+    <div class="panel">No completed tasks for this role yet.</div>
+  {% endfor %}
+</section>
+{% endblock %}

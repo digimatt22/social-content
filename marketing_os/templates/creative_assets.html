@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Creative Assets</h2>
+    <div class="subtle">Plan generated graphics from approved source photos, then prepare a manifest and review records for the image-generation pass.</div>
+  </div>
+  <a class="button secondary" href="{{ url_for('assets') }}">Review assets</a>
+</div>
+
+<section class="grid">
+  {% for plan in plans %}
+    {% set asset = plan.source_asset %}
+    <article class="panel">
+      {% if asset.file_exists %}
+        <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+      {% else %}
+        <div class="asset-missing">Source photo missing</div>
+      {% endif %}
+      <h3 style="margin-top: 12px;">{{ asset.name }}</h3>
+      <div class="meta">
+        <span class="pill {{ 'complete' if plan.source_ready else 'blocked' }}">{{ 'ready' if plan.source_ready else 'not ready' }}</span>
+        <span class="pill">{{ asset.review_state }}</span>
+        <span class="pill">{{ asset.asset_type }}</span>
+      </div>
+      <p class="subtle">{{ plan.readiness_message }}</p>
+      <form method="post" action="{{ url_for('creative_assets_register') }}">
+        <input type="hidden" name="source_asset_id" value="{{ asset.id }}">
+        {% for format in plan.formats %}
+          <label>
+            <input type="checkbox" name="template_name" value="{{ format.template_name }}" checked>
+            {{ format.template_name }} <span>{{ format.dimensions }} · {{ format.output_path }}</span>
+          </label>
+          <details style="margin-bottom: 10px;">
+            <summary class="subtle">Prompt and review rules</summary>
+            <div class="copybox">{{ format.prompt }}</div>
+          </details>
+        {% endfor %}
+        <button type="submit" {{ 'disabled' if not plan.source_ready else '' }}>Prepare generation run</button>
+      </form>
+    </article>
+  {% else %}
+    <div class="panel">
+      <h3>No source photos yet</h3>
+      <p class="subtle">Add product photos under assets/products, scan local assets, then approve a source photo before registering generated output candidates.</p>
+      <a class="button secondary" href="{{ url_for('assets') }}">Open assets</a>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}

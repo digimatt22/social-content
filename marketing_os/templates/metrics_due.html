@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Metrics Due</h2>
+    <div class="subtle">Follow-up work for posts that already went out.</div>
+  </div>
+</div>
+
+<section class="grid">
+  {% for model in tasks %}
+    {% set task = model.task %}
+    <article class="task">
+      <a class="task-title" href="{{ url_for('task_detail', task_id=task.id) }}">{{ model.action_title }}</a>
+      <div class="meta">
+        <span class="pill ready">Due {{ task.metric_due_date or today }}</span>
+        <span class="pill">{{ task.platform }}</span>
+        <span class="pill">{{ task.metric_status }}</span>
+        <span class="pill {{ 'blocked' if model.metric_followup_reason == 'missing_post_url' else 'ready' }}">{{ model.metric_followup_label }}</span>
+      </div>
+      {% if model.metric_followup_reason == "missing_post_url" %}
+        <div class="subtle">Add the post URL first, then record the performance numbers.</div>
+      {% else %}
+        <div class="subtle">Record the platform numbers for the published post.</div>
+      {% endif %}
+      <div class="subtle">{{ task.metric_instruction }}</div>
+    </article>
+  {% else %}
+    <div class="panel">No metrics are due right now.</div>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Data Health</h2>
+    <div class="subtle">What needs upkeep before the planner can be trusted.</div>
+  </div>
+  <div class="button-group">
+    <form method="post" action="{{ url_for('scan_assets') }}">
+      <button class="secondary" type="submit">Scan assets</button>
+    </form>
+  </div>
+</div>
+
+<section class="panel health">
+  {% for item in items %}
+    <div class="health-row">
+      <strong>{{ item.area }}</strong>
+      <span class="pill {{ 'complete' if item.status == 'OK' else 'blocked' }}">{{ item.status }}</span>
+      <span>{{ item.count }}</span>
+      <div>
+        <div>{{ item.message }}</div>
+        <div class="subtle">{{ item.action }}</div>
+      </div>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}

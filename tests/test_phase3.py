@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import json
 import tempfile
 import unittest
 from datetime import date
@@ -18,6 +20,31 @@ from marketing_os.phase3 import (
     seed_database,
     update_task_status,
 )
+from marketing_os.phase4 import (
+    asset_inventory,
+    assign_asset_to_task,
+    backup_sqlite_database,
+    completed_tasks,
+    complete_task_status,
+    creative_asset_plans,
+    data_health,
+    export_operating_data,
+    generate_creative_output_files_for_source,
+    import_external_product_image,
+    import_etsy_listing_csv,
+    import_source_photo_to_inventory,
+    metrics_due_tasks,
+    posting_guides,
+    prepare_creative_generation_run,
+    register_creative_outputs_for_source,
+    register_generated_asset_candidate,
+    register_local_source_photo,
+    review_asset,
+    scan_local_asset_folder,
+    task_asset_options,
+    today_view,
+    week_agenda,
+)
 from marketing_os.web_app import create_app
 
 
@@ -26,6 +53,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         db_path = Path(tmp.name) / "phase3.sqlite"
         engine = create_db_engine(db_path)
+        self.addCleanup(engine.dispose)
         init_db(engine)
         factory = session_factory(engine)
         return tmp, factory
@@ -87,10 +115,52 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(metric.reach, 120)
             self.assertEqual(metric.etsy_visits, 7)
 
+    def test_phase4_operator_services_prioritize_and_track_metrics_due(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            plan = ensure_default_plan(session, start_date=date(2026, 6, 17))
+            operator_model = today_view(session, today=date(2026, 6, 17))
+            self.assertIsNotNone(operator_model.recommended)
+            self.assertEqual(operator_model.role, "social operator")
+            self.assertIn("Post", operator_model.recommended.action_title)
+
+            task_id = operator_model.recommended.task.id
+            complete_task_status(session, task_id, "mark_posted", notes="Posted.", post_url="https://example.com/post")
+
+            task = session.get(TaskRecord, task_id)
+            self.assertEqual(task.status, "posted")
+            self.assertEqual(task.metric_status, "pending")
+            self.assertEqual(task.published_url, "https://example.com/post")
+            self.assertIsNotNone(task.metric_due_date)
+
+            second_task = next(item for item in plan.tasks if item.id != task_id and item.owner_role == "social operator")
+            complete_task_status(session, second_task.id, "mark_posted", notes="Posted without URL.")
+            due_models = metrics_due_tasks(session, today=date(2026, 6, 18))
+            reasons_by_id = {model.task.id: model.metric_followup_reason for model in due_models}
+            self.assertEqual(reasons_by_id[task_id], "missing_metrics")
+            self.assertEqual(reasons_by_id[second_task.id], "missing_post_url")
+
+            agenda = week_agenda(session, today=date(2026, 6, 17))
+            self.assertTrue(agenda)
+            self.assertTrue(any(day.tasks for day in agenda))
+
+            instagram_agenda = week_agenda(session, today=date(2026, 6, 17), platform="Instagram")
+            self.assertTrue(instagram_agenda)
+            self.assertTrue(all(task.task.platform == "Instagram" for day in instagram_agenda for task in day.tasks))
+
+            posted_agenda = week_agenda(session, today=date(2026, 6, 17), status="posted")
+            self.assertTrue(any(task.task.id == task_id for day in posted_agenda for task in day.tasks))
+
     def test_web_app_renders_operator_workflow_and_persists_forms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "web.sqlite"
             app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            app.config["ASSETS_ROOT"] = Path(tmp) / "assets" / "products"
+            app.config["EXPORT_DIR"] = Path(tmp) / "exports"
             client = app.test_client()
 
             health = client.get("/health")
@@ -99,7 +169,58 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             dashboard = client.get("/")
             self.assertEqual(dashboard.status_code, 200)
             self.assertIn(b"Today", dashboard.data)
-            self.assertIn(b"Active Plan", dashboard.data)
+            self.assertIn(b"Recommended next action", dashboard.data)
+            self.assertIn(b"Start task", dashboard.data)
+
+            week = client.get("/week")
+            self.assertEqual(week.status_code, 200)
+            self.assertIn(b"This Week", week.data)
+
+            guides = client.get("/guides")
+            self.assertEqual(guides.status_code, 200)
+            self.assertIn(b"Posting Guides", guides.data)
+            self.assertIn(b"Instagram Reel", guides.data)
+
+            completed = client.get("/completed")
+            self.assertEqual(completed.status_code, 200)
+            self.assertIn(b"Completed", completed.data)
+
+            creative_assets = client.get("/creative-assets")
+            self.assertEqual(creative_assets.status_code, 200)
+            self.assertIn(b"Creative Assets", creative_assets.data)
+
+            assets = client.get("/assets")
+            self.assertEqual(assets.status_code, 200)
+            self.assertIn(b"Register Source Photo", assets.data)
+            self.assertIn(b"Upload source photo", assets.data)
+            self.assertIn(b"Used by", assets.data)
+
+            upload_response = client.post(
+                "/assets/upload-source",
+                data={
+                    "photo": (io.BytesIO(b"fake image bytes"), "upload-bingo.jpg"),
+                    "name": "Uploaded web source",
+                },
+                content_type="multipart/form-data",
+                follow_redirects=True,
+            )
+            self.assertEqual(upload_response.status_code, 200)
+            self.assertIn(b"Uploaded source photo", upload_response.data)
+
+            settings = client.get("/settings")
+            self.assertEqual(settings.status_code, 200)
+            self.assertIn(b"Export JSON", settings.data)
+            self.assertIn(b"JSON exports", settings.data)
+
+            export_response = client.post("/settings/export")
+            self.assertEqual(export_response.status_code, 200)
+            self.assertEqual(export_response.mimetype, "application/json")
+            export_payload = json.loads(export_response.data.decode("utf-8"))
+            self.assertEqual(export_payload["format"], "marketing_os_phase4_export")
+            self.assertIn("products", export_payload)
+            self.assertIn("tasks", export_payload)
+            self.assertIn("assets", export_payload)
+            export_response.close()
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 task = session.scalars(select(TaskRecord).order_by(TaskRecord.id)).first()
@@ -108,16 +229,29 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             detail = client.get(f"/tasks/{task_id}")
             self.assertEqual(detail.status_code, 200)
-            self.assertIn(b"Posting Steps", detail.data)
+            self.assertIn(b"Prepare", detail.data)
+            self.assertIn(b"Post", detail.data)
+            self.assertIn(b"Finish", detail.data)
+            self.assertIn(b"Metrics Later", detail.data)
+            self.assertIn(b"Copy caption", detail.data)
             self.assertIn(b"Preview Checklist", detail.data)
-            self.assertIn(b"Metric To Record Later", detail.data)
+            self.assertIn(b"Common mistake to avoid", detail.data)
 
-            status_response = client.post(
-                f"/tasks/{task_id}/status",
-                data={"status": "posted", "notes": "Posted through web test."},
+            finish_response = client.post(
+                f"/tasks/{task_id}/finish",
+                data={"action": "mark_posted", "notes": "Posted through web test.", "post_url": "https://example.com/post"},
                 follow_redirects=True,
             )
-            self.assertEqual(status_response.status_code, 200)
+            self.assertEqual(finish_response.status_code, 200)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                task = session.get(TaskRecord, task_id)
+                task.metric_due_date = date.today()
+
+            metrics_due = client.get("/metrics-due")
+            self.assertEqual(metrics_due.status_code, 200)
+            self.assertIn(b"Metrics Due", metrics_due.data)
+            self.assertIn(b"Metrics needed", metrics_due.data)
 
             metric_response = client.post(
                 f"/tasks/{task_id}/metrics",
@@ -129,8 +263,477 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 task = session.get(TaskRecord, task_id)
                 metric = session.scalar(select(MetricRecord).where(MetricRecord.task_id == task_id))
-                self.assertEqual(task.status, "metrics needed")
-                self.assertEqual(metric.reach, 88)
+                self.assertEqual(task.metric_status, "complete")
+                self.assertEqual(task.published_url, "https://example.com/post")
+            self.assertEqual(metric.reach, 88)
+
+    def test_phase4_json_api_reuses_operator_view_models(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "api.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            app.config["ASSETS_ROOT"] = Path(tmp) / "assets" / "products"
+            client = app.test_client()
+
+            today_response = client.get("/api/today")
+            self.assertEqual(today_response.status_code, 200)
+            today_payload = today_response.get_json()
+            self.assertEqual(today_payload["role"], "social operator")
+            self.assertIn("attention_count", today_payload)
+            self.assertIsNotNone(today_payload["recommended"])
+            self.assertIn("action_title", today_payload["recommended"])
+            self.assertIn("metric_status", today_payload["recommended"])
+            self.assertIn("metric_followup_reason", today_payload["recommended"])
+
+            task_id = today_payload["recommended"]["id"]
+            task_response = client.get(f"/api/tasks/{task_id}")
+            self.assertEqual(task_response.status_code, 200)
+            task_payload = task_response.get_json()
+            self.assertEqual(task_payload["id"], task_id)
+            self.assertIn("posting_steps", task_payload)
+            self.assertIn("preview_checklist", task_payload)
+            self.assertIn("post_guidance", task_payload)
+            self.assertIn("common_mistake", task_payload["post_guidance"])
+            self.assertTrue(task_payload["post_guidance"]["common_mistake"])
+            self.assertIn("metric_fields", task_payload)
+            self.assertIn("asset_options", task_payload)
+
+            week_response = client.get("/api/week")
+            self.assertEqual(week_response.status_code, 200)
+            self.assertIn("agendas", week_response.get_json())
+
+            metrics_response = client.get("/api/metrics-due")
+            self.assertEqual(metrics_response.status_code, 200)
+            self.assertIn("tasks", metrics_response.get_json())
+
+            assets_response = client.get("/api/assets")
+            self.assertEqual(assets_response.status_code, 200)
+            assets_payload = assets_response.get_json()
+            self.assertIn("assets", assets_payload)
+            self.assertIn("sync_status", assets_payload["assets"][0])
+            self.assertIn("manual_override_state", assets_payload["assets"][0])
+            self.assertIn("file_checksum", assets_payload["assets"][0])
+
+            health_response = client.get("/api/data-health")
+            self.assertEqual(health_response.status_code, 200)
+            health_payload = health_response.get_json()
+            self.assertTrue(any(item["area"] == "Assets" for item in health_payload["items"]))
+
+            creative_response = client.get("/api/creative-assets")
+            self.assertEqual(creative_response.status_code, 200)
+            creative_payload = creative_response.get_json()
+            self.assertIn("plans", creative_payload)
+
+    def test_phase4_json_api_mutations_reuse_task_services(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "api-mutations.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            today_payload = client.get("/api/today").get_json()
+            task_id = today_payload["recommended"]["id"]
+
+            finish_response = client.post(
+                f"/api/tasks/{task_id}/finish",
+                json={"action": "mark_posted", "notes": "Posted through API.", "post_url": "https://example.com/api-post"},
+            )
+            self.assertEqual(finish_response.status_code, 200)
+            finished_task = finish_response.get_json()["task"]
+            self.assertEqual(finished_task["status"], "posted")
+            self.assertEqual(finished_task["published_url"], "https://example.com/api-post")
+            self.assertEqual(finished_task["metric_status"], "pending")
+
+            metrics_response = client.post(
+                f"/api/tasks/{task_id}/metrics",
+                json={"reach": 321, "likes": 44, "comments": 5, "notes": "API metrics."},
+            )
+            self.assertEqual(metrics_response.status_code, 200)
+            metrics_payload = metrics_response.get_json()
+            self.assertEqual(metrics_payload["task"]["metric_status"], "complete")
+            self.assertEqual(metrics_payload["metric"]["task_id"], task_id)
+
+            source_path = Path(tmp) / "approved-bingo.jpg"
+            source_path.write_bytes(b"fake image bytes")
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                task = session.get(TaskRecord, task_id)
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == task.product_name))
+                asset = register_local_source_photo(session, source_path, product_id=product.id, name="API approved asset")
+                asset_id = asset.id
+
+            rejected_asset_response = client.post(f"/api/tasks/{task_id}/asset", json={"asset_id": asset_id})
+            self.assertEqual(rejected_asset_response.status_code, 400)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                review_asset(session, asset_id, "approved", "Accurate.")
+
+            asset_response = client.post(f"/api/tasks/{task_id}/asset", json={"asset_id": asset_id})
+            self.assertEqual(asset_response.status_code, 200)
+            self.assertEqual(asset_response.get_json()["task"]["asset_id"], asset_id)
+
+    def test_phase4_task_asset_assignment_requires_approved_file_backed_asset(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "photos" / "approved-bingo.jpg"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"fake image bytes")
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            plan = ensure_default_plan(session, start_date=date(2026, 6, 17))
+            task = next(task for task in plan.tasks if task.product_name == "Bingo Duck")
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            asset = register_local_source_photo(session, source_path, product_id=product.id, name="Approved Bingo photo")
+
+            with self.assertRaises(ValueError):
+                assign_asset_to_task(session, task.id, asset.id)
+
+            review_asset(session, asset.id, "approved", "Accurate source photo.")
+            assign_asset_to_task(session, task.id, asset.id)
+            self.assertEqual(task.asset_id, asset.id)
+
+            options = task_asset_options(session, task)
+            self.assertTrue(any(option.asset.id == asset.id for option in options))
+
+    def test_phase4_asset_scan_and_data_health(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        asset_root = Path(tmp.name) / "assets" / "products"
+        source_dir = asset_root / "bingo-duck" / "source"
+        source_dir.mkdir(parents=True)
+        (source_dir / "etsy-photo.jpg").write_bytes(b"fake image bytes")
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            ensure_default_plan(session, start_date=date(2026, 6, 17))
+            imported = scan_local_asset_folder(session, asset_root)
+            self.assertEqual(len(imported), 1)
+            self.assertEqual(imported[0].external_source, "local_folder")
+            self.assertEqual(imported[0].file_exists, 1)
+            self.assertTrue(imported[0].file_checksum)
+            self.assertEqual(imported[0].review_state, "needs review")
+
+            health = data_health(session)
+            self.assertTrue(any(item.area == "Asset Review" and item.count >= 1 for item in health))
+            self.assertTrue(any(item.area == "Templates" and item.status == "OK" for item in health))
+            self.assertTrue(any(item.area == "Imports" for item in health))
+
+            inventory = asset_inventory(session)
+            self.assertTrue(any(model.used_by for model in inventory))
+
+    def test_phase4_manual_source_photo_registration(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "photos" / "manual-bingo.jpg"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"fake image bytes")
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            asset = register_local_source_photo(
+                session,
+                source_path,
+                product_id=product.id,
+                name="Manual Bingo source",
+                notes="Registered by path.",
+            )
+
+            self.assertEqual(asset.product_id, product.id)
+            self.assertEqual(asset.name, "Manual Bingo source")
+            self.assertEqual(asset.asset_type, "source photo")
+            self.assertEqual(asset.external_source, "local_file")
+            self.assertEqual(asset.sync_status, "registered")
+            self.assertEqual(asset.review_state, "needs review")
+            self.assertEqual(asset.file_exists, 1)
+            self.assertTrue(asset.file_checksum)
+
+            with self.assertRaises(FileNotFoundError):
+                register_local_source_photo(session, Path(tmp.name) / "missing.jpg")
+
+    def test_phase4_source_photo_upload_copy_uses_inventory_structure(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "incoming" / "Bingo Upload.JPG"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"fake image bytes")
+        assets_root = Path(tmp.name) / "assets" / "products"
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            asset = import_source_photo_to_inventory(
+                session,
+                source_path,
+                product_id=product.id,
+                name="Uploaded Bingo source",
+                assets_root=assets_root,
+            )
+
+            self.assertEqual(asset.product_id, product.id)
+            self.assertEqual(asset.name, "Uploaded Bingo source")
+            self.assertIn("assets/products/bingo-duck/source", asset.source_path)
+            self.assertTrue(Path(asset.source_path).exists())
+            self.assertTrue(asset.file_checksum)
+            self.assertEqual(asset.review_state, "needs review")
+
+    def test_phase4_external_product_image_import_creates_listing_asset(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        from PIL import Image
+
+        source_path = Path(tmp.name) / "remote" / "mailman.png"
+        source_path.parent.mkdir(parents=True)
+        Image.new("RGB", (320, 320), "#38bdf8").save(source_path)
+        assets_root = Path(tmp.name) / "assets" / "products"
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Mailman Duck"))
+            asset = import_external_product_image(
+                session,
+                source_path.as_uri(),
+                product_id=product.id,
+                name="Mailman website hero",
+                assets_root=assets_root,
+            )
+
+            self.assertEqual(asset.product_id, product.id)
+            self.assertEqual(asset.asset_type, "external listing image")
+            self.assertEqual(asset.external_source, "mattmademe_website")
+            self.assertEqual(asset.sync_status, "imported")
+            self.assertEqual(asset.canonical_url, source_path.as_uri())
+            self.assertTrue(Path(asset.source_path).exists())
+            self.assertTrue(asset.file_checksum)
+
+    def test_phase4_generated_asset_candidate_requires_review_then_approval(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            source = session.scalars(select(AssetRecord).order_by(AssetRecord.id)).first()
+            candidate = register_generated_asset_candidate(
+                session,
+                source,
+                Path(tmp.name) / "outputs" / "graphics" / "bingo-square.jpg",
+                "Square Product Card",
+                "Preserve the duck and create a square product card.",
+            )
+
+            self.assertEqual(candidate.asset_type, "generated graphic")
+            self.assertEqual(candidate.review_state, "needs review")
+            self.assertEqual(candidate.source_asset_id, source.id)
+            self.assertIn("Preserve the duck", candidate.generated_prompt)
+
+            with self.assertRaises(ValueError):
+                review_asset(session, candidate.id, "approved", "Looks accurate.")
+
+            Path(candidate.source_path).parent.mkdir(parents=True)
+            Path(candidate.source_path).write_bytes(b"generated image bytes")
+            review_asset(session, candidate.id, "approved", "Looks accurate.")
+            self.assertEqual(candidate.review_state, "approved")
+            self.assertEqual(candidate.readiness_state, "ready to use")
+
+    def test_phase4_creative_asset_plans_require_approved_source_and_register_three_outputs(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "assets" / "products" / "bingo-duck" / "source" / "photo.jpg"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"fake image bytes")
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            source = AssetRecord(
+                product_id=product.id,
+                name="Bingo Duck source photo",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                platform_suitability_json='["Instagram", "Facebook"]',
+                readiness_state="needs review",
+                review_state="needs review",
+            )
+            session.add(source)
+            session.flush()
+
+            plans = [plan for plan in creative_asset_plans(session) if plan.source_asset.id == source.id]
+            self.assertEqual(len(plans), 1)
+            self.assertFalse(plans[0].source_ready)
+            self.assertEqual(len(plans[0].formats), 3)
+
+            with self.assertRaises(ValueError):
+                register_creative_outputs_for_source(session, source.id)
+
+            review_asset(session, source.id, "approved", "Source photo is accurate.")
+            plans = [plan for plan in creative_asset_plans(session) if plan.source_asset.id == source.id]
+            self.assertTrue(plans[0].source_ready)
+
+            candidates = register_creative_outputs_for_source(session, source.id)
+            self.assertEqual(len(candidates), 3)
+            self.assertTrue(all(candidate.review_state == "needs review" for candidate in candidates))
+            self.assertTrue(all(candidate.source_asset_id == source.id for candidate in candidates))
+            self.assertTrue(any("Square Product Card" in candidate.name for candidate in candidates))
+
+    def test_phase4_creative_generation_run_writes_manifest(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        source_path = Path(tmp.name) / "assets" / "products" / "bingo-duck" / "source" / "photo.jpg"
+        source_path.parent.mkdir(parents=True)
+        source_path.write_bytes(b"fake image bytes")
+        output_root = Path(tmp.name) / "outputs" / "graphics"
+        manifest_dir = Path(tmp.name) / "outputs" / "manifests"
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            source = AssetRecord(
+                product_id=product.id,
+                name="Bingo Duck source photo",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                platform_suitability_json='["Instagram", "Facebook"]',
+                readiness_state="ready to use",
+                review_state="approved",
+            )
+            session.add(source)
+            session.flush()
+
+            run = prepare_creative_generation_run(
+                session,
+                source.id,
+                output_root=output_root,
+                manifest_dir=manifest_dir,
+            )
+            self.assertEqual(len(run.candidates), 3)
+            self.assertTrue(run.manifest_path.exists())
+            payload = json.loads(run.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["source_asset"]["id"], source.id)
+            self.assertEqual(len(payload["outputs"]), 3)
+            self.assertTrue(all("prompt" in output for output in payload["outputs"]))
+            self.assertTrue(all(output["review_state"] == "needs review" for output in payload["outputs"]))
+            self.assertTrue(all(str(output_root) in output["output_path"] for output in payload["outputs"]))
+
+    def test_phase4_creative_output_generation_writes_three_files(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        from PIL import Image
+
+        source_path = Path(tmp.name) / "assets" / "products" / "bingo-duck" / "source" / "photo.jpg"
+        source_path.parent.mkdir(parents=True)
+        Image.new("RGB", (600, 500), "#facc15").save(source_path)
+        output_root = Path(tmp.name) / "outputs" / "graphics"
+        manifest_dir = Path(tmp.name) / "outputs" / "manifests"
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            source = register_local_source_photo(session, source_path, product_id=product.id, name="Bingo Duck source photo")
+            review_asset(session, source.id, "approved", "Source photo is accurate.")
+
+            run = generate_creative_output_files_for_source(
+                session,
+                source.id,
+                output_root=output_root,
+                manifest_dir=manifest_dir,
+            )
+            self.assertEqual(len(run.candidates), 3)
+            self.assertTrue(run.manifest_path.exists())
+            self.assertTrue(all(Path(candidate.source_path).exists() for candidate in run.candidates))
+            self.assertTrue(all(candidate.file_checksum for candidate in run.candidates))
+            self.assertTrue(all(candidate.review_state == "needs review" for candidate in run.candidates))
+
+    def test_phase4_sqlite_backup_copies_database_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase4.sqlite"
+            backup_dir = Path(tmp) / "backups"
+            engine = create_db_engine(db_path)
+            self.addCleanup(engine.dispose)
+            init_db(engine)
+            target = backup_sqlite_database(db_path, backup_dir)
+            self.assertTrue(target.exists())
+            self.assertEqual(target.parent, backup_dir)
+
+    def test_phase4_operating_data_export_writes_portable_json(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            ensure_default_plan(session, start_date=date(2026, 6, 17))
+            target = export_operating_data(session, Path(tmp.name) / "exports")
+
+            self.assertTrue(target.exists())
+            payload = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(payload["format"], "marketing_os_phase4_export")
+            self.assertEqual(payload["version"], 1)
+            self.assertTrue(payload["products"])
+            self.assertTrue(payload["templates"])
+            self.assertTrue(payload["plans"])
+            self.assertTrue(payload["tasks"])
+            self.assertIn("metrics", payload)
+            self.assertIn("sync_metadata", payload)
+            self.assertIn("external_source", payload["products"][0])
+            self.assertIn("manual_override_state", payload["products"][0])
+            self.assertIn("metric_status", payload["tasks"][0])
+            self.assertIn("manual_override_state", payload["tasks"][0])
+            self.assertIn("file_checksum", payload["assets"][0])
+
+    def test_phase4_posting_guides_completed_tasks_and_etsy_csv_import(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        csv_path = Path(tmp.name) / "etsy-listings.csv"
+        csv_path.write_text(
+            "Title,Listing ID,Listing URL,Status\n"
+            "Imported Duck,12345,https://etsy.example/listing/12345,active\n",
+            encoding="utf-8",
+        )
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            guides = posting_guides(session)
+            self.assertTrue(any(guide.name == "Instagram Reel" for guide in guides))
+
+            imported = import_etsy_listing_csv(session, csv_path)
+            self.assertEqual(len(imported), 1)
+            self.assertEqual(imported[0].name, "Imported Duck")
+            self.assertEqual(imported[0].external_source, "etsy_csv")
+            self.assertEqual(imported[0].external_id, "12345")
+            self.assertEqual(imported[0].canonical_url, "https://etsy.example/listing/12345")
+            self.assertEqual(imported[0].staleness_state, "fresh")
+
+            imported[0].manual_override_state = "locked"
+            imported[0].manual_override_note = "Keep local status while testing imports."
+            imported[0].status = "local custom"
+            csv_path.write_text(
+                "Title,Listing ID,Listing URL,Status\n"
+                "Imported Duck,12345,https://etsy.example/listing/12345,inactive\n",
+                encoding="utf-8",
+            )
+            imported_again = import_etsy_listing_csv(session, csv_path)
+            self.assertEqual(imported_again[0].status, "local custom")
+            self.assertEqual(imported_again[0].sync_status, "manual override")
+            self.assertIn("manual override", imported_again[0].sync_error)
+
+            health = data_health(session)
+            self.assertTrue(any(item.area == "Manual Overrides" and item.count >= 1 for item in health))
+
+            plan = ensure_default_plan(session, start_date=date(2026, 6, 17))
+            task_id = plan.tasks[0].id
+            complete_task_status(session, task_id, "complete", notes="Done.")
+            completed = completed_tasks(session, role="all")
+            self.assertTrue(any(model.task.id == task_id for model in completed))
 
 
 if __name__ == "__main__":

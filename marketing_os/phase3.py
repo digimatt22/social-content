@@ -348,6 +348,7 @@ def task_from_calendar_item(session: Session, plan_id: int, item: CalendarItemRe
         posting_steps_json=json.dumps(playbook["steps"]),
         preview_checklist_json=json.dumps(playbook["checklist"]),
         metric_instruction=item.success_metric or playbook["metric"],
+        metric_status="not due",
         status="ready to post" if asset else "needs asset",
         notes="",
     )
@@ -368,6 +369,7 @@ def task_from_weekly_action(plan_id: int, action: WeeklyAction, start_date: date
         posting_steps_json=json.dumps(["Ask Matt for the missing decision or account detail.", "Record the answer in task notes."]),
         preview_checklist_json=json.dumps(["Owner input is documented.", "Task can be reassigned or completed."]),
         metric_instruction="Track whether the blocker was resolved this week.",
+        metric_status="not needed",
         status="blocked",
         notes=action.related_item,
     )
@@ -404,6 +406,10 @@ def add_metric(
     task = session.get(TaskRecord, task_id)
     if task and task.status == "posted":
         task.status = "metrics needed"
+    if task:
+        if post_url:
+            task.published_url = post_url
+        task.metric_status = "complete"
     return metric
 
 

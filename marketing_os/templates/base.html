@@ -16,6 +16,7 @@
         --warn: #9a3412;
         --ready: #1d4ed8;
         --blocked: #991b1b;
+        --good: #0f5f58;
       }
       * { box-sizing: border-box; }
       body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #eef1ed; }
@@ -24,6 +25,7 @@
       .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
       nav { background: #24312f; color: #f6f7f5; padding: 20px 14px; }
       nav h1 { font-size: 18px; margin: 0 0 18px; letter-spacing: 0; }
+      nav .nav-section { margin: 16px 0 6px; color: #bccbc7; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
       nav a { display: block; color: #f6f7f5; padding: 9px 10px; border-radius: 6px; margin-bottom: 4px; }
       nav a.active, nav a:hover { background: #36514d; text-decoration: none; }
       main { padding: 22px clamp(16px, 3vw, 34px); }
@@ -32,6 +34,9 @@
       h3 { margin: 0 0 10px; font-size: 18px; letter-spacing: 0; }
       .subtle { color: var(--muted); }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+      .agenda { display: grid; gap: 14px; }
+      .agenda-day { display: grid; gap: 10px; }
+      .hero-task { background: #ffffff; border: 1px solid #a7e7dc; border-left: 5px solid var(--accent); border-radius: 8px; padding: 18px; display: grid; gap: 12px; }
       .panel, .task, .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
       .task { display: grid; gap: 8px; }
       .task-title { font-weight: 700; color: var(--ink); }
@@ -42,8 +47,12 @@
       .pill.complete { background: var(--accent-soft); color: #0f5f58; border-color: #a7e7dc; }
       .button, button { border: 1px solid #0b5f59; background: var(--accent); color: white; border-radius: 6px; padding: 8px 11px; font: inherit; cursor: pointer; }
       .button.secondary, button.secondary { background: white; color: var(--ink); border-color: var(--line); }
+      .button.warn, button.warn { background: #fff7ed; color: var(--warn); border-color: #fed7aa; }
+      .button.row-action, button.row-action { width: auto; }
+      .button-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
       form.inline { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; background: white; }
+      input[type="checkbox"] { width: auto; }
       textarea { min-height: 95px; }
       label { display: grid; gap: 4px; font-weight: 650; margin-bottom: 10px; }
       label span { color: var(--muted); font-weight: 500; font-size: 13px; }
@@ -51,12 +60,23 @@
       th, td { padding: 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
       th { background: #f3f5f1; font-size: 13px; color: var(--muted); }
       .copybox { white-space: pre-wrap; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+      .copyrow { display: grid; gap: 8px; }
+      .step-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .step-list span { border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #f8faf7; font-weight: 700; text-align: center; }
+      .asset-thumb { width: 100%; max-width: 210px; aspect-ratio: 1 / 1; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; background: var(--field); display: block; }
+      .asset-missing { width: 100%; max-width: 210px; aspect-ratio: 1 / 1; border: 1px dashed var(--line); border-radius: 6px; background: var(--field); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 10px; }
+      .asset-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+      .health { display: grid; gap: 10px; }
+      .health-row { display: grid; grid-template-columns: 140px 120px 70px minmax(0, 1fr); gap: 10px; align-items: start; }
       .flash { background: var(--accent-soft); border: 1px solid #a7e7dc; padding: 10px; border-radius: 6px; margin-bottom: 14px; }
       @media (max-width: 760px) {
         .shell { grid-template-columns: 1fr; }
         nav { position: static; }
         nav a { display: inline-block; margin-right: 4px; }
         .topline { display: block; }
+        .step-list { grid-template-columns: 1fr 1fr; }
+        .health-row { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; }
       }
     </style>
   </head>
@@ -64,13 +84,25 @@
     <div class="shell">
       <nav>
         <h1>MattMadeMe Marketing OS</h1>
+        <div class="nav-section">Daily Work</div>
         {% for key, label, endpoint in [
           ("today", "Today", "dashboard"),
+          ("week", "This Week", "week"),
+          ("metrics_due", "Metrics Due", "metrics_due"),
+          ("completed", "Completed", "completed"),
+          ("guides", "Posting Guides", "guides")
+        ] %}
+          <a class="{{ 'active' if active == key else '' }}" href="{{ url_for(endpoint) }}">{{ label }}</a>
+        {% endfor %}
+        <div class="nav-section">Admin</div>
+        {% for key, label, endpoint in [
           ("calendar", "Calendar", "calendar"),
           ("plans", "Plans", "plans"),
           ("assets", "Assets", "assets"),
+          ("creative_assets", "Creative Assets", "creative_assets"),
           ("templates", "Templates", "templates"),
-          ("metrics", "Metrics", "metrics"),
+          ("metrics", "Metric History", "metrics"),
+          ("data_health", "Data Health", "data_health"),
           ("settings", "Settings", "settings")
         ] %}
           <a class="{{ 'active' if active == key else '' }}" href="{{ url_for(endpoint) }}">{{ label }}</a>
@@ -85,5 +117,20 @@
         {% block content %}{% endblock %}
       </main>
     </div>
+    <script>
+      document.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy-target]");
+        if (!button) return;
+        const target = document.querySelector(button.dataset.copyTarget);
+        if (!target) return;
+        const text = target.innerText || target.value || "";
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text.trim());
+        }
+        const original = button.innerText;
+        button.innerText = "Copied";
+        window.setTimeout(() => { button.innerText = original; }, 1200);
+      });
+    </script>
   </body>
 </html>

@@ -5,11 +5,39 @@
   <section class="panel">
     <h3>Local Files</h3>
     <p><strong>Business directory:</strong> {{ business_dir }}</p>
-    <p class="subtle">Edit docs/business and docs/templates files, then restart the server to sync them into SQLite.</p>
+    <p><strong>Database:</strong> {{ db_path }}</p>
+    <p><strong>Asset inventory:</strong> {{ assets_root }}</p>
+    <p><strong>JSON exports:</strong> {{ export_dir }}</p>
+    <p class="subtle">Business and template files seed the app. The database stores working plans, task states, assets, notes, and metrics.</p>
+  </section>
+  <section class="panel">
+    <h3>Backup</h3>
+    <p class="subtle">Create a timestamped copy of the local SQLite database under data/backups.</p>
+    <form method="post" action="{{ url_for('backup_database') }}">
+      <button type="submit">Create backup</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Export</h3>
+    <p class="subtle">Download a readable JSON snapshot of products, plans, tasks, assets, metrics, templates, and sync metadata.</p>
+    <form method="post" action="{{ url_for('export_data') }}">
+      <button type="submit">Export JSON</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Etsy CSV Import</h3>
+    <p class="subtle">Import listing titles, IDs, URLs, and status from a local Etsy CSV export. This is read-only/import-only.</p>
+    <form method="post" action="{{ url_for('import_etsy_csv') }}">
+      <label>CSV path
+        <input name="csv_path" placeholder="exports/etsy-listings.csv">
+      </label>
+      <button type="submit">Import CSV</button>
+    </form>
   </section>
   <section class="panel">
     <h3>Network Use</h3>
     <p>Default startup binds to 0.0.0.0 so trusted devices on the local network can reach it.</p>
+    <p class="subtle">Do not expose this app to the public internet.</p>
   </section>
 </div>
 {% endblock %}

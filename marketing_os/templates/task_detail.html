@@ -2,45 +2,84 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>{{ task.title }}</h2>
+    <h2>{{ task_model.action_title }}</h2>
     <div class="subtle">{{ task.due_date }} · {{ task.owner_role }} · {{ task.platform }} {{ task.content_type }}</div>
   </div>
   <a class="button secondary" href="{{ url_for('dashboard') }}">Back to today</a>
 </div>
 
-<div class="grid">
-  <section class="panel">
-    <h3>What To Do</h3>
+<div class="step-list" aria-label="Task steps">
+  <span>Prepare</span>
+  <span>Post</span>
+  <span>Finish</span>
+  <span>Metrics later</span>
+</div>
+
+<section class="grid">
+  <div class="panel">
+    <h3>Prepare</h3>
+    <p><strong>{{ task.product_name or "Owner/admin task" }}</strong></p>
+    {% if task.asset and task.asset.file_exists %}
+      <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=task.asset.id) }}" alt="{{ task.asset.name }}">
+      <p class="subtle">{{ task.asset.name }} · {{ task.asset.readiness_state }}</p>
+    {% elif task.asset %}
+      <div class="asset-missing">Asset file needs review</div>
+      <p class="subtle">{{ task.asset.name }} · {{ task.asset.readiness_state }}</p>
+    {% else %}
+      <div class="asset-missing">No asset attached yet</div>
+    {% endif %}
+    <details style="margin-top: 12px;">
+      <summary class="subtle">Change asset</summary>
+      {% if asset_options %}
+        <form method="post" action="{{ url_for('task_asset', task_id=task.id) }}" style="margin-top: 10px;">
+          <label>Approved asset
+            <select name="asset_id">
+              {% for option in asset_options %}
+                <option value="{{ option.asset.id }}" {{ 'selected' if task.asset_id == option.asset.id else '' }}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="secondary" type="submit">Assign asset</button>
+        </form>
+      {% else %}
+        <p class="subtle">No approved file-backed assets are available for this task yet.</p>
+        <a class="button secondary" href="{{ url_for('assets') }}">Review assets</a>
+      {% endif %}
+    </details>
+  </div>
+
+  <div class="panel">
+    <h3>Copy</h3>
+    <div class="copyrow">
+      <div class="subtle">Caption / body</div>
+      <div id="caption-copy" class="copybox">{{ task.draft_caption }}</div>
+      <button class="secondary row-action" type="button" data-copy-target="#caption-copy">Copy caption</button>
+    </div>
+    <div class="copyrow" style="margin-top: 14px;">
+      <div class="subtle">CTA</div>
+      <div id="cta-copy" class="copybox">{{ task.cta }}</div>
+      <button class="secondary row-action" type="button" data-copy-target="#cta-copy">Copy CTA</button>
+    </div>
+    {% if json_list(task.hashtags_json) %}
+      <div class="copyrow" style="margin-top: 14px;">
+        <div class="subtle">Hashtags</div>
+        <div id="hashtags-copy" class="copybox">{{ json_list(task.hashtags_json) | join(" ") }}</div>
+        <button class="secondary row-action" type="button" data-copy-target="#hashtags-copy">Copy hashtags</button>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="grid" style="margin-top: 14px;">
+  <div class="panel">
+    <h3>Post</h3>
     <p>{{ playbook.explanation }}</p>
     <div class="meta">
       <span class="pill">Device: {{ playbook.device }}</span>
       <span class="pill">Media: {{ playbook.media }}</span>
-      <span class="pill">{{ task.status }}</span>
+      <span class="pill {{ task_model.status_tone }}">{{ task_model.status_label }}</span>
     </div>
-    <h3 style="margin-top: 16px;">Product And Asset</h3>
-    <p><strong>{{ task.product_name or "No product" }}</strong></p>
-    {% if task.asset %}
-      <p>{{ task.asset.name }}<br><span class="subtle">{{ task.asset.readiness_state }} · {{ task.asset.source_path }}</span></p>
-    {% else %}
-      <p class="subtle">No asset attached yet.</p>
-    {% endif %}
-  </section>
-
-  <section class="panel">
-    <h3>Draft Caption / Body</h3>
-    <div class="copybox">{{ task.draft_caption }}</div>
-    <h3 style="margin-top: 16px;">CTA</h3>
-    <div class="copybox">{{ task.cta }}</div>
-    {% if json_list(task.hashtags_json) %}
-      <h3 style="margin-top: 16px;">Hashtags</h3>
-      <div class="copybox">{{ json_list(task.hashtags_json) | join(" ") }}</div>
-    {% endif %}
-  </section>
-</div>
-
-<div class="grid" style="margin-top: 14px;">
-  <section class="panel">
-    <h3>Posting Steps</h3>
+    <h3 style="margin-top: 16px;">Steps</h3>
     <ol>
       {% for step in json_list(task.posting_steps_json) %}<li>{{ step }}</li>{% endfor %}
     </ol>
@@ -48,45 +87,64 @@
     <ul>
       {% for item in json_list(task.preview_checklist_json) %}<li>{{ item }}</li>{% endfor %}
     </ul>
-    <p class="subtle"><strong>Beginner mistake to avoid:</strong> {{ playbook.mistakes }}</p>
-  </section>
+    <p class="subtle"><strong>Common mistake to avoid:</strong> {{ playbook.mistakes }}</p>
+  </div>
 
-  <section class="panel">
-    <h3>Status</h3>
-    <form method="post" action="{{ url_for('task_status', task_id=task.id) }}">
-      <label>Status
-        <select name="status">
-          {% for status in statuses %}
-            <option value="{{ status }}" {{ 'selected' if task.status == status else '' }}>{{ status }}</option>
-          {% endfor %}
-        </select>
+  <div class="panel">
+    <h3>Finish</h3>
+    <form method="post" action="{{ url_for('task_finish', task_id=task.id) }}">
+      <label>Published URL <span>Optional now. Helpful for metrics later.</span>
+        <input name="post_url" value="{{ task.published_url }}">
       </label>
       <label>Notes <span>What changed, what was confusing, or what Matt needs to know.</span>
         <textarea name="notes">{{ task.notes }}</textarea>
       </label>
-      <button type="submit">Save status</button>
+      <div class="button-group">
+        <button name="action" value="mark_posted" type="submit">Mark posted</button>
+        <button class="secondary" name="action" value="scheduled" type="submit">Scheduled</button>
+        <button class="secondary" name="action" value="needs_help" type="submit">Needs help</button>
+        <button class="warn" name="action" value="skip" type="submit">Skip</button>
+      </div>
     </form>
-  </section>
-</div>
+    <details style="margin-top: 16px;">
+      <summary class="subtle">Advanced status</summary>
+      <form method="post" action="{{ url_for('task_status', task_id=task.id) }}" style="margin-top: 10px;">
+        <label>Status
+          <select name="status">
+            {% for status in statuses %}
+              <option value="{{ status }}" {{ 'selected' if task.status == status else '' }}>{{ status }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Notes <textarea name="notes">{{ task.notes }}</textarea></label>
+        <button class="secondary" type="submit">Save advanced status</button>
+      </form>
+    </details>
+  </div>
+</section>
 
 <section class="panel" style="margin-top: 14px;">
-  <h3>Metric To Record Later</h3>
+  <h3>Metrics Later</h3>
   <p>{{ task.metric_instruction }}</p>
-  <form method="post" action="{{ url_for('task_metrics', task_id=task.id) }}">
-    <div class="grid">
-      <label>Post URL <input name="post_url"></label>
-      <label>Reach / Views <input name="reach" type="number" min="0"></label>
-      <label>Likes <input name="likes" type="number" min="0"></label>
-      <label>Comments <input name="comments" type="number" min="0"></label>
-      <label>Shares <input name="shares" type="number" min="0"></label>
-      <label>Saves <input name="saves" type="number" min="0"></label>
-      <label>Etsy Visits <input name="etsy_visits" type="number" min="0"></label>
-      <label>Etsy Orders <input name="etsy_orders" type="number" min="0"></label>
-      <label>Email Signups <input name="email_signups" type="number" min="0"></label>
-    </div>
-    <label>Metric Notes <textarea name="notes"></textarea></label>
-    <button type="submit">Save metrics</button>
-  </form>
+  {% if task.metric_due_date %}
+    <p class="subtle">Check on {{ task.metric_due_date }}. Current state: {{ task.metric_status }}.</p>
+  {% else %}
+    <p class="subtle">Metrics are not due until this is posted.</p>
+  {% endif %}
+  <details {{ 'open' if show_metrics else '' }}>
+    <summary>{{ 'Enter metrics now' if show_metrics else 'Metric form' }}</summary>
+    <form method="post" action="{{ url_for('task_metrics', task_id=task.id) }}" style="margin-top: 12px;">
+      <div class="grid">
+        {% for name, label in metric_fields %}
+          <label>{{ label }}
+            <input name="{{ name }}" type="{{ 'text' if name == 'post_url' else 'number' }}" min="0" value="{{ task.published_url if name == 'post_url' else '' }}">
+          </label>
+        {% endfor %}
+      </div>
+      <label>Metric Notes <textarea name="notes"></textarea></label>
+      <button type="submit">Save metrics</button>
+    </form>
+  </details>
 </section>
 
 {% if metrics %}

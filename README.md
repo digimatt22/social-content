@@ -12,7 +12,20 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - Binds to the local network by default for trusted household/shop devices.
 - SQLite persistence through SQLAlchemy
 - database-backed plans, tasks, assets, templates, and metrics
-- beginner-friendly task pages for Instagram, Facebook, Etsy, and website work
+- operator-first Today page with one recommended next task
+- guided task pages for Instagram, Facebook, Etsy, and website work
+- copy controls for captions, CTAs, and hashtags
+- metrics due workflow for follow-up after posting
+- completed-task review and operator-facing posting guides
+- local asset scanning with file checks and review states
+- source-photo upload into the local product asset inventory
+- manual source-photo registration from a local file path
+- creative asset planning, generation manifests, and generated-output review registration
+- read-only Etsy CSV listing import foundation
+- manual override fields that protect local edits from future imports
+- data health view for stale, missing, or unreviewed records
+- local SQLite backup from Settings
+- local JSON read/write endpoints for future frontend/API reuse
 - editable platform, copy, and graphic templates under `docs/templates`
 - manual metric entry after posting
 
@@ -76,6 +89,18 @@ To bind to localhost only, override the host:
 python run_local.py --host 127.0.0.1
 ```
 
+To use a different local product-photo inventory:
+
+```bash
+MARKETING_OS_ASSETS_ROOT=/path/to/assets/products python run_local.py
+```
+
+To write JSON exports somewhere else:
+
+```bash
+MARKETING_OS_EXPORT_DIR=/path/to/exports python run_local.py
+```
+
 Do not expose this local app to the public internet.
 
 Archived Phase 1/2 executable references live in `archive/phase1-phase2-executables`.
@@ -91,6 +116,8 @@ python -m unittest discover -s tests
 ## Current Scope
 
 The Marketing OS is a local planning and operator assistant. It does not publish content or connect to external analytics.
+
+Phase 4 keeps the Python/Flask/SQLAlchemy/SQLite stack while adding service boundaries and integration-ready fields so a future richer frontend can attach without replacing the planning core.
 
 Out of scope:
 

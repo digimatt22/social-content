@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import date, timedelta
+import tempfile
+from datetime import date
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 from sqlalchemy import select
+from werkzeug.utils import secure_filename
 
-from .db import create_db_engine, init_db, session_factory, session_scope
-from .db_models import AssetRecord, MetricRecord, PlanRecord, TaskRecord, TemplateRecord
+from .db import DEFAULT_DB_PATH, create_db_engine, init_db, session_factory, session_scope
+from .db_models import AssetRecord, MetricRecord, PlanRecord, ProductRecord, TaskRecord, TemplateRecord
 from .phase3 import (
     ROLE_OPTIONS,
     TASK_STATUSES,
@@ -22,6 +24,39 @@ from .phase3 import (
     status_counts,
     template_body,
     update_task_status,
+)
+from .phase4 import (
+    OPERATOR_DEFAULT_ROLE,
+    assign_asset_to_task,
+    asset_inventory,
+    asset_path,
+    complete_task_status,
+    backup_sqlite_database,
+    completed_tasks,
+    creative_asset_plans,
+    data_health as build_data_health,
+    export_operating_data,
+    import_etsy_listing_csv,
+    import_source_photo_to_inventory,
+    metrics_due_tasks,
+    platform_metric_fields,
+    posting_guides,
+    prepare_creative_generation_run,
+    refresh_asset_file_state,
+    register_local_source_photo,
+    review_asset,
+    scan_local_asset_folder,
+    serialize_asset_view,
+    serialize_creative_asset_plan,
+    serialize_data_health_item,
+    serialize_task_detail,
+    serialize_task_view,
+    serialize_today_view,
+    serialize_week_agenda,
+    task_view,
+    task_asset_options,
+    today_view,
+    week_agenda,
 )
 
 
@@ -38,6 +73,9 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     app.config["SESSION_FACTORY"] = factory
     app.config["BUSINESS_DIR"] = business_dir
+    app.config["DB_PATH"] = Path(os.environ.get("MARKETING_OS_DB_PATH", db_path or DEFAULT_DB_PATH))
+    app.config["ASSETS_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSETS_ROOT", "assets/products"))
+    app.config["EXPORT_DIR"] = Path(os.environ.get("MARKETING_OS_EXPORT_DIR", "data/exports"))
 
     @app.context_processor
     def inject_helpers() -> dict[str, object]:
@@ -53,35 +91,196 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/api/today")
+    def api_today():
+        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        with session_scope(factory) as session:
+            return jsonify(serialize_today_view(today_view(session, role=role)))
+
+    @app.get("/api/week")
+    def api_week():
+        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        status = request.args.get("status", "open")
+        platform = request.args.get("platform", "all")
+        with session_scope(factory) as session:
+            return jsonify({"agendas": serialize_week_agenda(week_agenda(session, role=role, status=status, platform=platform))})
+
+    @app.get("/api/tasks/<int:task_id>")
+    def api_task_detail(task_id: int):
+        with session_scope(factory) as session:
+            task = session.get(TaskRecord, task_id)
+            if task is None:
+                return jsonify({"error": "Task not found."}), 404
+            show_metrics = task.status in {"posted", "metrics needed"} or bool(task.metric_due_date and task.metric_due_date <= date.today())
+            return jsonify(
+                serialize_task_detail(
+                    task_view(task),
+                    task_asset_options(session, task),
+                    platform_metric_fields(task.platform),
+                    show_metrics,
+                    playbook_for(task.platform, task.content_type),
+                )
+            )
+
+    @app.post("/api/tasks/<int:task_id>/finish")
+    def api_task_finish(task_id: int):
+        payload = request.get_json(silent=True) or {}
+        with session_scope(factory) as session:
+            try:
+                task = complete_task_status(
+                    session,
+                    task_id,
+                    str(payload.get("action") or "ready to post"),
+                    notes=str(payload.get("notes") or ""),
+                    post_url=str(payload.get("post_url") or ""),
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 404
+            return jsonify({"task": serialize_task_view(task_view(task))})
+
+    @app.post("/api/tasks/<int:task_id>/metrics")
+    def api_task_metrics(task_id: int):
+        payload = request.get_json(silent=True) or {}
+        with session_scope(factory) as session:
+            try:
+                metric = add_metric(
+                    session,
+                    task_id=task_id,
+                    post_url=str(payload.get("post_url") or ""),
+                    reach=_int_or_none(payload.get("reach")),
+                    likes=_int_or_none(payload.get("likes")),
+                    comments=_int_or_none(payload.get("comments")),
+                    shares=_int_or_none(payload.get("shares")),
+                    saves=_int_or_none(payload.get("saves")),
+                    etsy_visits=_int_or_none(payload.get("etsy_visits")),
+                    etsy_orders=_int_or_none(payload.get("etsy_orders")),
+                    email_signups=_int_or_none(payload.get("email_signups")),
+                    notes=str(payload.get("notes") or ""),
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 404
+            task = session.get(TaskRecord, task_id)
+            return jsonify(
+                {
+                    "task": serialize_task_view(task_view(task)),
+                    "metric": {
+                        "id": metric.id,
+                        "task_id": metric.task_id,
+                        "recorded_on": metric.recorded_on.isoformat(),
+                        "post_url": metric.post_url,
+                    },
+                }
+            )
+
+    @app.post("/api/tasks/<int:task_id>/asset")
+    def api_task_asset(task_id: int):
+        payload = request.get_json(silent=True) or {}
+        asset_id = _int_or_none(payload.get("asset_id"))
+        if asset_id is None:
+            return jsonify({"error": "Choose an approved asset to assign."}), 400
+        with session_scope(factory) as session:
+            try:
+                task = assign_asset_to_task(session, task_id, asset_id)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"task": serialize_task_view(task_view(task))})
+
+    @app.get("/api/metrics-due")
+    def api_metrics_due():
+        with session_scope(factory) as session:
+            return jsonify({"tasks": [serialize_task_view(task) for task in metrics_due_tasks(session)]})
+
+    @app.get("/api/assets")
+    def api_assets():
+        with session_scope(factory) as session:
+            return jsonify({"assets": [serialize_asset_view(model) for model in asset_inventory(session)]})
+
+    @app.get("/api/data-health")
+    def api_data_health():
+        with session_scope(factory) as session:
+            refresh_asset_file_state(session)
+            return jsonify({"items": [serialize_data_health_item(item) for item in build_data_health(session)]})
+
+    @app.get("/api/creative-assets")
+    def api_creative_assets():
+        with session_scope(factory) as session:
+            refresh_asset_file_state(session)
+            return jsonify({"plans": [serialize_creative_asset_plan(plan) for plan in creative_asset_plans(session)]})
+
     @app.get("/")
     def dashboard() -> str:
-        today = date.today()
-        week_end = today + timedelta(days=6)
-        role = request.args.get("role", "all")
+        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
         with session_scope(factory) as session:
             plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc())).first()
-            query = select(TaskRecord).where(TaskRecord.due_date <= week_end).order_by(TaskRecord.due_date, TaskRecord.id)
-            if role != "all":
-                query = query.where(TaskRecord.owner_role == role)
-            tasks = list(session.scalars(query))
-            today_tasks = [task for task in tasks if task.due_date <= today and task.status not in {"complete", "skipped"}]
             plan_tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.plan_id == plan.id).order_by(TaskRecord.due_date))) if plan else []
             return render_template(
                 "dashboard.html",
                 active="today",
                 plan=plan,
-                today_tasks=today_tasks,
-                week_tasks=tasks,
+                today_model=today_view(session, role=role),
                 status_counts=status_counts(plan_tasks),
                 selected_role=role,
             )
+
+    @app.get("/week")
+    def week() -> str:
+        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        status = request.args.get("status", "open")
+        platform = request.args.get("platform", "all")
+        with session_scope(factory) as session:
+            agendas = week_agenda(session, role=role, status=status, platform=platform)
+            platforms = sorted({task.platform for task in session.scalars(select(TaskRecord)).all() if task.platform})
+            return render_template(
+                "week.html",
+                active="week",
+                agendas=agendas,
+                selected_role=role,
+                selected_status=status,
+                selected_platform=platform,
+                platforms=platforms,
+            )
+
+    @app.get("/completed")
+    def completed() -> str:
+        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        with session_scope(factory) as session:
+            tasks = completed_tasks(session, role=role)
+            return render_template("completed.html", active="completed", tasks=tasks, selected_role=role)
+
+    @app.get("/guides")
+    def guides() -> str:
+        with session_scope(factory) as session:
+            guides_model = posting_guides(session)
+            return render_template("guides.html", active="guides", guides=guides_model)
+
+    @app.get("/creative-assets")
+    def creative_assets() -> str:
+        with session_scope(factory) as session:
+            refresh_asset_file_state(session)
+            plans = creative_asset_plans(session)
+            return render_template("creative_assets.html", active="creative_assets", plans=plans)
+
+    @app.post("/creative-assets/register")
+    def creative_assets_register() -> str:
+        source_asset_id = int(request.form.get("source_asset_id", "0"))
+        selected_templates = request.form.getlist("template_name")
+        with session_scope(factory) as session:
+            try:
+                run = prepare_creative_generation_run(session, source_asset_id, selected_templates)
+                flash(
+                    f"Prepared {len(run.candidates)} generated output candidate(s). "
+                    f"Generation manifest: {run.manifest_path}."
+                )
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("creative_assets"))
 
     @app.get("/calendar")
     def calendar() -> str:
         with session_scope(factory) as session:
             plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc())).first()
             tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.plan_id == plan.id).order_by(TaskRecord.due_date))) if plan else []
-            return render_template("calendar.html", active="calendar", plan=plan, tasks=tasks)
+            return render_template("calendar.html", active="calendar", plan=plan, tasks=[task_view(task) for task in tasks])
 
     @app.get("/plans")
     def plans() -> str:
@@ -107,7 +306,19 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 return render_template("not_found.html", active="today"), 404
             metrics = list(session.scalars(select(MetricRecord).where(MetricRecord.task_id == task_id).order_by(MetricRecord.recorded_on.desc())))
             playbook = playbook_for(task.platform, task.content_type)
-            return render_template("task_detail.html", active="today", task=task, playbook=playbook, metrics=metrics)
+            metric_fields = platform_metric_fields(task.platform)
+            show_metrics = task.status in {"posted", "metrics needed"} or bool(task.metric_due_date and task.metric_due_date <= date.today())
+            return render_template(
+                "task_detail.html",
+                active="today",
+                task=task,
+                task_model=task_view(task),
+                asset_options=task_asset_options(session, task),
+                playbook=playbook,
+                metrics=metrics,
+                metric_fields=metric_fields,
+                show_metrics=show_metrics,
+            )
 
     @app.post("/tasks/<int:task_id>/status")
     def task_status(task_id: int) -> str:
@@ -116,6 +327,30 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             update_task_status(session, task_id, status, notes)
             flash("Task status saved.")
+        return redirect(url_for("task_detail", task_id=task_id))
+
+    @app.post("/tasks/<int:task_id>/finish")
+    def task_finish(task_id: int) -> str:
+        action = request.form.get("action", "ready to post")
+        notes = request.form.get("notes", "")
+        post_url = request.form.get("post_url", "")
+        with session_scope(factory) as session:
+            complete_task_status(session, task_id, action, notes=notes, post_url=post_url)
+            flash("Task updated.")
+        return redirect(url_for("task_detail", task_id=task_id))
+
+    @app.post("/tasks/<int:task_id>/asset")
+    def task_asset(task_id: int) -> str:
+        asset_id_text = request.form.get("asset_id", "").strip()
+        if not asset_id_text:
+            flash("Choose an approved asset to assign.")
+            return redirect(url_for("task_detail", task_id=task_id))
+        with session_scope(factory) as session:
+            try:
+                assign_asset_to_task(session, task_id, int(asset_id_text))
+                flash("Task asset updated.")
+            except ValueError as exc:
+                flash(str(exc))
         return redirect(url_for("task_detail", task_id=task_id))
 
     @app.post("/tasks/<int:task_id>/metrics")
@@ -142,11 +377,98 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             flash("Metrics saved.")
         return redirect(url_for("task_detail", task_id=task_id))
 
+    @app.get("/metrics-due")
+    def metrics_due() -> str:
+        with session_scope(factory) as session:
+            tasks = metrics_due_tasks(session)
+            return render_template("metrics_due.html", active="metrics_due", tasks=tasks)
+
     @app.get("/assets")
     def assets() -> str:
         with session_scope(factory) as session:
-            records = list(session.scalars(select(AssetRecord).order_by(AssetRecord.name)))
-            return render_template("assets.html", active="assets", assets=records)
+            records = asset_inventory(session)
+            products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            return render_template("assets.html", active="assets", assets=records, products=products)
+
+    @app.post("/assets/scan")
+    def scan_assets() -> str:
+        with session_scope(factory) as session:
+            imported = scan_local_asset_folder(session, app.config["ASSETS_ROOT"])
+            flash(f"Scanned local assets. Found {len(imported)} image file(s).")
+        return redirect(url_for("assets"))
+
+    @app.post("/assets/register-source")
+    def register_source_asset() -> str:
+        file_path = request.form.get("file_path", "").strip()
+        product_id_text = request.form.get("product_id", "").strip()
+        product_id = int(product_id_text) if product_id_text else None
+        name = request.form.get("name", "").strip()
+        notes = request.form.get("notes", "").strip()
+        if not file_path:
+            flash("Enter a local source photo path.")
+            return redirect(url_for("assets"))
+        with session_scope(factory) as session:
+            try:
+                asset = register_local_source_photo(session, file_path, product_id=product_id, name=name, notes=notes)
+                flash(f"Registered source photo: {asset.name}.")
+            except (FileNotFoundError, ValueError) as exc:
+                flash(str(exc))
+        return redirect(url_for("assets"))
+
+    @app.post("/assets/upload-source")
+    def upload_source_asset() -> str:
+        upload = request.files.get("photo")
+        product_id_text = request.form.get("product_id", "").strip()
+        product_id = int(product_id_text) if product_id_text else None
+        name = request.form.get("name", "").strip()
+        notes = request.form.get("notes", "").strip()
+        if upload is None or not upload.filename:
+            flash("Choose a product photo to upload.")
+            return redirect(url_for("assets"))
+        filename = secure_filename(upload.filename)
+        if not filename:
+            flash("Choose a product photo with a valid filename.")
+            return redirect(url_for("assets"))
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_path = Path(tmp) / filename
+            upload.save(temp_path)
+            with session_scope(factory) as session:
+                try:
+                    asset = import_source_photo_to_inventory(
+                        session,
+                        temp_path,
+                        product_id=product_id,
+                        name=name,
+                        notes=notes,
+                        assets_root=app.config["ASSETS_ROOT"],
+                    )
+                    flash(f"Uploaded source photo: {asset.name}.")
+                except (FileNotFoundError, ValueError) as exc:
+                    flash(str(exc))
+        return redirect(url_for("assets"))
+
+    @app.post("/assets/<int:asset_id>/review")
+    def asset_review(asset_id: int) -> str:
+        review_state = request.form.get("review_state", "needs review")
+        notes = request.form.get("approval_notes", "")
+        with session_scope(factory) as session:
+            try:
+                review_asset(session, asset_id, review_state, notes)
+                flash("Asset review saved.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("assets"))
+
+    @app.get("/assets/<int:asset_id>/preview")
+    def asset_preview(asset_id: int):
+        with session_scope(factory) as session:
+            asset = session.get(AssetRecord, asset_id)
+            if asset is None:
+                abort(404)
+            path = asset_path(asset)
+            if not path.is_file():
+                abort(404)
+            return send_file(path)
 
     @app.get("/templates")
     def templates() -> str:
@@ -160,11 +482,60 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             records = list(session.scalars(select(MetricRecord).order_by(MetricRecord.recorded_on.desc(), MetricRecord.id.desc())))
             return render_template("metrics.html", active="metrics", metrics=records)
 
+    @app.get("/data-health")
+    def data_health() -> str:
+        with session_scope(factory) as session:
+            refresh_asset_file_state(session)
+            items = build_data_health(session)
+            return render_template("data_health.html", active="data_health", items=items)
+
+    @app.post("/imports/etsy-csv")
+    def import_etsy_csv() -> str:
+        csv_path = request.form.get("csv_path", "").strip()
+        if not csv_path:
+            flash("Enter a local Etsy CSV path to import.")
+            return redirect(url_for("settings"))
+        with session_scope(factory) as session:
+            try:
+                imported = import_etsy_listing_csv(session, csv_path)
+                flash(f"Imported {len(imported)} Etsy listing record(s).")
+            except FileNotFoundError as exc:
+                flash(str(exc))
+        return redirect(url_for("data_health"))
+
     @app.get("/settings")
     def settings() -> str:
-        return render_template("settings.html", active="settings", business_dir=business_dir)
+        return render_template(
+            "settings.html",
+            active="settings",
+            business_dir=business_dir,
+            db_path=app.config["DB_PATH"],
+            assets_root=app.config["ASSETS_ROOT"],
+            export_dir=app.config["EXPORT_DIR"],
+        )
+
+    @app.post("/settings/backup")
+    def backup_database() -> str:
+        try:
+            path = backup_sqlite_database(app.config["DB_PATH"])
+            flash(f"Database backup created at {path}.")
+        except FileNotFoundError as exc:
+            flash(str(exc))
+        return redirect(url_for("settings"))
+
+    @app.post("/settings/export")
+    def export_data():
+        with session_scope(factory) as session:
+            path = export_operating_data(session, app.config["EXPORT_DIR"])
+        return send_file(path.resolve(), as_attachment=True, download_name=path.name)
 
     return app
+
+
+def _int_or_none(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    return int(value)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>Posting Guides</h2>
+    <div class="subtle">Beginner-friendly platform guides pulled from the editable platform templates.</div>
+  </div>
+</div>
+
+<section class="grid">
+  {% for guide in guides %}
+    <article class="panel">
+      <h3>{{ guide.name }}</h3>
+      <div class="meta">
+        <span class="pill">{{ guide.platform }}</span>
+        <span class="pill">{{ guide.format }}</span>
+        <span class="pill">{{ guide.difficulty }}</span>
+      </div>
+      <p><strong>Media:</strong> {{ guide.media_count }} · {{ guide.dimensions }}</p>
+      <p><strong>Caption:</strong> {{ guide.caption_structure }}</p>
+      <p><strong>CTA:</strong> {{ guide.cta_placement }}</p>
+      <p><strong>Asset:</strong> {{ guide.asset_requirements }}</p>
+      <details>
+        <summary class="subtle">More guidance</summary>
+        <p><strong>Text on image:</strong> {{ guide.text_overlay_rules }}</p>
+        <p><strong>Example:</strong> {{ guide.example_layout }}</p>
+        <p class="subtle">{{ guide.reuse_notes }}</p>
+      </details>
+    </article>
+  {% else %}
+    <div class="panel">No platform guides found.</div>
+  {% endfor %}
+</section>
+{% endblock %}

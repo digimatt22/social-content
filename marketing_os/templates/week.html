@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <h2>This Week</h2>
+    <div class="subtle">A day-by-day agenda for the selected role.</div>
+  </div>
+  <form class="inline" method="get" action="{{ url_for('week') }}">
+    <select name="role">
+      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
+      {% for role in roles %}
+        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="open" {{ 'selected' if selected_status == 'open' else '' }}>Open</option>
+      <option value="all" {{ 'selected' if selected_status == 'all' else '' }}>All statuses</option>
+      {% for status in statuses %}
+        <option value="{{ status }}" {{ 'selected' if selected_status == status else '' }}>{{ status }}</option>
+      {% endfor %}
+    </select>
+    <select name="platform">
+      <option value="all" {{ 'selected' if selected_platform == 'all' else '' }}>All platforms</option>
+      {% for platform in platforms %}
+        <option value="{{ platform }}" {{ 'selected' if selected_platform == platform else '' }}>{{ platform }}</option>
+      {% endfor %}
+    </select>
+    <button class="secondary" type="submit">Filter</button>
+  </form>
+</div>
+
+<section class="agenda">
+  {% for day in agendas %}
+    <div class="agenda-day">
+      <h3>{{ day.day }}</h3>
+      <div class="grid">
+        {% for model in day.tasks %}
+          {% set task = model.task %}
+          {% include "_task_card.html" %}
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="panel">No matching tasks this week.</div>
+  {% endfor %}
+</section>
+{% endblock %}

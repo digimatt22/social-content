@@ -7,7 +7,12 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .venv/
+.env
+.env.*
+!.env.example
 outputs/
+assets/products/*
+!assets/products/.gitkeep
 data/*.sqlite
 data/*.sqlite-*
 data/backups/
