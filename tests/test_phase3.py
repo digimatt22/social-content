@@ -1872,8 +1872,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b'value="magnific_mcp"', prefilled_page.data)
             self.assertIn(b"Preserve the duck&#39;s shape", prefilled_page.data)
             self.assertIn(b"outputs/magnific/mailman-source-facebook-post-image.png", prefilled_page.data)
+            self.assertIn(packet["creative_handoff"]["import_defaults"]["absolute_output_path"].encode(), prefilled_page.data)
+            self.assertIn(source_path.resolve(strict=False).as_posix().encode(), prefilled_page.data)
+            self.assertIn(b"Marketing OS will also accept: outputs/magnific/mailman-source-facebook-post-image.png", prefilled_page.data)
             self.assertIn(f'src="/assets/{source_id}/preview"'.encode(), prefilled_page.data)
             self.assertIn(b"Copy source path", prefilled_page.data)
+            self.assertIn(b"Copy absolute source path", prefilled_page.data)
+            self.assertIn(b"Copy output path", prefilled_page.data)
             self.assertIn(b"Copy prompt", prefilled_page.data)
 
             export_response = client.post("/phase5-readiness/export-creative-handoff")

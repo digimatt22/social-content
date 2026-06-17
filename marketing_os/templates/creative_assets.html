@@ -67,8 +67,20 @@
           <p class="subtle">Source asset #{{ handoff_asset.id }} · {{ handoff_asset.name }}</p>
           <div class="copybox" id="handoff-source-path">{{ handoff_asset.source_path }}</div>
           <button class="secondary" type="button" data-copy-target="#handoff-source-path">Copy source path</button>
+          {% if handoff_asset.absolute_source_path %}
+            <div class="copybox" id="handoff-absolute-source-path">{{ handoff_asset.absolute_source_path }}</div>
+            <button class="secondary" type="button" data-copy-target="#handoff-absolute-source-path">Copy absolute source path</button>
+          {% endif %}
         </div>
       </div>
+    {% endif %}
+    {% if manual_import_defaults.absolute_output_path %}
+      <p class="subtle">Suggested output file</p>
+      <div class="copybox" id="handoff-output-path">{{ manual_import_defaults.absolute_output_path }}</div>
+      <button class="secondary" type="button" data-copy-target="#handoff-output-path">Copy output path</button>
+    {% endif %}
+    {% if manual_import_defaults.output_path %}
+      <p class="subtle">Marketing OS will also accept: {{ manual_import_defaults.output_path }}</p>
     {% endif %}
   {% endif %}
   <form method="post" action="{{ url_for('creative_assets_manual_import') }}" enctype="multipart/form-data">
@@ -82,7 +94,7 @@
         </select>
       </label>
       <label>Output file path
-        <input name="output_path" value="{{ manual_import_defaults.output_path or '' }}" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg">
+        <input name="output_path" value="{{ manual_import_defaults.absolute_output_path or manual_import_defaults.output_path or '' }}" placeholder="/Volumes/MarketingAssets/products/.../generated/output.jpg">
       </label>
       <label>Upload generated file
         <input type="file" name="output_file" accept="image/*">
