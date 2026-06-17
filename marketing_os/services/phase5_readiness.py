@@ -119,6 +119,10 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
             ]
         )
 
+    lines.extend(["## Final Proof Runbook", ""])
+    lines.extend(_final_proof_runbook_lines(payload))
+    lines.append("")
+
     lines.extend(["## Facebook Copy Review", ""])
     if copy_review:
         lines.extend(
@@ -209,6 +213,50 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
         lines.append(f"- {action}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _final_proof_runbook_lines(payload: dict[str, object]) -> list[str]:
+    creative_review = payload.get("creative_review")
+    creative_handoff = payload.get("creative_handoff")
+    readiness = payload.get("readiness")
+    lines = [
+        "1. Open `/phase5-readiness#facebook-copy-review`, review the copyable Facebook post, "
+        "and save the review with `Reviewed by` set to Matt.",
+    ]
+    if isinstance(creative_review, dict):
+        review_path = creative_review.get("review_path") or "/creative-assets"
+        lines.append(
+            f"2. Open `{review_path}`, compare source and generated candidate previews, "
+            "then approve or reject the generated creative with `Reviewed by` set to Matt."
+        )
+    elif isinstance(creative_handoff, dict):
+        import_query = creative_handoff.get("manual_import_query") or "/creative-assets"
+        lines.extend(
+            [
+                "2. Run `python -m marketing_os.jobs.phase5_readiness --export-creative-handoff` "
+                "to export the Magnific/MCP prompt handoff.",
+                f"3. Generate the image externally, then open `{import_query}` "
+                "to import the generated output for review.",
+            ]
+        )
+    else:
+        lines.append(
+            "2. Open `/creative-assets` and import one real Magnific/MCP generated output "
+            "from an approved source asset."
+        )
+
+    final_step_number = 4 if isinstance(creative_handoff, dict) and not isinstance(creative_review, dict) else 3
+    if isinstance(readiness, dict) and readiness.get("complete"):
+        lines.append(
+            f"{final_step_number}. Re-run `python -m marketing_os.jobs.phase5_readiness --fail-on-incomplete`; "
+            "it should exit 0 before Phase 5 is marked complete."
+        )
+    else:
+        lines.append(
+            f"{final_step_number}. Re-run `python -m marketing_os.jobs.phase5_readiness --fail-on-incomplete`; "
+            "exit 2 means final human proof is still incomplete."
+        )
+    return lines
 
 
 def write_phase5_approval_packet(session: Session, export_dir: str | Path) -> Path:
