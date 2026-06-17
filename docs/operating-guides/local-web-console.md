@@ -154,12 +154,13 @@ Use Phase 5 Readiness to check the two final human-proof items before calling Ph
 - Matt-approved Facebook copy with reviewer evidence
 - Matt-approved generated creative with reviewer evidence and a file-backed candidate asset
 
-The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset and Magnific/MCP prompt handoff for the next generation pass. It can also export a Markdown approval packet that gathers the latest Facebook copy candidate, latest creative generation job, readiness status, and remaining review actions.
+The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset and Magnific/MCP prompt handoff for the next generation pass. It can export either a full Markdown approval packet or a focused creative handoff file.
 
 The same check can run from the command line:
 
 ```bash
 python -m marketing_os.jobs.phase5_readiness --export-markdown
+python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
 ```
 
 Add `--fail-on-incomplete` only when using the command as a strict final gate.

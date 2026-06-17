@@ -120,6 +120,7 @@ To check Phase 5 final proof readiness or export a review packet:
 ```bash
 python -m marketing_os.jobs.phase5_readiness
 python -m marketing_os.jobs.phase5_readiness --export-markdown
+python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
 ```
 
 For strict completion gates, add `--fail-on-incomplete` so the command exits with code 2 while human proof is still missing.

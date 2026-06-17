@@ -205,6 +205,89 @@ def write_phase5_approval_packet(session: Session, export_dir: str | Path) -> Pa
     return target
 
 
+def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str:
+    payload = serialize_phase5_approval_packet(packet)
+    handoff = payload["creative_handoff"]
+    creative_review = payload["creative_review"]
+    if not handoff:
+        return "\n".join(
+            [
+                "# Phase 5 Creative Handoff",
+                "",
+                f"Generated at: {payload['generated_at']}",
+                "",
+                "No creative handoff is available yet. Create a planned content item and run content production, or approve a source asset first.",
+                "",
+            ]
+        )
+
+    source_asset = handoff["source_asset"]
+    lines = [
+        "# Phase 5 Creative Handoff",
+        "",
+        f"Generated at: {payload['generated_at']}",
+        "",
+        "## Purpose",
+        "",
+        "Use this handoff to generate one real Magnific/MCP creative candidate, save the output locally, and import it back into Marketing OS for review.",
+        "",
+        "## Source Asset",
+        "",
+    ]
+    if source_asset:
+        lines.extend(
+            [
+                f"- Asset ID: {source_asset['id']}",
+                f"- Name: {source_asset['name']}",
+                f"- Type: {source_asset['asset_type']}",
+                f"- Local path: {source_asset['source_path']}",
+                f"- File exists: {source_asset['file_exists']}",
+                f"- External source: {source_asset['external_source'] or 'local'}",
+                f"- Canonical URL: {source_asset['canonical_url'] or 'not recorded'}",
+                "",
+            ]
+        )
+    else:
+        lines.extend(["No approved file-backed source asset was found.", ""])
+
+    lines.extend(
+        [
+            "## Generation Prompt",
+            "",
+            str(handoff["prompt"] or "").strip() or "No generation prompt recorded.",
+            "",
+            "## Import Back Into Marketing OS",
+            "",
+            f"- Open: {handoff['manual_import_path']}",
+            "- Use the source asset ID above.",
+            "- Set provider to `magnific_mcp` or the actual provider/tool used.",
+            "- Paste the prompt above into the Prompt field.",
+            "- Save the generated output to a local path that Marketing OS can read.",
+            "- Import the output as `Facebook post image` and leave it in `needs_review` until Matt approves it.",
+            "",
+        ]
+    )
+    if creative_review:
+        lines.extend(
+            [
+                "## Existing Creative Job",
+                "",
+                f"Creative job #{creative_review['id']} already exists with state `{creative_review['review_state']}`.",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def write_phase5_creative_handoff(session: Session, export_dir: str | Path) -> Path:
+    target_dir = Path(export_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    target = target_dir / f"phase5-creative-handoff-{stamp}.md"
+    target.write_text(render_phase5_creative_handoff_markdown(build_phase5_approval_packet(session)), encoding="utf-8")
+    return target
+
+
 def _copy_review_item(session: Session) -> ReadinessItem:
     candidate = session.scalar(
         select(GeneratedContentCandidateRecord)

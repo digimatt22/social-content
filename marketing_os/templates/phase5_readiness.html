@@ -106,6 +106,9 @@
           </details>
         {% endif %}
         <p class="subtle">{{ packet.creative_handoff.next_step }}</p>
+        <form method="post" action="{{ url_for('export_phase5_creative_handoff') }}">
+          <button class="secondary" type="submit">Export creative handoff</button>
+        </form>
       {% endif %}
       <a class="button secondary" href="{{ url_for('creative_assets') }}">Import in Creative Assets</a>
     {% endif %}

@@ -10,6 +10,7 @@ from ..services.phase5_readiness import (
     serialize_phase5_approval_packet,
     serialize_phase5_readiness,
     write_phase5_approval_packet,
+    write_phase5_creative_handoff,
 )
 
 
@@ -17,6 +18,7 @@ def run(
     db_path: str | Path | None = None,
     export_dir: str | Path = "data/exports",
     export_markdown: bool = False,
+    export_creative_handoff: bool = False,
 ) -> dict[str, object]:
     engine = create_db_engine(db_path)
     init_db(engine)
@@ -29,9 +31,12 @@ def run(
                 "readiness": serialize_phase5_readiness(packet.readiness),
                 "packet": payload,
                 "export_path": None,
+                "creative_handoff_export_path": None,
             }
             if export_markdown:
                 summary["export_path"] = str(write_phase5_approval_packet(session, export_dir))
+            if export_creative_handoff:
+                summary["creative_handoff_export_path"] = str(write_phase5_creative_handoff(session, export_dir))
             return summary
     finally:
         engine.dispose()
@@ -42,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db-path", default=None)
     parser.add_argument("--export-dir", default="data/exports")
     parser.add_argument("--export-markdown", action="store_true")
+    parser.add_argument("--export-creative-handoff", action="store_true")
     parser.add_argument(
         "--fail-on-incomplete",
         action="store_true",
@@ -49,7 +55,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    summary = run(db_path=args.db_path, export_dir=args.export_dir, export_markdown=args.export_markdown)
+    summary = run(
+        db_path=args.db_path,
+        export_dir=args.export_dir,
+        export_markdown=args.export_markdown,
+        export_creative_handoff=args.export_creative_handoff,
+    )
     print(json.dumps(summary, indent=2))
     if args.fail_on_incomplete and not summary["readiness"]["complete"]:
         return 2

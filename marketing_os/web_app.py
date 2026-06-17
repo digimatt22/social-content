@@ -33,6 +33,7 @@ from .services.phase5_readiness import (
     serialize_phase5_approval_packet,
     serialize_phase5_readiness,
     write_phase5_approval_packet,
+    write_phase5_creative_handoff,
 )
 from .phase4 import (
     OPERATOR_DEFAULT_ROLE,
@@ -854,6 +855,12 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def export_phase5_approval_packet():
         with session_scope(factory) as session:
             path = write_phase5_approval_packet(session, app.config["EXPORT_DIR"])
+        return send_file(path.resolve(), as_attachment=True, download_name=path.name, mimetype="text/markdown")
+
+    @app.post("/phase5-readiness/export-creative-handoff")
+    def export_phase5_creative_handoff():
+        with session_scope(factory) as session:
+            path = write_phase5_creative_handoff(session, app.config["EXPORT_DIR"])
         return send_file(path.resolve(), as_attachment=True, download_name=path.name, mimetype="text/markdown")
 
     @app.post("/phase5-readiness/copy-review")

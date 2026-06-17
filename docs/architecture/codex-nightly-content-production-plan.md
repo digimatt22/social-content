@@ -130,9 +130,10 @@ Final readiness/proof command:
 
 ```bash
 python -m marketing_os.jobs.phase5_readiness --export-markdown
+python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
 ```
 
-This reports the current Phase 5 human-proof gate as JSON and can export a Markdown approval packet. Use `--fail-on-incomplete` only for a strict final completion gate; normal nightly content production should not fail just because Matt still needs to review copy or generated creative.
+This reports the current Phase 5 human-proof gate as JSON and can export a Markdown approval packet or focused creative handoff. Use `--fail-on-incomplete` only for a strict final completion gate; normal nightly content production should not fail just because Matt still needs to review copy or generated creative.
 
 ## Automation Schedule
 

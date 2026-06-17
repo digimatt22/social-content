@@ -75,10 +75,12 @@ from marketing_os.services.mattmademe_website_import import sync_mattmademe_webs
 from marketing_os.services.phase5_readiness import (
     build_phase5_approval_packet,
     build_phase5_readiness,
+    render_phase5_creative_handoff_markdown,
     render_phase5_approval_packet_markdown,
     serialize_phase5_approval_packet,
     serialize_phase5_readiness,
     write_phase5_approval_packet,
+    write_phase5_creative_handoff,
 )
 from marketing_os.web_app import create_app
 
@@ -1465,6 +1467,14 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 )
                 produce_content_for_item(session, item)
                 source_id = source.id
+                packet = build_phase5_approval_packet(session)
+                markdown = render_phase5_creative_handoff_markdown(packet)
+                export_path = write_phase5_creative_handoff(session, Path(tmp) / "exports")
+                self.assertIn("Phase 5 Creative Handoff", markdown)
+                self.assertIn("Mailman source", markdown)
+                self.assertIn("Preserve the duck's shape", markdown)
+                self.assertTrue(export_path.is_file())
+                self.assertIn("Import Back Into Marketing OS", export_path.read_text(encoding="utf-8"))
 
             api_response = client.get("/api/phase5-approval-packet")
             self.assertEqual(api_response.status_code, 200)
@@ -1482,6 +1492,14 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Magnific/MCP prompt handoff", page.data)
             self.assertIn(b"Mailman Duck", page.data)
             self.assertIn(b"Import in Creative Assets", page.data)
+            self.assertIn(b'action="/phase5-readiness/export-creative-handoff"', page.data)
+
+            export_response = client.post("/phase5-readiness/export-creative-handoff")
+            self.assertEqual(export_response.status_code, 200)
+            self.assertIn("text/markdown", export_response.content_type)
+            self.assertIn(b"Phase 5 Creative Handoff", export_response.data)
+            self.assertIn(b"Mailman source", export_response.data)
+            export_response.close()
 
     def test_phase5_readiness_job_reports_and_exports_packet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
