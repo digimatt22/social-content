@@ -346,6 +346,8 @@ def record_candidate_review(
 ) -> GeneratedContentCandidateRecord:
     if review_state not in CANDIDATE_REVIEW_STATES:
         raise ValueError(f"Unsupported review state: {review_state}")
+    if review_state == "approved" and not reviewed_by.strip():
+        raise ValueError("Approved generated copy must include a reviewer.")
     candidate = session.get(GeneratedContentCandidateRecord, candidate_id)
     if candidate is None:
         raise ValueError(f"Generated content candidate not found: {candidate_id}")

@@ -104,6 +104,8 @@ def review_creative_generation_job(
 ) -> CreativeGenerationJobRecord:
     if review_state not in CREATIVE_REVIEW_STATES:
         raise ValueError(f"Unsupported creative review state: {review_state}")
+    if review_state == "approved" and not reviewed_by.strip():
+        raise ValueError("Approved generated creative must include a reviewer.")
     refresh_asset_file_state(session)
     job = session.get(CreativeGenerationJobRecord, job_id)
     if job is None:

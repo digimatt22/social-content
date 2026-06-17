@@ -812,6 +812,16 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertEqual(jobs[0].provider_job_id, "api-job-1")
                 job_id = jobs[0].id
 
+            missing_reviewer_response = client.post(
+                f"/api/creative-assets/jobs/{job_id}/review",
+                json={
+                    "review_state": "approved",
+                    "review_notes": "Approval without proof.",
+                },
+            )
+            self.assertEqual(missing_reviewer_response.status_code, 400)
+            self.assertIn("reviewer", missing_reviewer_response.get_json()["error"])
+
             review_response = client.post(
                 f"/api/creative-assets/jobs/{job_id}/review",
                 json={
@@ -1325,7 +1335,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 )
                 result = produce_content_for_item(session, item)
                 facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
-                record_candidate_review(session, facebook.id, "approved", "Approved for learning-loop test.")
+                record_candidate_review(session, facebook.id, "approved", "Approved for learning-loop test.", reviewed_by="Matt")
                 link_generated_content_to_task(session, task.id, facebook.id)
                 update_task_status(session, task.id, "posted", "Posted generated Facebook draft.")
                 add_metric(
@@ -1408,6 +1418,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(production_response.status_code, 200)
             candidates = production_response.get_json()["planned_item"]["candidates"]
             candidate_id = next(candidate["id"] for candidate in candidates if candidate["candidate_type"] == "facebook_post")
+
+            missing_reviewer_response = client.post(
+                f"/api/generated-content/{candidate_id}/review",
+                json={"review_state": "approved", "revision_notes": "Approval without proof."},
+            )
+            self.assertEqual(missing_reviewer_response.status_code, 400)
+            self.assertIn("reviewer", missing_reviewer_response.get_json()["error"])
 
             review_response = client.post(
                 f"/api/generated-content/{candidate_id}/review",
