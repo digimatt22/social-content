@@ -24,6 +24,7 @@ from marketing_os.db_models import (
     TemplateRecord,
 )
 from marketing_os.jobs.content_production import run as run_content_production_job
+from marketing_os.jobs.phase5_readiness import run as run_phase5_readiness_job
 from marketing_os.phase3 import (
     TASK_STATUSES,
     add_metric,
@@ -1371,6 +1372,60 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Phase 5 Approval Packet", export_response.data)
             self.assertIn(b"Final Actions", export_response.data)
             export_response.close()
+
+    def test_phase5_readiness_job_reports_and_exports_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-readiness-job.sqlite"
+            source_path = Path(tmp) / "source.jpg"
+            output_path = Path(tmp) / "generated.jpg"
+            export_dir = Path(tmp) / "exports"
+            source_path.write_bytes(b"source image bytes")
+            output_path.write_bytes(b"generated image bytes")
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Job source")
+                review_asset(session, source.id, "approved", "Source approved.")
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 29),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    audience="gift buyers",
+                )
+                result = produce_content_for_item(session, item)
+                facebook = next(candidate for candidate in result.candidates if candidate.candidate_type == "facebook_post")
+                record_candidate_review(session, facebook.id, "approved", "Matt approved copy.", reviewed_by="Matt")
+                creative = import_manual_generated_output(
+                    session,
+                    source.id,
+                    output_path,
+                    target_format="Facebook post image",
+                    prompt="Preserve product accuracy.",
+                    provider="magnific_manual",
+                    provider_job_id="readiness-job-command",
+                )
+                review_creative_generation_job(
+                    session,
+                    creative.job.id,
+                    "approved",
+                    review_notes="Matt approved generated output.",
+                    reviewed_by="Matt",
+                )
+
+            summary = run_phase5_readiness_job(db_path=db_path, export_dir=export_dir, export_markdown=True)
+            self.assertTrue(summary["readiness"]["complete"])
+            self.assertEqual(summary["readiness"]["remaining_count"], 0)
+            self.assertEqual(summary["packet"]["copy_review"]["reviewed_by"], "Matt")
+            self.assertEqual(summary["packet"]["creative_review"]["provider_job_id"], "readiness-job-command")
+            export_path = Path(str(summary["export_path"]))
+            self.assertTrue(export_path.is_file())
+            self.assertEqual(export_path.parent, export_dir)
+            self.assertIn("Phase 5 Approval Packet", export_path.read_text(encoding="utf-8"))
 
     def test_phase5_etsy_read_only_sync_imports_products_and_images(self) -> None:
         class FakeEtsyAdapter:

@@ -115,6 +115,15 @@ To prepare review candidates for planned marketing items:
 python -m marketing_os.jobs.content_production --limit 10
 ```
 
+To check Phase 5 final proof readiness or export a review packet:
+
+```bash
+python -m marketing_os.jobs.phase5_readiness
+python -m marketing_os.jobs.phase5_readiness --export-markdown
+```
+
+For strict completion gates, add `--fail-on-incomplete` so the command exits with code 2 while human proof is still missing.
+
 Do not expose this local app to the public internet.
 
 Archived Phase 1/2 executable references live in `archive/phase1-phase2-executables`.

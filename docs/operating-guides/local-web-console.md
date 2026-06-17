@@ -156,6 +156,14 @@ Use Phase 5 Readiness to check the two final human-proof items before calling Ph
 
 The page can export a Markdown approval packet that gathers the latest Facebook copy candidate, latest creative generation job, readiness status, and remaining review actions.
 
+The same check can run from the command line:
+
+```bash
+python -m marketing_os.jobs.phase5_readiness --export-markdown
+```
+
+Add `--fail-on-incomplete` only when using the command as a strict final gate.
+
 ## API Boundary
 
 Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose JSON endpoints so a future frontend can reuse the same service logic:

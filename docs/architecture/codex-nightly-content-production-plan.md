@@ -126,6 +126,14 @@ Useful options:
 
 The job should be idempotent. If a planned item already has current candidates, rerunning should update run metadata or create a new revision intentionally, not silently duplicate drafts.
 
+Final readiness/proof command:
+
+```bash
+python -m marketing_os.jobs.phase5_readiness --export-markdown
+```
+
+This reports the current Phase 5 human-proof gate as JSON and can export a Markdown approval packet. Use `--fail-on-incomplete` only for a strict final completion gate; normal nightly content production should not fail just because Matt still needs to review copy or generated creative.
+
 ## Automation Schedule
 
 Start with one nightly run.
@@ -165,4 +173,3 @@ The web app should make it easy to:
 - The user can review generated content from the web app before posting.
 - The job can be run manually and later by Codex automation.
 - Rerunning the job does not duplicate existing candidates accidentally.
-
