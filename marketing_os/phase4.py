@@ -31,7 +31,6 @@ from .db_models import (
 )
 from .phase3 import ROLE_OPTIONS, TASK_STATUSES, json_list, slugify, update_task_status
 from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
-from .services.phase5_readiness import build_phase5_readiness
 
 
 OPERATOR_DEFAULT_ROLE = "social operator"
@@ -939,7 +938,6 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     creative_jobs = list(session.scalars(select(CreativeGenerationJobRecord)))
     sync_metadata = list(session.scalars(select(SyncMetadata)))
     learning_summary = build_learning_summary(session)
-    phase5_readiness = build_phase5_readiness(session)
     stale_products = [product for product in products if product.staleness_state in {"stale", "unknown"} and product.external_source]
     imported_products = [product for product in products if product.external_source]
     sync_errors = [product for product in products if product.sync_error or product.sync_status == "error"]
@@ -983,7 +981,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             "Errors" if sync_errors else "OK",
             len(sync_errors) if sync_errors else len(imported_products),
             "Some imported records have sync errors." if sync_errors else f"{len(imported_products)} imported record(s) are tracked with source metadata.",
-            "Use Settings to import Etsy CSV records or review sync errors.",
+            "Open Products to review imported records or sync errors.",
         ),
         DataHealthItem(
             "Templates",
@@ -1043,14 +1041,14 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             _sync_status_label(etsy_sync),
             0 if etsy_sync and "error:" not in etsy_sync.notes and "missing_credentials" not in etsy_sync.notes else 1,
             _sync_message(etsy_sync, "Etsy API has not been synced yet."),
-            "Configure Etsy credentials in .env or run sync from Settings.",
+            "Configure Etsy credentials in .env or run sync from Products.",
         ),
         DataHealthItem(
             "Website Sync",
             _sync_status_label(website_sync),
             0 if website_sync and "error:" not in website_sync.notes and "missing_credentials" not in website_sync.notes else 1,
             _sync_message(website_sync, "MattMadeMe website API has not been synced yet."),
-            "Configure website API credentials in .env or run sync from Settings.",
+            "Configure website API credentials in .env or run sync from Products.",
         ),
         DataHealthItem(
             "Local Asset Library",
@@ -1069,15 +1067,6 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             if creative_jobs_attention
             else "No imported creative generation jobs are waiting for review.",
             "Open Creative Assets.",
-        ),
-        DataHealthItem(
-            "Phase 5 Readiness",
-            "OK" if phase5_readiness.complete else "Needs proof",
-            phase5_readiness.remaining_count,
-            "Phase 5 final approval evidence is complete."
-            if phase5_readiness.complete
-            else "Phase 5 still needs final copy or creative approval evidence.",
-            "Open Phase 5 Readiness.",
         ),
     ]
 

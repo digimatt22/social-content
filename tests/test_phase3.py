@@ -430,6 +430,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(health_response.status_code, 200)
             health_payload = health_response.get_json()
             self.assertTrue(any(item["area"] == "Assets" for item in health_payload["items"]))
+            self.assertFalse(any(item["area"] == "Phase 5 Readiness" for item in health_payload["items"]))
 
             creative_response = client.get("/api/creative-assets")
             self.assertEqual(creative_response.status_code, 200)
@@ -1911,7 +1912,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 health = data_health(session)
-                self.assertTrue(any(item.area == "Phase 5 Readiness" and item.status == "OK" for item in health))
+                self.assertFalse(any(item.area == "Phase 5 Readiness" for item in health))
 
     def test_phase5_approval_packet_exports_copy_and_creative_review_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
