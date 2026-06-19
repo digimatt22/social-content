@@ -59,9 +59,8 @@
           </div>
         </div>
         <div class="button-group">
-          <a class="button secondary" href="{{ etsy_shop_url }}" target="_blank" rel="noreferrer">Share Etsy shop</a>
           {% if product.canonical_url %}
-            <a class="button secondary" href="{{ product.canonical_url }}" target="_blank" rel="noreferrer">Open source</a>
+            <a class="button secondary" href="{{ product.canonical_url }}" target="_blank" rel="noreferrer">{{ 'View on Etsy' if product.external_source == 'etsy' else 'View source' }}</a>
           {% endif %}
         </div>
       </div>

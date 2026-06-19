@@ -104,7 +104,6 @@ from .services.creative_generation import (
 from .services.etsy_import import sync_etsy_read_only
 from .services.local_assets import scan_asset_root
 from .services.mattmademe_website_import import sync_mattmademe_website
-from .services.product_admin import ETSY_SHOP_URL
 from .services.product_matching import match_product_records
 
 
@@ -880,7 +879,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 products=products,
                 assets_by_product=assets_by_product,
                 references_by_product=references_by_product,
-                etsy_shop_url=ETSY_SHOP_URL,
             )
 
     @app.post("/assets/scan")
