@@ -1134,12 +1134,17 @@ def backup_sqlite_database(db_path: str | Path, backup_dir: str | Path = "data/b
     return target
 
 
-def export_operating_data(session: Session, export_dir: str | Path = "data/exports") -> Path:
+EXPORT_SCOPES = {"all", "products", "work", "metrics", "templates"}
+
+
+def export_operating_data(session: Session, export_dir: str | Path = "data/exports", scope: str = "all") -> Path:
+    if scope not in EXPORT_SCOPES:
+        raise ValueError(f"Unsupported export scope: {scope}")
     target_dir = Path(export_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    target = target_dir / f"marketing-os-export-{stamp}.json"
-    payload = {
+    target = target_dir / f"marketing-os-{scope}-export-{stamp}.json"
+    sections = {
         "exported_at": utc_now().isoformat(),
         "format": "marketing_os_phase4_export",
         "version": 1,
@@ -1165,6 +1170,25 @@ def export_operating_data(session: Session, export_dir: str | Path = "data/expor
         "blog_posts": [_export_blog_post(record) for record in session.scalars(select(BlogPostRecord).order_by(BlogPostRecord.title, BlogPostRecord.id))],
         "sync_metadata": [_export_sync(record) for record in session.scalars(select(SyncMetadata).order_by(SyncMetadata.source_name))],
     }
+    keys_by_scope = {
+        "all": list(sections.keys()),
+        "products": ["exported_at", "format", "version", "products", "assets", "blog_posts", "sync_metadata"],
+        "work": [
+            "exported_at",
+            "format",
+            "version",
+            "plans",
+            "calendar_items",
+            "planned_content_items",
+            "generated_content_candidates",
+            "creative_generation_jobs",
+            "tasks",
+        ],
+        "metrics": ["exported_at", "format", "version", "metrics", "learning_summary", "tasks"],
+        "templates": ["exported_at", "format", "version", "templates"],
+    }
+    payload = {key: sections[key] for key in keys_by_scope[scope]}
+    payload["scope"] = scope
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return target
 

@@ -279,8 +279,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             settings = client.get("/settings")
             self.assertEqual(settings.status_code, 200)
-            self.assertIn(b"Export JSON", settings.data)
+            self.assertIn(b"Export scope", settings.data)
+            self.assertIn(b"Products and images", settings.data)
             self.assertIn(b"JSON exports", settings.data)
+            self.assertNotIn(b"Create backup", settings.data)
+            self.assertNotIn(b"Sync Etsy", settings.data)
+            self.assertNotIn(b"Sync website", settings.data)
             self.assertNotIn(b"Etsy CSV Import", settings.data)
             self.assertNotIn(b"Network Use", settings.data)
             self.assertNotIn(b"Product Matching", settings.data)
@@ -301,14 +305,15 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertIsNotNone(product)
                 product_id = product.id
 
-            export_response = client.post("/settings/export")
+            export_response = client.post("/settings/export", data={"scope": "products", "format": "json"})
             self.assertEqual(export_response.status_code, 200)
             self.assertEqual(export_response.mimetype, "application/json")
             export_payload = json.loads(export_response.data.decode("utf-8"))
             self.assertEqual(export_payload["format"], "marketing_os_phase4_export")
+            self.assertEqual(export_payload["scope"], "products")
             self.assertIn("products", export_payload)
-            self.assertIn("tasks", export_payload)
             self.assertIn("assets", export_payload)
+            self.assertNotIn("tasks", export_payload)
             export_response.close()
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
@@ -1018,6 +1023,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertTrue(target.exists())
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual(payload["format"], "marketing_os_phase4_export")
+            self.assertEqual(payload["scope"], "all")
             self.assertEqual(payload["version"], 1)
             self.assertTrue(payload["products"])
             self.assertTrue(payload["templates"])
@@ -1032,6 +1038,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn("metric_status", payload["tasks"][0])
             self.assertIn("manual_override_state", payload["tasks"][0])
             self.assertIn("file_checksum", payload["assets"][0])
+
+            scoped = export_operating_data(session, Path(tmp.name) / "exports", scope="templates")
+            scoped_payload = json.loads(scoped.read_text(encoding="utf-8"))
+            self.assertEqual(scoped_payload["scope"], "templates")
+            self.assertIn("templates", scoped_payload)
+            self.assertNotIn("products", scoped_payload)
+            self.assertNotIn("tasks", scoped_payload)
 
     def test_phase4_posting_guides_completed_tasks_and_etsy_csv_import(self) -> None:
         tmp, factory = self.build_session()
@@ -2616,8 +2629,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
                 settings = client.get("/settings")
                 self.assertEqual(settings.status_code, 200)
-                self.assertIn(b"Sync Etsy", settings.data)
-                self.assertIn(b"Sync website", settings.data)
+                self.assertNotIn(b"Sync Etsy", settings.data)
+                self.assertNotIn(b"Sync website", settings.data)
 
                 etsy_response = client.post("/api/integrations/etsy/sync")
                 self.assertEqual(etsy_response.status_code, 400)

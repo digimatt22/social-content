@@ -52,7 +52,6 @@ from .phase4 import (
     asset_inventory,
     asset_path,
     complete_task_status,
-    backup_sqlite_database,
     completed_tasks,
     creative_asset_plans,
     data_health as build_data_health,
@@ -1130,19 +1129,14 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(str(exc))
         return redirect(url_for("products_admin"))
 
-    @app.post("/settings/backup")
-    def backup_database() -> str:
-        try:
-            path = backup_sqlite_database(app.config["DB_PATH"])
-            flash(f"Database backup created at {path}.")
-        except FileNotFoundError as exc:
-            flash(str(exc))
-        return redirect(url_for("settings"))
-
     @app.post("/settings/export")
     def export_data():
+        if request.form.get("format", "json") != "json":
+            flash("Only JSON export is supported right now.")
+            return redirect(url_for("settings"))
+        scope = request.form.get("scope", "all")
         with session_scope(factory) as session:
-            path = export_operating_data(session, app.config["EXPORT_DIR"])
+            path = export_operating_data(session, app.config["EXPORT_DIR"], scope=scope)
         return send_file(path.resolve(), as_attachment=True, download_name=path.name)
 
     return app

@@ -159,25 +159,9 @@ Use Data Health to see upkeep work that can make the planner less trustworthy:
 - manual overrides that protect local edits from imports
 - posted tasks waiting for metrics
 
-## Phase 5 Readiness
+## Phase 5 Status
 
-Use Phase 5 Readiness to check the two final human-proof items before calling Phase 5 complete:
-
-- Matt-approved Facebook copy with reviewer evidence
-- Matt-approved generated creative with reviewer evidence and a file-backed candidate asset
-
-The page can record the final copy and creative review directly, and it links to the underlying Planning and Creative Assets records for deeper inspection. When no generated creative job exists yet, it shows a recommended approved source asset preview and Magnific/MCP prompt handoff with copy controls, and it can open Creative Assets with the import form prefilled for either file upload or path-based import. It can export either a full Markdown approval packet or a focused creative handoff file.
-
-The approval packet includes a final proof runbook. Use it as the last-mile checklist: review the copyable Facebook post, set `Reviewed by` to Matt when approving, generate/import the real Magnific/MCP output if needed, review the source and generated creative previews, and then rerun the strict readiness command. If copy is marked `rewrite_requested`, the readiness action points back to the content-production job so the next draft can address the review notes.
-
-The same check can run from the command line:
-
-```bash
-python -m marketing_os.jobs.phase5_readiness --export-markdown
-python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
-```
-
-Add `--fail-on-incomplete` only when using the command as a strict final gate.
+Phase 5 is closed as historical implementation work. Use Planning and Products as the current starting points for the next operating goal and plan.
 
 ## API Boundary
 
@@ -189,8 +173,6 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/metrics-due`
 - `GET /api/assets`
 - `GET /api/data-health`
-- `GET /api/phase5-readiness`
-- `GET /api/phase5-approval-packet`
 - `GET /api/creative-assets`
 - `GET /api/planned-content`
 - `POST /api/creative-assets/manual-import`
@@ -231,14 +213,8 @@ Both syncs are safe to run without credentials. Missing credentials are recorded
 
 Planning queues image generation until real files exist. See `docs/operating-guides/codex-image-generation.md` for the adapter contract, and `docs/operating-guides/codex-content-automation.md` for the scheduled Codex automation setup.
 
-## Backup And Export
+## Export
 
-Use Settings to create a timestamped SQLite backup under:
-
-```text
-data/backups
-```
-
-Use `Export JSON` to download a readable snapshot of products, plans, tasks, assets, metrics, templates, and sync metadata. Use the SQLite backup for full local recovery; use JSON export for review, portability, and future integration work.
+Use Settings to download a readable JSON export. Choose a scope such as full snapshot, products and images, plans and tasks, metrics and insights, or templates.
 
 The app remains local-first. Do not expose it to the public internet.

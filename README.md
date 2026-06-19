@@ -30,7 +30,6 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - MattMadeMe website sync boundary for products, product images, and published blog metadata
 - manual override fields that protect local edits from future imports
 - data health view for stale, missing, or unreviewed records
-- local SQLite backup from Settings
 - local JSON read/write endpoints for future frontend/API reuse
 - editable platform, copy, and graphic templates under `docs/templates`
 - manual metric entry after posting
@@ -132,18 +131,6 @@ python -m marketing_os.jobs.content_production --limit 10
 
 The wrapper defaults to planned items due within the next 14 days and is intended for manual or Codex-managed runs.
 
-To check Phase 5 final proof readiness or export a review packet:
-
-```bash
-python -m marketing_os.jobs.phase5_readiness
-python -m marketing_os.jobs.phase5_readiness --export-markdown
-python -m marketing_os.jobs.phase5_readiness --export-creative-handoff
-```
-
-The Markdown approval packet includes a final proof runbook, the latest copyable Facebook post, creative review or handoff details, and the strict final-gate command. Approved generated copy and approved generated creative must include `Reviewed by` evidence.
-
-For strict completion gates, add `--fail-on-incomplete` so the command exits with code 2 while human proof is still missing.
-
 Do not expose this local app to the public internet.
 
 Archived Phase 1/2 executable references live in `archive/phase1-phase2-executables`.
@@ -164,13 +151,12 @@ Current implementation keeps the Python/Flask/SQLAlchemy/SQLite stack while addi
 
 Current active planning docs:
 
-- [Phase 5 current state](docs/reviews/phase5-current-state-2026-06-17.md)
 - [Local web console operating guide](docs/operating-guides/local-web-console.md)
 - [Magnific MCP creative asset guide](docs/operating-guides/magnific-mcp-creative-assets.md)
 
 Superseded Phase 5 implementation plans and proof artifacts are archived under `docs/archive/2026-06-17-phase5-implementation/`.
 
-Phase 5 final proof readiness is visible in the local app at `/phase5-readiness` and as JSON at `/api/phase5-readiness`. The readiness page can export a Markdown approval packet, and the same packet is available as JSON at `/api/phase5-approval-packet`.
+Phase 5 is closed as historical implementation work. The next active goal and plan should start from the current Planning and Products workflows.
 
 Out of scope:
 

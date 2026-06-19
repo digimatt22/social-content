@@ -155,16 +155,15 @@
         {% endfor %}
         <div class="nav-section">Admin</div>
         {% for key, label, endpoint in [
-          ("calendar", "Calendar", "calendar"),
           ("planning", "Planning", "planning"),
-          ("plans", "Plans", "plans"),
           ("products", "Products", "products_admin"),
+          ("calendar", "Calendar", "calendar"),
+          ("plans", "Plans", "plans"),
           ("assets", "Assets", "assets"),
           ("creative_assets", "Creative Assets", "creative_assets"),
           ("templates", "Templates", "templates"),
           ("metrics", "Metric History", "metrics"),
           ("insights", "Insights", "insights"),
-          ("phase5_readiness", "Phase 5 Readiness", "phase5_readiness"),
           ("data_health", "Data Health", "data_health"),
           ("settings", "Settings", "settings")
         ] %}
