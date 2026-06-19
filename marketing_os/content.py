@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import cycle, islice
 
 from .models import BusinessContext, ContentIdea
+from .services.product_admin import ETSY_SHOP_URL
 
 
 class ContentGenerator:
@@ -103,8 +104,7 @@ class ContentGenerator:
 
     def _cta(self, fallback: str, platform: str) -> str:
         if platform == "Etsy":
-            return f"{fallback}: {self.context.etsy_url or 'mattmademe.etsy.com'}"
+            return f"{fallback}: {self.context.etsy_url or ETSY_SHOP_URL}"
         if platform == "Website":
             return f"{fallback}: {self.context.website_url or 'mattmademe.com'}"
         return fallback
-

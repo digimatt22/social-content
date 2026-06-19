@@ -119,6 +119,7 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "occasion": "VARCHAR(200) NOT NULL DEFAULT ''",
             "promotion": "VARCHAR(200) NOT NULL DEFAULT ''",
             "notes": "TEXT NOT NULL DEFAULT ''",
+            "selected_source_asset_ids_json": "TEXT NOT NULL DEFAULT '[]'",
             "status": "VARCHAR(80) NOT NULL DEFAULT 'planned'",
             "brief_status": "VARCHAR(80) NOT NULL DEFAULT 'pending'",
             "last_production_run_at": "DATETIME",

@@ -6,12 +6,15 @@ Last updated: 2026-06-17
 
 MattMadeMe is a maker-led business creating original, high-quality 3D printed ducks and whimsical collectibles. The brand sells primarily through Etsy and uses MattMadeMe.com as the owned home for the product showroom, maker story, blog, giveaway, upcoming designs, and community touchpoints.
 
+MattMadeMe sells online only. Do not imply in-person selling, craft fairs, booths, markets, pop-ups, or event vending unless Matt explicitly provides a future exception.
+
 ## Public Positioning
 
 - Core offer: Original 3D printed ducks and creative gifts with personality, charm, and story.
 - Brand promise: Fun, whimsical, collectible ducks designed to make people smile.
 - Primary sales channel: Etsy shop at `mattmademe.etsy.com`.
 - Owned website: `https://mattmademe.com`.
+- Sales model: Online-only through Etsy and owned web channels; no craft fairs, in-person booths, pop-ups, markets, or event vending.
 - Materials: PETG for durable, high-quality 3D prints.
 - Production/design notes: Ducks are modeled in Nomad Sculpt on iPad and printed on Bambu Lab printers with AMS multicolor systems.
 - Differentiator: Original designs created from scratch rather than mass-produced or licensed characters.
@@ -115,4 +118,3 @@ Priority seasonal/event windows:
 - Social follower counts
 - Top-performing posts/reels/pins
 - Ad spend and ROAS, if applicable
-

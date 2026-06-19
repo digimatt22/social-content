@@ -143,7 +143,7 @@ Output: realistic photograph, no illustration, no cartoon styling, no added text
 ## Example MCP Request Wording
 
 ```text
-Use Magnific `images_generate` with the current Nano Banana reference-image model.
+Use Magnific `images_generate` with Google Nano Banana 2. If that exact model is unavailable, use the closest current Nano Banana reference-image model.
 
 Upload/use these references:
 - @img1: primary visible 3/4 product angle
@@ -155,7 +155,7 @@ Generate one square 1:1 image at 2K using this prompt:
 
 [paste the improved prompt]
 
-After generation, wait for completion and show the result for manual product-accuracy review before saving it as an approved Marketing OS asset.
+After generation, wait for completion, download the generated file under `outputs/graphics/planning/` or `outputs/magnific/`, and show the result for manual product-accuracy review before saving it as an approved Marketing OS asset.
 ```
 
 ## REST API Fallback

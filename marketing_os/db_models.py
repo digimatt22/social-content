@@ -49,6 +49,24 @@ class ProductRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     assets: Mapped[list["AssetRecord"]] = relationship(back_populates="product")
+    external_references: Mapped[list["ProductExternalReference"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+
+class ProductExternalReference(Base):
+    __tablename__ = "product_external_references"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    canonical_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    display_name: Mapped[str] = mapped_column(String(260), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord] = relationship(back_populates="external_references")
+
+    __table_args__ = (UniqueConstraint("source_name", "external_id", name="uq_product_external_source_id"),)
 
 
 class TemplateRecord(Base):
@@ -189,6 +207,7 @@ class PlannedContentRecord(Base):
     destinations_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     goals_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    selected_source_asset_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     audience: Mapped[str] = mapped_column(String(200), default="", nullable=False)
     occasion: Mapped[str] = mapped_column(String(200), default="", nullable=False)
     promotion: Mapped[str] = mapped_column(String(200), default="", nullable=False)

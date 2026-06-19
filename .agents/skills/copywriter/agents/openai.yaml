@@ -1,0 +1,4 @@
+interface:
+  display_name: "Copywriter"
+  short_description: "Brand-voice copy for posts, emails, and articles"
+  default_prompt: "Use $copywriter to create brand-consistent copy for a destination, audience, goal, and set of details."

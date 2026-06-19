@@ -4,11 +4,14 @@ This folder contains executed or superseded planning, review, and architecture d
 
 Current implementation work should start from:
 
-- `docs/goals/phase5-integrations-and-creative-quality.md`
-- `docs/reviews/phase4-current-state-premortem.md`
-- `docs/architecture/etsy-read-only-integration-plan.md`
-- `docs/architecture/mattmademe-website-integration-plan.md`
-- `docs/architecture/local-asset-library-agent-access-plan.md`
-- `docs/architecture/freepik-magnific-creative-integration-plan.md`
+- `README.md`
+- `docs/reviews/phase5-current-state-2026-06-17.md`
+- `docs/operating-guides/local-web-console.md`
+- `docs/operating-guides/magnific-mcp-creative-assets.md`
+
+Archive groups:
+
+- `2026-06-17-phase1-phase4/`: superseded Phase 1-4 goals, plans, and reviews.
+- `2026-06-17-phase5-implementation/`: Phase 5 implementation plan, architecture inputs, UI proof artifacts, and completion reviews.
 
 Archived docs may still be useful as historical context, but they should not be treated as active goals.

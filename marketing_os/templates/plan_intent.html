@@ -3,75 +3,203 @@
 <div class="topline">
   <div>
     <h2>Planning</h2>
-    <div class="subtle">Create high-level calendar intent for Codex-assisted content production.</div>
+    <div class="subtle">Queue one post at a time, then review the generated copy and image options when automation finishes.</div>
   </div>
 </div>
 
-<section class="panel">
-  <h3>New Planned Item</h3>
-  <form method="post" action="{{ url_for('create_planning_item') }}">
-    <div class="grid">
+{% set destination_icons = {
+  "Facebook": "f",
+  "Instagram": "◎",
+  "Pinterest": "P",
+  "Blog post": "✎",
+  "Etsy": "E",
+  "Website": "⌂",
+  "Email": "@"
+} %}
+
+{% set goal_labels = {
+  "Sales growth": "Increasing sales",
+  "Repeat customers": "Bringing customers back",
+  "Followers": "Gaining followers on social",
+  "Product awareness": "Increasing product awareness",
+  "Email signup": "Growing the email list",
+  "Blog traffic": "Sending readers to the blog",
+  "Seasonal launch": "Supporting a seasonal launch",
+  "Engagement": "Starting a conversation"
+} %}
+
+<section class="panel planner-shell">
+  <div class="wizard-progress" aria-label="Planner progress">
+    <span class="active" data-progress-step="1">1</span>
+    <span data-progress-step="2">2</span>
+    <span data-progress-step="3">3</span>
+  </div>
+
+  <form method="post" action="{{ url_for('create_planning_item') }}" data-planner-wizard>
+    <div class="wizard-step active" data-step="1">
+      <div class="step-kicker">Step 1</div>
+      <h3>Where should this post go?</h3>
+      <p class="subtle">Pick the date, destination, and main job for this post.</p>
+
       <label>
-        Calendar date
+        When should it go out?
         <input type="date" name="calendar_date" value="{{ today.isoformat() }}" required>
       </label>
+
+      <div class="field-label">Where is it going?</div>
+      <div class="destination-picker">
+        {% for destination in destinations %}
+          <label class="destination-card">
+            <input type="radio" name="destinations" value="{{ destination }}" required {{ 'checked' if loop.first else '' }}>
+            <span class="destination-icon">{{ destination_icons.get(destination, destination[0]) }}</span>
+            <span>{{ destination }}</span>
+          </label>
+        {% endfor %}
+      </div>
+
       <label>
-        Audience
-        <input name="audience" placeholder="Collectors, gift buyers, repeat customers">
+        What would you like this post to focus on?
+        <select name="goals" required data-other-select="goal-other">
+          {% for goal in goals %}
+            <option value="{{ goal }}">{{ goal_labels.get(goal, goal) }}</option>
+          {% endfor %}
+          <option value="__other__">Something else</option>
+        </select>
       </label>
+      <label class="other-field" id="goal-other">
+        Describe the focus
+        <input name="goals_other" placeholder="Example: remind people about Father’s Day gifts">
+      </label>
+      <div class="button-group wizard-actions">
+        <button type="button" data-next-step="2">Continue</button>
+      </div>
+    </div>
+
+    <div class="wizard-step" data-step="2">
+      <div class="step-kicker">Step 2</div>
+      <h3>What should it be about?</h3>
+      <p class="subtle">Choose the product and audience. Product stays tied to the catalog; the rest can be custom.</p>
+
       <label>
-        Occasion
-        <input name="occasion" placeholder="Launch, seasonal moment, gift idea">
+        Which product should be featured?
+        <select name="product_ids" required data-product-reference-select>
+          {% for product in products %}
+            <option value="{{ product.id }}">{{ product.name }}</option>
+          {% endfor %}
+        </select>
       </label>
+
+      <div class="field-label">Reference images sent to Magnific</div>
+      <p class="subtle">Select the approved product photos that should be uploaded as identity references. The first selected image is used as @img1; the rest are identity locks.</p>
+      <div class="reference-picker" data-reference-picker>
+        {% for asset in product_reference_assets %}
+          <label class="reference-card {{ '' if asset.selectable else 'disabled' }}" data-product-id="{{ asset.product_id }}">
+            <input type="checkbox" name="selected_source_asset_ids" value="{{ asset.id }}" {{ 'checked' if asset.selectable else '' }} {{ '' if asset.selectable else 'disabled' }}>
+            {% if asset.file_exists %}
+              <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+            {% else %}
+              <span class="asset-missing">No local file</span>
+            {% endif %}
+            <span class="reference-copy">
+              <strong>{{ asset.name }}</strong>
+              <span>{{ asset.asset_type }} · {{ asset.review_state.replace('_', ' ') }}{% if not asset.file_exists %} · not file-backed{% endif %}</span>
+            </span>
+          </label>
+        {% else %}
+          <div class="empty-state">No product reference images are registered yet.</div>
+        {% endfor %}
+      </div>
+
       <label>
-        Promotion
-        <input name="promotion" placeholder="Optional offer or timing note">
+        Who are we talking to?
+        <select name="audience" data-other-select="audience-other">
+          <option value="gift buyers">Gift buyers</option>
+          <option value="collectors">Collectors</option>
+          <option value="repeat customers">Repeat customers</option>
+          <option value="cruise duck fans">Cruise duck fans</option>
+          <option value="__other__">Someone else</option>
+        </select>
       </label>
+      <label class="other-field" id="audience-other">
+        Describe the audience
+        <input name="audience_other" placeholder="Example: teachers buying end-of-year gifts">
+      </label>
+
+      <label>
+        Is there a moment behind it?
+        <select name="occasion" data-other-select="occasion-other">
+          <option value="">No special moment</option>
+          <option value="new batch">New batch</option>
+          <option value="gift idea">Gift idea</option>
+          <option value="seasonal launch">Seasonal launch</option>
+          <option value="behind the scenes">Behind the scenes</option>
+          <option value="__other__">Something else</option>
+        </select>
+      </label>
+      <label class="other-field" id="occasion-other">
+        Describe the moment
+        <input name="occasion_other" placeholder="Example: local craft fair weekend">
+      </label>
+
+      <div class="button-group wizard-actions">
+        <button class="secondary" type="button" data-prev-step="1">Back</button>
+        <button type="button" data-next-step="3">Continue</button>
+      </div>
     </div>
 
-    <h3>Destinations</h3>
-    <div class="check-grid">
-      {% for destination in destinations %}
-        <label class="check-label"><input type="checkbox" name="destinations" value="{{ destination }}"> {{ destination }}</label>
-      {% endfor %}
-    </div>
+    <div class="wizard-step" data-step="3">
+      <div class="step-kicker">Step 3</div>
+      <h3>Any creative direction?</h3>
+      <p class="subtle">Add only what would help the copywriter and image creator make better first options.</p>
 
-    <h3>Goals</h3>
-    <div class="check-grid">
-      {% for goal in goals %}
-        <label class="check-label"><input type="checkbox" name="goals" value="{{ goal }}"> {{ goal }}</label>
-      {% endfor %}
-    </div>
+      <label>
+        Is there an offer or timing note?
+        <select name="promotion" data-other-select="promotion-other">
+          <option value="">No offer</option>
+          <option value="available in the shop">Available in the shop</option>
+          <option value="limited small batch">Limited small batch</option>
+          <option value="good gift idea">Good gift idea</option>
+          <option value="new design spotlight">New design spotlight</option>
+          <option value="__other__">Something else</option>
+        </select>
+      </label>
+      <label class="other-field" id="promotion-other">
+        Describe the offer or timing
+        <input name="promotion_other" placeholder="Example: made-to-order window closes Friday">
+      </label>
 
-    <h3>Product Focus</h3>
-    <div class="check-grid">
-      {% for product in products %}
-        <label class="check-label"><input type="checkbox" name="product_ids" value="{{ product.id }}"> {{ product.name }}</label>
-      {% endfor %}
-    </div>
+      <label>
+        Anything else the generator should know?
+        <textarea name="notes" placeholder="Example: keep it warm, make it feel like a small gift, avoid holiday language."></textarea>
+      </label>
 
-    <label>
-      Notes
-      <textarea name="notes" placeholder="What should Codex know before drafting copy or image briefs?"></textarea>
-    </label>
-    <button type="submit">Save planned item</button>
+      <div class="button-group wizard-actions">
+        <button class="secondary" type="button" data-prev-step="2">Back</button>
+        <button type="submit">Save and queue post</button>
+      </div>
+    </div>
   </form>
 </section>
 
-<h3 style="margin-top: 22px;">Planned Calendar Intent</h3>
+<h3 style="margin-top: 22px;">Queued And Planned Posts</h3>
 <section class="agenda">
   {% for item in planned_items %}
-    <div class="panel">
-      <div class="meta">
-        <span class="pill">{{ item.calendar_date }}</span>
-        <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
-        <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
+    <div class="panel" id="planned-item-{{ item.id }}">
+      <div class="planned-header">
+        <div>
+          <div class="meta">
+            <span class="pill">{{ item.calendar_date }}</span>
+            <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else 'blocked' if item.waiting_for_generation else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
+            <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
+          </div>
+          <h3>{{ item.destinations|join(', ') or 'No destination' }} post for {{ item.products|map(attribute='name')|join(', ') or 'selected product' }}</h3>
+          <div class="subtle">{{ item.goals|join(', ') or 'No goal selected' }}</div>
+        </div>
+        <form method="post" action="{{ url_for('delete_planning_item', item_id=item.id) }}" onsubmit="return confirm('Delete this queued post?');">
+          <button class="warn" type="submit">Delete</button>
+        </form>
       </div>
-      <h3>{{ item.destinations|join(', ') or 'No destination' }} for {{ item.goals|join(', ') or 'No goal' }}</h3>
-      <div class="subtle">
-        Products:
-        {{ item.products|map(attribute='name')|join(', ') or 'No products selected' }}
-      </div>
+
       {% if item.audience or item.occasion or item.promotion %}
         <div class="meta" style="margin-top: 8px;">
           {% if item.audience %}<span class="pill">{{ item.audience }}</span>{% endif %}
@@ -80,112 +208,206 @@
         </div>
       {% endif %}
       {% if item.notes %}<p class="subtle">{{ item.notes }}</p>{% endif %}
+      {% if item.source_assets %}
+        <details style="margin-top: 10px;" open>
+          <summary class="subtle">Reference images for generation</summary>
+          {% if item.selected_source_assets %}
+            <div class="reference-strip">
+              {% for asset in item.selected_source_assets %}
+                <figure>
+                  <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+                  <figcaption>@img{{ loop.index }} · {{ asset.name }}</figcaption>
+                </figure>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="subtle">No references were selected for this post; approved file-backed product assets will be used as the fallback identity lock during generation.</p>
+          {% endif %}
+        </details>
+      {% endif %}
 
-      <div class="button-group">
-        <form method="post" action="{{ url_for('produce_planning_item', item_id=item.id) }}">
-          <button class="secondary" type="submit">Prepare candidates</button>
-        </form>
-        <form method="post" action="{{ url_for('produce_planning_item', item_id=item.id) }}">
-          <input type="hidden" name="force" value="1">
-          <button class="secondary" type="submit">Regenerate</button>
-        </form>
+      {% if item.waiting_for_generation %}
+        <div class="queue-state">
+          <strong>Waiting for content generation</strong>
+          <span>Codex automation will prepare copy and image assets. This post stays here until reviewable output exists.</span>
+          {% if item.production_error %}<span>{{ item.production_error }}</span>{% endif %}
+        </div>
+      {% endif %}
+
+      <div class="review-grid">
+        <section class="review-column">
+          <div class="review-heading">
+            <h3>Copy</h3>
+            {% if item.waiting_for_copy %}<span class="pill blocked">Queued</span>{% endif %}
+          </div>
+          {% if item.copy_candidates %}
+            {% for candidate in item.copy_candidates %}
+              <div class="task" id="candidate-{{ candidate.id }}">
+                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</pre>
+
+                <form method="post" action="{{ url_for('update_planning_copy', candidate_id=candidate.id) }}" class="copy-edit-form" data-edit-panel="copy-{{ candidate.id }}">
+                  <label>Edit post copy
+                    <textarea name="copy_text" {{ 'disabled' if item.waiting_for_copy else '' }}>{{ candidate.copy_text }}</textarea>
+                  </label>
+                  <div class="button-group">
+                    <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Save copy</button>
+                    <button class="secondary" type="button" data-hide-panel="copy-{{ candidate.id }}">Cancel</button>
+                  </div>
+                </form>
+
+                <form method="post" action="{{ url_for('regenerate_planning_item', item_id=item.id) }}" class="rewrite-form" data-edit-panel="rewrite-{{ candidate.id }}">
+                  <input type="hidden" name="target" value="copy">
+                  <label>What should change?
+                    <textarea name="feedback" placeholder="Example: make it shorter, warmer, and mention the gift angle." {{ 'disabled' if item.waiting_for_copy else '' }}></textarea>
+                  </label>
+                  <div class="button-group">
+                    <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Queue rewrite</button>
+                    <button class="secondary" type="button" data-hide-panel="rewrite-{{ candidate.id }}">Cancel</button>
+                  </div>
+                </form>
+
+                <div class="button-group">
+                  <button class="secondary" type="button" data-show-panel="copy-{{ candidate.id }}" {{ 'disabled' if item.waiting_for_copy else '' }}>Edit</button>
+                  <button class="secondary" type="button" data-show-panel="rewrite-{{ candidate.id }}" {{ 'disabled' if item.waiting_for_copy else '' }}>Rewrite</button>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty-state">Copy will appear here after automation runs.</div>
+          {% endif %}
+        </section>
+
+        <section class="review-column">
+          <div class="review-heading">
+            <h3>Images</h3>
+            {% if item.waiting_for_images %}<span class="pill blocked">Queued</span>{% endif %}
+          </div>
+          {% if item.image_candidates %}
+            <div class="image-option-grid">
+              {% for candidate in item.image_candidates %}
+                {% if candidate.image_asset %}
+                  <article class="image-review-card" id="candidate-{{ candidate.id }}">
+                    <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" alt="{{ candidate.image_asset.title }}">
+                    <h3>{{ candidate.image_asset.title }}</h3>
+                    <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
+                      <input type="hidden" name="review_state" value="approved">
+                      <input type="hidden" name="reviewed_by" value="Matt">
+                      <input type="hidden" name="revision_notes" value="Selected in Planning.">
+                      <button class="secondary" type="submit">Use this image</button>
+                    </form>
+                  </article>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if item.waiting_for_images or item.image_candidates|length < 3 %}
+            <div class="image-option-grid">
+              {% for slot in range(item.image_candidates|length + 1, 4) %}
+                <article class="image-placeholder-card" aria-disabled="true">
+                  <div class="placeholder-image"></div>
+                  <h3>Image option {{ slot }}</h3>
+                  <p class="subtle">Waiting for generation</p>
+                </article>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="button-group">
+            <button class="secondary" type="button" data-show-panel="upload-image-{{ item.id }}">Use your own image</button>
+            <button class="secondary" type="button" data-show-panel="rewrite-images-{{ item.id }}">Regenerate images</button>
+          </div>
+
+          <form method="post" action="{{ url_for('upload_planning_image', item_id=item.id) }}" enctype="multipart/form-data" class="upload-panel" data-edit-panel="upload-image-{{ item.id }}">
+            <h3>Use your own image</h3>
+            <label>Image file
+              <input type="file" name="image_file" accept="image/*" required>
+            </label>
+            <label>Name
+              <input name="name" placeholder="Optional image name">
+            </label>
+            <label>Notes
+              <input name="notes" placeholder="What should be checked before approval?">
+            </label>
+            <div class="button-group">
+              <button class="secondary" type="submit">Upload image option</button>
+              <button class="secondary" type="button" data-hide-panel="upload-image-{{ item.id }}">Cancel</button>
+            </div>
+          </form>
+
+          <form method="post" action="{{ url_for('regenerate_planning_item', item_id=item.id) }}" class="rewrite-form image-rewrite" data-edit-panel="rewrite-images-{{ item.id }}">
+            <input type="hidden" name="target" value="images">
+            <label>What should the next images do differently?
+              <textarea name="feedback" placeholder="Example: show it on a desk, brighter lighting, less clutter."></textarea>
+            </label>
+            <div class="button-group">
+              <button class="secondary" type="submit">Queue image regeneration</button>
+              <button class="secondary" type="button" data-hide-panel="rewrite-images-{{ item.id }}">Cancel</button>
+            </div>
+          </form>
+        </section>
       </div>
 
-      <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 12px;">
-        <div class="grid">
-          <label>Create posting task for
-            <select name="destination">
-              {% for destination in item.destinations %}
-                <option value="{{ destination }}">{{ destination }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>Approved candidate
-            <select name="candidate_id">
-              <option value="">No approved copy yet</option>
-              {% for candidate in item.candidates %}
-                {% if candidate.review_state == 'approved' %}
-                  <option value="{{ candidate.id }}">#{{ candidate.id }} · {{ candidate.candidate_type.replace('_', ' ').title() }}</option>
-                {% endif %}
-              {% endfor %}
-            </select>
-          </label>
+      {% set can_create_task = item.has_current_copy and not item.waiting_for_copy and item.has_selected_image %}
+      {% if item.copy_candidates %}
+        <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 14px;">
+          <input type="hidden" name="destination" value="{{ item.destinations[0] if item.destinations else '' }}">
+          <input type="hidden" name="candidate_id" value="{{ item.copy_candidates[0].id }}">
+          <button class="secondary" type="submit" {{ '' if can_create_task else 'disabled' }}>Create posting task</button>
+        </form>
+      {% else %}
+        <div style="margin-top: 14px;">
+          <button class="secondary" type="button" disabled>Create posting task</button>
         </div>
-        <button class="secondary" type="submit">Create posting task</button>
-      </form>
-
-      {% if item.candidates %}
-        <h3 style="margin-top: 14px;">Candidates</h3>
-        <div class="agenda">
-          {% for candidate in item.candidates %}
-            <div class="task" id="candidate-{{ candidate.id }}">
-              <div class="meta">
-                <span class="pill">{{ candidate.candidate_type.replace('_', ' ').title() }}</span>
-                <span class="pill">{{ candidate.provider }}</span>
-                <span class="pill">{{ candidate.review_state.replace('_', ' ').title() }}</span>
-              </div>
-              {% if candidate.candidate_type == 'facebook_post' and candidate.copy_text %}
-                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</pre>
-                <details>
-                  <summary class="subtle">Review evidence</summary>
-                  <pre class="copybox">{{ candidate.display_body }}</pre>
-                </details>
-              {% else %}
-                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.display_body }}</pre>
-              {% endif %}
-              <div class="button-group">
-                <button class="secondary" type="button" data-copy-target="#candidate-copy-{{ candidate.id }}">Copy {{ 'post' if candidate.candidate_type == 'facebook_post' else 'candidate' }}</button>
-              </div>
-              <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
-                {% if candidate.candidate_type == 'facebook_post' %}
-                  <label>Edit post copy
-                    <textarea name="copy_text">{{ candidate.copy_text }}</textarea>
-                  </label>
-                {% endif %}
-                <div class="grid">
-                  <label>Review state
-                    <select name="review_state">
-                      {% for state in candidate_review_states %}
-                        <option value="{{ state }}" {{ 'selected' if candidate.review_state == state else '' }}>{{ state.replace('_', ' ').title() }}</option>
-                      {% endfor %}
-                    </select>
-                  </label>
-                  <label>Review notes
-                    <input name="revision_notes" value="{{ candidate.revision_notes }}">
-                  </label>
-                  <label>Reviewed by
-                    <span>Required when approving generated copy.</span>
-                    <input name="reviewed_by" value="{{ candidate.reviewed_by }}" placeholder="Matt">
-                  </label>
-                </div>
-                <button class="secondary" type="submit">Save review</button>
-              </form>
-              {% if candidate.reviewed_by or candidate.reviewed_at %}
-                <div class="subtle">
-                  Reviewed{% if candidate.reviewed_by %} by {{ candidate.reviewed_by }}{% endif %}{% if candidate.reviewed_at %} at {{ candidate.reviewed_at }}{% endif %}
-                </div>
-              {% endif %}
-              {% if candidate.candidate_type == 'facebook_post' %}
-                <form method="post" action="{{ url_for('link_planning_candidate_to_task', candidate_id=candidate.id) }}">
-                  <label>Attach copy to task
-                    <select name="task_id">
-                      <option value="">Choose a task</option>
-                      {% for task in tasks %}
-                        <option value="{{ task.id }}">{{ task.due_date }} · {{ task.platform }} · {{ task.title }}</option>
-                      {% endfor %}
-                    </select>
-                  </label>
-                  <button class="secondary" type="submit">Attach to task</button>
-                </form>
-              {% endif %}
-              {% if candidate.revision_notes %}<div class="subtle">{{ candidate.revision_notes }}</div>{% endif %}
-            </div>
-          {% endfor %}
-        </div>
+      {% endif %}
+      {% if not can_create_task %}
+        <div class="subtle" style="margin-top: 6px;">A post can be created after fresh copy is ready and an image is selected.</div>
       {% endif %}
     </div>
   {% else %}
-    <div class="panel">No planned marketing intent yet.</div>
+    <div class="panel">No posts queued yet.</div>
   {% endfor %}
 </section>
+
+<script>
+  function syncOtherField(select) {
+    const target = document.getElementById(select.dataset.otherSelect);
+    if (!target) return;
+    target.classList.toggle("visible", select.value === "__other__");
+  }
+
+  document.querySelectorAll("[data-other-select]").forEach((select) => {
+    syncOtherField(select);
+    select.addEventListener("change", () => syncOtherField(select));
+  });
+
+  document.addEventListener("click", (event) => {
+    const next = event.target.closest("[data-next-step]");
+    const prev = event.target.closest("[data-prev-step]");
+    const showPanel = event.target.closest("[data-show-panel]");
+    const hidePanel = event.target.closest("[data-hide-panel]");
+
+    if (next || prev) {
+      const targetStep = next ? next.dataset.nextStep : prev.dataset.prevStep;
+      const form = event.target.closest("[data-planner-wizard]");
+      if (!form) return;
+      form.querySelectorAll(".wizard-step").forEach((step) => {
+        step.classList.toggle("active", step.dataset.step === targetStep);
+      });
+      document.querySelectorAll("[data-progress-step]").forEach((step) => {
+        step.classList.toggle("active", step.dataset.progressStep === targetStep);
+      });
+      return;
+    }
+
+    if (showPanel) {
+      const panel = document.querySelector(`[data-edit-panel="${showPanel.dataset.showPanel}"]`);
+      if (panel) panel.classList.add("active");
+    }
+    if (hidePanel) {
+      const panel = document.querySelector(`[data-edit-panel="${hidePanel.dataset.hidePanel}"]`);
+      if (panel) panel.classList.remove("active");
+    }
+  });
+</script>
 {% endblock %}

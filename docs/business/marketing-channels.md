@@ -10,6 +10,8 @@ Last updated: 2026-06-17
 - Facebook: `MattMadeMe`
 - Pinterest: `https://www.pinterest.com/mattmademe` - under-used and outdated
 
+MattMadeMe currently sells online only. Do not plan or write content that implies craft fairs, in-person booths, pop-ups, markets, or event vending unless Matt explicitly adds a future exception.
+
 ## Inactive Or Missing Channels
 
 - TikTok: None
@@ -32,7 +34,7 @@ Best fit for WIP previews, new duck launches, short videos, behind-the-scenes ma
 
 ### Facebook
 
-Best fit for cruise ducking groups, customer shares, giveaway participation, event/custom-order visibility, and community conversation.
+Best fit for cruise ducking groups, customer shares, giveaway participation, online custom-order visibility, and community conversation.
 
 ### Pinterest
 
@@ -45,4 +47,3 @@ Currently under-used and outdated. It may become useful for evergreen gift disco
 - Use Christmas and holiday gifting as the biggest campaign window.
 - Capture customer photos and stories from cruise duck finds.
 - Refresh Pinterest only if there is time to maintain boards consistently.
-

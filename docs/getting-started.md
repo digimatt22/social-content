@@ -28,6 +28,12 @@ This installs Flask and SQLAlchemy for the local web console.
 python run_local.py
 ```
 
+This starts the app with the current local database as-is. It does not seed sample products, plans, or tasks unless you explicitly run:
+
+```bash
+python run_local.py --bootstrap-data
+```
+
 The server binds to `0.0.0.0` by default so trusted devices on the same network can reach it.
 
 On the same machine, open:

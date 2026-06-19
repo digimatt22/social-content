@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
 
+from .config import load_local_env
 from .models import CalendarEntry, ContentIdea
 
 
@@ -77,6 +80,7 @@ class EtsyConfig:
 
     @classmethod
     def from_env(cls) -> "EtsyConfig":
+        load_local_env()
         return cls(
             keystring=os.environ.get("ETSY_KEYSTRING", ""),
             shared_secret=os.environ.get("ETSY_SHARED_SECRET", ""),
@@ -96,6 +100,7 @@ class WebsiteConfig:
 
     @classmethod
     def from_env(cls) -> "WebsiteConfig":
+        load_local_env()
         return cls(
             api_key=os.environ.get("MARKETING_AGENT_API_KEY", ""),
             base_url=os.environ.get("MATTMADEME_AGENT_API_BASE_URL", "https://mattmademe.com").rstrip("/"),
@@ -103,6 +108,9 @@ class WebsiteConfig:
 
 
 class EtsyReadOnlyAdapter(Protocol):
+    def find_shop_id_by_name(self, shop_name: str) -> str | None:
+        ...
+
     def list_active_shop_listings(self, shop_id: str) -> list[dict[str, object]]:
         ...
 
@@ -122,20 +130,49 @@ class MattMadeMeWebsiteAdapter(Protocol):
 
 
 class EtsyOpenApiAdapter:
+    MIN_REQUEST_INTERVAL_SECONDS = 0.25
+
     def __init__(self, config: EtsyConfig):
         if not config.configured:
             raise ValueError("Etsy API credentials are not configured.")
         self.config = config
+        self._last_request_at = 0.0
 
     def list_active_shop_listings(self, shop_id: str) -> list[dict[str, object]]:
-        payload = self._get(f"/shops/{shop_id}/listings/active")
-        return _extract_results(payload)
+        return self._get_paginated(f"/shops/{shop_id}/listings/active")
+
+    def find_shop_id_by_name(self, shop_name: str) -> str | None:
+        query = urllib.parse.urlencode({"shop_name": shop_name, "limit": 5})
+        payload = self._get(f"/shops?{query}")
+        normalized = shop_name.casefold()
+        for shop in _extract_results(payload):
+            candidate_name = str(shop.get("shop_name") or "")
+            if candidate_name.casefold() == normalized and shop.get("shop_id"):
+                return str(shop["shop_id"])
+        for shop in _extract_results(payload):
+            if shop.get("shop_id"):
+                return str(shop["shop_id"])
+        return None
 
     def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
         payload = self._get(f"/listings/{listing_id}/images")
         return _extract_results(payload)
 
+    def _get_paginated(self, path: str, limit: int = 100) -> list[dict[str, object]]:
+        results: list[dict[str, object]] = []
+        offset = 0
+        while True:
+            separator = "&" if "?" in path else "?"
+            payload = self._get(f"{path}{separator}{urllib.parse.urlencode({'limit': limit, 'offset': offset})}")
+            page = _extract_results(payload)
+            results.extend(page)
+            count = _int_payload_value(payload.get("count"))
+            if not page or count is None or len(results) >= count:
+                return results
+            offset += len(page)
+
     def _get(self, path: str) -> dict[str, object]:
+        self._respect_rate_limit()
         request = urllib.request.Request(
             f"{self.config.base_url}{path}",
             headers={"x-api-key": self.config.api_key, "Accept": "application/json"},
@@ -143,6 +180,14 @@ class EtsyOpenApiAdapter:
         )
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def _respect_rate_limit(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self._last_request_at
+        wait_seconds = self.MIN_REQUEST_INTERVAL_SECONDS - elapsed
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+        self._last_request_at = time.monotonic()
 
 
 class MattMadeMeAgentApiAdapter:
@@ -186,3 +231,10 @@ def _extract_results(payload: dict[str, object], list_keys: tuple[str, ...] = ("
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     return []
+
+
+def _int_payload_value(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

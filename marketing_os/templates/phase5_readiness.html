@@ -128,7 +128,7 @@ Creative approval checklist:
         </div>
       </form>
     {% else %}
-      <p class="subtle">Import a real Magnific/MCP output before generated creative can be reviewed.</p>
+      <p class="subtle">Add a generated or uploaded image before generated creative can be reviewed.</p>
       {% if packet.creative_handoff %}
         {% if packet.creative_handoff.source_asset %}
           <p class="subtle">Recommended source asset #{{ packet.creative_handoff.source_asset.id }} · {{ packet.creative_handoff.source_asset.name }}</p>
@@ -149,7 +149,7 @@ Creative approval checklist:
         {% endif %}
         {% if packet.creative_handoff.prompt %}
           <details open>
-            <summary class="subtle">Magnific/MCP prompt handoff</summary>
+            <summary class="subtle">Selected image option handoff</summary>
             <div class="copybox" id="phase5-creative-prompt">{{ packet.creative_handoff.prompt }}</div>
             <button class="secondary" type="button" data-copy-target="#phase5-creative-prompt">Copy prompt</button>
           </details>

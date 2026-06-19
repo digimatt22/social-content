@@ -71,23 +71,13 @@ python -m marketing_os.jobs.content_production --export-briefs-dir data/exports/
 
 The job finds planned items, builds structured briefs from business/product context, creates review candidates, and writes them back to Marketing OS. Use `--export-briefs-dir` when Codex or another model-assisted worker needs a file handoff before or during generation. Brief filenames are stable by planned item ID, so rerunning the job updates the handoff instead of creating duplicate files. Rerunning the job does not duplicate existing candidates unless `--force` is used. Candidates marked `rewrite_requested` are picked up by the normal job and refreshed back into `needs_review`; exported briefs include the rewrite notes and prior copy so the next pass can address the critique.
 
-For the first local nightly schedule, use the wrapper script:
+For a local manual or Codex-managed run, use the wrapper script:
 
 ```bash
 ./scripts/run-content-production.sh
 ```
 
-The wrapper writes structured briefs to `data/exports/content-briefs`, appends job output to `data/logs/content-production.log`, and defaults to planned items due within the next 14 days. Override the window with `MARKETING_OS_CONTENT_DAYS_AHEAD`. To install the weekday 2:30 AM macOS LaunchAgent template:
-
-```bash
-./scripts/install-content-production-launchagent.sh --dry-run install
-./scripts/install-content-production-launchagent.sh install
-./scripts/install-content-production-launchagent.sh status
-```
-
-Use `./scripts/install-content-production-launchagent.sh uninstall` to remove the local LaunchAgent.
-
-Keep manual runs available even after scheduling. If the nightly job creates candidates, they still start in `needs_review`; the schedule should never approve, post, or mark Phase 5 complete.
+The wrapper writes structured briefs to `data/exports/content-briefs`, appends job output to `data/logs/content-production.log`, and defaults to planned items due within the next 14 days. Override the window with `MARKETING_OS_CONTENT_DAYS_AHEAD`. If a Codex automation runs this flow, keep generated copy and creative in `needs_review`; the automation should never approve, post, or mark Phase 5 complete.
 
 ## Assets
 
@@ -106,7 +96,7 @@ Generated graphics should stay in `needs review` until a human approves them.
 
 Set `MARKETING_OS_ASSETS_ROOT` before startup if the local product photo inventory should live somewhere other than `assets/products`.
 
-Phase 5 is expected to move the durable asset source to the external-drive asset library described in `docs/architecture/local-asset-library-agent-access-plan.md`. Until that is implemented, keep repo-local product photos treated as working data and out of git.
+Phase 5 added the external-drive asset-library path. The original implementation plan is archived at `docs/archive/2026-06-17-phase5-implementation/architecture/local-asset-library-agent-access-plan.md`; use the Local Asset Library workflow below as the active operator guidance.
 
 ## Local Asset Library
 
@@ -239,6 +229,10 @@ Etsy API sync imports active listings and listing images as external records. It
 MattMadeMe Website Sync imports website products, product images, and published blog metadata. It requires `MARKETING_AGENT_API_KEY`.
 
 Both syncs are safe to run without credentials. Missing credentials are recorded in Data Health rather than blocking normal daily work.
+
+## Planning Image Generation
+
+Planning queues image generation until real files exist. See `docs/operating-guides/codex-image-generation.md` for the adapter contract, and `docs/operating-guides/codex-content-automation.md` for the scheduled Codex automation setup.
 
 ## Backup And Export
 

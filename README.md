@@ -37,6 +37,8 @@ The app helps a solo business owner generate and execute marketing plans from a 
 
 The Phase 2 planner remains active behind the web app. Old Phase 1/2 executable entry points are archived under `archive/phase1-phase2-executables`, and executed planning docs are archived under `docs/archive`.
 
+Repo-specific Codex skills live under `skills/`; see [SKILLS.md](SKILLS.md) and [AGENTS.md](AGENTS.md).
+
 ## Installation
 
 Requirements:
@@ -81,6 +83,12 @@ Run the local web console:
 python run_local.py
 ```
 
+Startup does not seed sample products, plans, or tasks by default. To explicitly bootstrap business docs into a fresh local database for demo or fixture work, run:
+
+```bash
+python run_local.py --bootstrap-data
+```
+
 On the same machine, open:
 
 ```text
@@ -122,7 +130,7 @@ python -m marketing_os.jobs.content_production --limit 10
 ./scripts/run-content-production.sh
 ```
 
-For a local weekday nightly schedule on this Mac, use `./scripts/install-content-production-launchagent.sh --dry-run install` to preview the install, then run it without `--dry-run`. The wrapper defaults to planned items due within the next 14 days.
+The wrapper defaults to planned items due within the next 14 days and is intended for manual or Codex-managed runs.
 
 To check Phase 5 final proof readiness or export a review packet:
 
@@ -156,19 +164,11 @@ Current implementation keeps the Python/Flask/SQLAlchemy/SQLite stack while addi
 
 Current active planning docs:
 
-- [Phase 5 goal](docs/goals/phase5-integrations-and-creative-quality.md)
-- [Phase 4 current-state premortem](docs/reviews/phase4-current-state-premortem.md)
-- [Etsy read-only integration plan](docs/architecture/etsy-read-only-integration-plan.md)
-- [MattMadeMe website integration plan](docs/architecture/mattmademe-website-integration-plan.md)
-- [Local asset library agent access plan](docs/architecture/local-asset-library-agent-access-plan.md)
-- [Freepik/Magnific creative integration plan](docs/architecture/freepik-magnific-creative-integration-plan.md)
-- [Copywriter skill and learning loop plan](docs/architecture/copywriter-skill-and-learning-loop-plan.md)
-- [Codex nightly content production plan](docs/architecture/codex-nightly-content-production-plan.md)
-- [Phase 5 UI/UX walkthrough](docs/reviews/phase5-ui-ux-walkthrough.md)
-- [Phase 5 Facebook post proof](docs/reviews/phase5-facebook-post-proof.md)
-- [Phase 5 operator workflow proof](docs/reviews/phase5-operator-workflow-proof.md)
-- [Phase 5 completion audit](docs/reviews/phase5-completion-audit.md)
 - [Phase 5 current state](docs/reviews/phase5-current-state-2026-06-17.md)
+- [Local web console operating guide](docs/operating-guides/local-web-console.md)
+- [Magnific MCP creative asset guide](docs/operating-guides/magnific-mcp-creative-assets.md)
+
+Superseded Phase 5 implementation plans and proof artifacts are archived under `docs/archive/2026-06-17-phase5-implementation/`.
 
 Phase 5 final proof readiness is visible in the local app at `/phase5-readiness` and as JSON at `/api/phase5-readiness`. The readiness page can export a Markdown approval packet, and the same packet is available as JSON at `/api/phase5-approval-packet`.
 

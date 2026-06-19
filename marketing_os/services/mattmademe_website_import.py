@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..db_models import AssetRecord, BlogPostRecord, ProductRecord, SyncMetadata, utc_now
 from ..integrations import MattMadeMeAgentApiAdapter, MattMadeMeWebsiteAdapter, WebsiteConfig
+from .product_identity import find_product_by_identity, remember_product_reference
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ def upsert_website_product(session: Session, payload: dict[str, object]) -> Prod
     name = _text(payload, "name", "title") or f"Website product {external_id}"
     url = _text(payload, "url", "productUrl", "canonicalUrl")
     status = _text(payload, "status") or "imported"
-    existing = _find_product(session, "mattmademe_website", external_id, url, name)
+    existing = find_product_by_identity(session, "mattmademe_website", external_id, url, name)
     if existing is None:
         existing = ProductRecord(
             name=name,
@@ -94,6 +95,7 @@ def upsert_website_product(session: Session, payload: dict[str, object]) -> Prod
     existing.last_synced_at = utc_now()
     existing.sync_status = "manual override" if existing.manual_override_state in {"locked", "override"} else "imported"
     existing.staleness_state = "fresh"
+    remember_product_reference(session, existing, "mattmademe_website", external_id, url, name)
     return existing
 
 
@@ -145,18 +147,6 @@ def upsert_website_blog_post(session: Session, payload: dict[str, object]) -> Bl
     existing.sync_error = ""
     existing.review_state = "imported"
     return existing
-
-
-def _find_product(session: Session, source: str, external_id: str, url: str, name: str) -> ProductRecord | None:
-    if external_id:
-        record = session.scalar(select(ProductRecord).where(ProductRecord.external_source == source, ProductRecord.external_id == external_id))
-        if record:
-            return record
-    if url:
-        record = session.scalar(select(ProductRecord).where(ProductRecord.canonical_url == url))
-        if record:
-            return record
-    return session.scalar(select(ProductRecord).where(ProductRecord.name == name))
 
 
 def _image_urls(payload: dict[str, object]) -> list[str]:

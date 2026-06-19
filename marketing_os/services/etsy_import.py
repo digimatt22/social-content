@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import html
 import json
+import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from urllib.error import HTTPError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..db_models import AssetRecord, ProductRecord, SyncMetadata, utc_now
 from ..integrations import EtsyConfig, EtsyOpenApiAdapter, EtsyReadOnlyAdapter
 from ..phase3 import json_list
+from .product_identity import find_product_by_identity, remember_product_reference
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,9 @@ def sync_etsy_read_only(
     config: EtsyConfig | None = None,
 ) -> EtsySyncSummary:
     config = config or EtsyConfig.from_env()
+    cooldown_message = _active_rate_limit_message(session)
+    if cooldown_message:
+        return EtsySyncSummary("etsy", 0, 0, [cooldown_message])
     if adapter is None:
         if not config.configured:
             _record_sync(session, "etsy_api", "missing_credentials", "Etsy API credentials are not configured.")
@@ -36,7 +44,14 @@ def sync_etsy_read_only(
     products_imported = 0
     assets_imported = 0
     try:
-        listings = adapter.list_active_shop_listings(shop_id)
+        try:
+            listings = adapter.list_active_shop_listings(shop_id)
+        except HTTPError as exc:
+            resolved_shop_id = _resolve_shop_id_after_not_found(adapter, config, exc)
+            if not resolved_shop_id:
+                raise
+            shop_id = resolved_shop_id
+            listings = adapter.list_active_shop_listings(shop_id)
         for listing in listings:
             product = upsert_etsy_listing_product(session, listing)
             products_imported += 1
@@ -47,6 +62,9 @@ def sync_etsy_read_only(
                     assets_imported += 1
         _record_sync(session, "etsy_api", shop_id, f"Imported {products_imported} listing(s) and {assets_imported} image(s).")
     except Exception as exc:  # pragma: no cover - exercised via fake/service-level tests for normal flow.
+        if _is_rate_limit_error(exc):
+            message = _record_rate_limit(session, shop_id)
+            return EtsySyncSummary("etsy", products_imported, assets_imported, [message])
         message = str(exc)
         errors.append(message)
         _record_sync(session, "etsy_api", shop_id, f"error: {message}")
@@ -54,12 +72,54 @@ def sync_etsy_read_only(
     return EtsySyncSummary("etsy", products_imported, assets_imported, errors)
 
 
+def _resolve_shop_id_after_not_found(adapter: EtsyReadOnlyAdapter, config: EtsyConfig, exc: HTTPError) -> str | None:
+    if exc.code != 404 or not config.shop_name:
+        return None
+    resolver = getattr(adapter, "find_shop_id_by_name", None)
+    if not callable(resolver):
+        return None
+    return resolver(config.shop_name)
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    return isinstance(exc, HTTPError) and exc.code == 429
+
+
+def _active_rate_limit_message(session: Session) -> str | None:
+    record = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == "etsy_api"))
+    if record is None:
+        return None
+    until = _rate_limited_until(record.notes)
+    if until is None or until <= utc_now():
+        return None
+    return f"Etsy API sync is paused until {until.isoformat()} UTC because Etsy returned a rate limit response."
+
+
+def _record_rate_limit(session: Session, shop_id: str) -> str:
+    until = utc_now() + timedelta(hours=24)
+    message = f"rate_limited_until={until.isoformat()} Etsy returned 429 Too Many Requests; sync is paused for 24 hours."
+    _record_sync(session, "etsy_api", shop_id, message)
+    session.flush()
+    return f"Etsy returned 429 Too Many Requests. Etsy API sync is paused until {until.isoformat()} UTC."
+
+
+def _rate_limited_until(notes: str) -> datetime | None:
+    marker = "rate_limited_until="
+    if marker not in notes:
+        return None
+    raw_value = notes.split(marker, 1)[1].split(maxsplit=1)[0]
+    try:
+        return datetime.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
 def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) -> ProductRecord:
     listing_id = _text(listing, "listing_id", "id")
     title = _text(listing, "title", "name") or f"Etsy listing {listing_id}"
     url = _text(listing, "url", "listing_url") or (f"https://www.etsy.com/listing/{listing_id}" if listing_id else "")
     state = _text(listing, "state", "status") or "active"
-    existing = _find_product(session, "etsy", listing_id, url, title)
+    existing = find_product_by_identity(session, "etsy", listing_id, url, title)
     if existing is None:
         existing = ProductRecord(
             name=title,
@@ -86,6 +146,7 @@ def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) ->
     existing.last_synced_at = utc_now()
     existing.sync_status = "manual override" if existing.manual_override_state in {"locked", "override"} else "imported"
     existing.staleness_state = "fresh"
+    remember_product_reference(session, existing, "etsy", listing_id, url, title)
     return existing
 
 
@@ -121,18 +182,6 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
     return existing
 
 
-def _find_product(session: Session, source: str, external_id: str, url: str, title: str) -> ProductRecord | None:
-    if external_id:
-        record = session.scalar(select(ProductRecord).where(ProductRecord.external_source == source, ProductRecord.external_id == external_id))
-        if record:
-            return record
-    if url:
-        record = session.scalar(select(ProductRecord).where(ProductRecord.canonical_url == url))
-        if record:
-            return record
-    return session.scalar(select(ProductRecord).where(ProductRecord.name == title))
-
-
 def _record_sync(session: Session, source_name: str, source_path: str, notes: str) -> None:
     record = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == source_name))
     if record is None:
@@ -148,14 +197,19 @@ def _text(payload: dict[str, object], *keys: str) -> str:
         value = payload.get(key)
         if value is None:
             continue
-        return str(value)
+        return _clean_text(str(value))
     return ""
 
 
 def _list_text(payload: dict[str, object], key: str) -> list[str]:
     value = payload.get(key)
     if isinstance(value, list):
-        return [str(item) for item in value]
+        return [_clean_text(str(item)) for item in value]
     if isinstance(value, str):
-        return json_list(value)
+        return [_clean_text(item) for item in json_list(value)]
     return []
+
+
+def _clean_text(value: str) -> str:
+    normalized = re.sub(r"&(\d+);", r"&#\1;", value)
+    return html.unescape(normalized).strip()

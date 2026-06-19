@@ -237,15 +237,14 @@ def _final_proof_runbook_lines(payload: dict[str, object]) -> list[str]:
         lines.extend(
             [
                 "2. Run `python -m marketing_os.jobs.phase5_readiness --export-creative-handoff` "
-                "to export the Magnific/MCP prompt handoff.",
+                "to export the selected image-option handoff.",
                 f"3. Generate the image externally, then open `{import_query}` "
-                "to import the generated output for review.",
+                "to add the generated output for review.",
             ]
         )
     else:
         lines.append(
-            "2. Open `/creative-assets` and import one real Magnific/MCP generated output "
-            "from an approved source asset."
+            "2. Open `/creative-assets` and add one generated or uploaded image from an approved source asset."
         )
 
     final_step_number = 4 if isinstance(creative_handoff, dict) and not isinstance(creative_review, dict) else 3
@@ -296,7 +295,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
         "",
         "## Purpose",
         "",
-        "Use this handoff to generate one real Magnific/MCP creative candidate, save the output locally, and import it back into Marketing OS for review.",
+        "Use this handoff to generate or upload one creative candidate, save the output locally, and add it back into Marketing OS for review.",
         "",
         "## Source Asset",
         "",
@@ -329,7 +328,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
             f"- Open: {handoff['manual_import_path']}",
             f"- Prefilled form: {handoff['manual_import_query']}",
             "- Use the source asset ID above.",
-            "- Set provider to `magnific_mcp` or the actual provider/tool used.",
+            "- Set provider to `image_generation`, `user_upload`, or the actual provider/tool used.",
             "- Paste the prompt above into the Prompt field.",
             f"- Suggested output path: {import_defaults['output_path'] or 'choose a local path that Marketing OS can read'}",
             f"- Suggested absolute output path: {import_defaults['absolute_output_path'] or 'choose a local path that Marketing OS can read'}",
@@ -447,7 +446,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
             complete=False,
             message="Latest generated creative was rejected.",
             evidence=_creative_job_evidence(latest),
-            action="Generate or import a revised Magnific/MCP output from an approved source asset and review the new candidate.",
+            action="Generate or upload a revised image from an approved source asset and review the new candidate.",
         )
     return ReadinessItem(
         key="creative_generation_review",
@@ -455,7 +454,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
         complete=False,
         message="No approved generated creative job has reviewer evidence yet.",
         evidence="Missing approved creative generation job with reviewed_by, reviewed_at, and candidate asset.",
-        action="Import a real Magnific/MCP output, visually review it, set Reviewed by to Matt, and save creative review.",
+        action="Add a generated or uploaded image, visually review it, set Reviewed by to Matt, and save creative review.",
     )
 
 
@@ -513,8 +512,12 @@ def _latest_creative_job(session: Session) -> CreativeGenerationJobRecord | None
 def _latest_image_prompt_candidate(session: Session) -> GeneratedContentCandidateRecord | None:
     return session.scalar(
         select(GeneratedContentCandidateRecord)
-        .where(GeneratedContentCandidateRecord.candidate_type == "image_prompt_brief")
-        .order_by(GeneratedContentCandidateRecord.updated_at.desc(), GeneratedContentCandidateRecord.id.desc())
+        .where(GeneratedContentCandidateRecord.candidate_type.in_(["image_option", "image_prompt_brief"]))
+        .order_by(
+            (GeneratedContentCandidateRecord.review_state == "approved").desc(),
+            GeneratedContentCandidateRecord.updated_at.desc(),
+            GeneratedContentCandidateRecord.id.desc(),
+        )
     )
 
 
@@ -574,9 +577,9 @@ def _serialize_creative_handoff(
         "prompt_review_path": f"/planning#candidate-{prompt_candidate.id}" if prompt_candidate else "",
         "source_asset": _serialize_source_asset(source_asset),
         "manual_import_path": "/creative-assets",
-        "manual_import_query": "/creative-assets?phase5_handoff=1#import-magnific-output",
+        "manual_import_query": "/creative-assets?phase5_handoff=1#import-generated-image",
         "import_defaults": _creative_import_defaults(prompt_candidate, source_asset),
-        "next_step": "Generate a real Magnific/MCP output from the recommended source asset, save it locally, then import it through Creative Assets.",
+        "next_step": "Generate an image from the selected option or upload your own image, then keep it in review until approved.",
     }
 
 
@@ -589,8 +592,8 @@ def _creative_import_defaults(prompt_candidate: GeneratedContentCandidateRecord 
         "output_path": output_path,
         "absolute_output_path": _absolute_local_path(output_path),
         "target_format": "Facebook post image",
-        "provider": "magnific_mcp",
-        "model_name": "Magnific MCP",
+        "provider": "image_generation",
+        "model_name": "Selected image option",
         "provider_job_id": "",
         "output_url": "",
         "requested_dimensions": "1080x1080",
@@ -600,16 +603,25 @@ def _creative_import_defaults(prompt_candidate: GeneratedContentCandidateRecord 
 
 
 def _creative_handoff_prompt(prompt_candidate: GeneratedContentCandidateRecord | None, source_asset: AssetRecord | None) -> str:
-    base_prompt = prompt_candidate.body.strip() if prompt_candidate else ""
+    base_prompt = _candidate_image_prompt(prompt_candidate)
     source_name = source_asset.name if source_asset else "the approved source asset"
+    product_name = source_asset.product.name if source_asset and source_asset.product else "the planned product"
     return (
-        f"Use {source_name} as the reference image. Create one product-accurate Facebook-ready image for MattMadeMe. "
+        f"Use {source_name} as the reference image for {product_name}. Create one product-accurate Facebook-ready image for MattMadeMe. "
         "Preserve the duck's shape, color, printed details, proportions, and 3D-printed collectible feel. "
         "Do not invent new markings, characters, logos, text overlays, or packaging. "
         "Use a clean, warm product-photo composition suitable for a Facebook post. "
         "Leave the output unapproved until Matt reviews it in Marketing OS."
         + (f"\n\nPlanning prompt context: {base_prompt}" if base_prompt else "")
     )
+
+
+def _candidate_image_prompt(prompt_candidate: GeneratedContentCandidateRecord | None) -> str:
+    if prompt_candidate is None:
+        return ""
+    data = _json_dict(prompt_candidate.body)
+    prompt = str(data.get("prompt") or "").strip() if data else ""
+    return prompt or prompt_candidate.body.strip()
 
 
 def _serialize_source_asset(asset: AssetRecord | None) -> dict[str, object] | None:

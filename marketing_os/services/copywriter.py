@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .product_admin import ETSY_SHOP_URL
+
 
 @dataclass(frozen=True)
 class FacebookPostDraft:
@@ -156,7 +158,7 @@ def _goal_phrase(goals: list[str]) -> str:
 
 def _cta_for_goal(goal_text: str) -> str:
     if goal_text == "sales growth":
-        return "Take a look in the shop, and tell me who this one reminds you of."
+        return f"Take a look in the Etsy shop: {ETSY_SHOP_URL}"
     if goal_text == "followers":
         return "Follow along if you want to see the next duck off the printer."
     return "Tell me where this duck should show up next."

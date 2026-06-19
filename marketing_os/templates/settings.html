@@ -33,16 +33,6 @@
     </form>
   </section>
   <section class="panel">
-    <h3>Etsy CSV Import</h3>
-    <p class="subtle">Import listing titles, IDs, URLs, and status from a local Etsy CSV export. This is read-only/import-only.</p>
-    <form method="post" action="{{ url_for('import_etsy_csv') }}">
-      <label>CSV path
-        <input name="csv_path" placeholder="exports/etsy-listings.csv">
-      </label>
-      <button type="submit">Import CSV</button>
-    </form>
-  </section>
-  <section class="panel">
     <h3>Etsy API Sync</h3>
     <p class="subtle">Read-only sync for active Etsy listings and listing images. Requires local `.env` credentials.</p>
     <form method="post" action="{{ url_for('sync_etsy') }}">
@@ -55,11 +45,6 @@
     <form method="post" action="{{ url_for('sync_website') }}">
       <button type="submit">Sync website</button>
     </form>
-  </section>
-  <section class="panel">
-    <h3>Network Use</h3>
-    <p>Default startup binds to 0.0.0.0 so trusted devices on the local network can reach it.</p>
-    <p class="subtle">Do not expose this app to the public internet.</p>
   </section>
 </div>
 {% endblock %}

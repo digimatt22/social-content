@@ -249,6 +249,10 @@ def serialize_asset_option(option: AssetOption) -> JsonDict:
         "name": option.asset.name,
         "asset_type": option.asset.asset_type,
         "review_state": option.asset.review_state,
+        "file_exists": bool(option.asset.file_exists),
+        "preview_path": option.asset.preview_path,
+        "source_path": option.asset.source_path,
+        "downloads_when_selected": bool(not option.asset.file_exists and option.asset.source_path.startswith(("http://", "https://", "file://"))),
     }
 
 
@@ -576,16 +580,19 @@ def asset_inventory(session: Session) -> list[AssetView]:
 def task_asset_options(session: Session, task: TaskRecord) -> list[AssetOption]:
     refresh_asset_file_state(session)
     product = session.scalar(select(ProductRecord).where(ProductRecord.name == task.product_name)) if task.product_name else None
-    assets = list(
-        session.scalars(
-            select(AssetRecord)
-            .where(AssetRecord.file_exists == 1, AssetRecord.review_state == "approved")
-            .order_by(AssetRecord.name)
-        )
-    )
+    query = select(AssetRecord).order_by(AssetRecord.file_exists.desc(), AssetRecord.name)
+    if product:
+        query = query.where(AssetRecord.product_id.in_([product.id, None]))
+    assets = list(session.scalars(query))
     options: list[AssetOption] = []
     for asset in assets:
-        if product and asset.product_id not in {product.id, None}:
+        is_local_approved = bool(asset.file_exists and asset.review_state == "approved")
+        is_remote_product_image = bool(
+            not asset.file_exists
+            and asset.source_path.startswith(("http://", "https://", "file://"))
+            and asset.asset_type in {"Etsy product photo", "external listing image"}
+        )
+        if not is_local_approved and not is_remote_product_image:
             continue
         label_bits = [asset.name, asset.asset_type, asset.readiness_state]
         if asset.product:
@@ -594,7 +601,7 @@ def task_asset_options(session: Session, task: TaskRecord) -> list[AssetOption]:
     return options
 
 
-def assign_asset_to_task(session: Session, task_id: int, asset_id: int) -> TaskRecord:
+def assign_asset_to_task(session: Session, task_id: int, asset_id: int, assets_root: str | Path = "assets/products") -> TaskRecord:
     task = session.get(TaskRecord, task_id)
     if task is None:
         raise ValueError(f"Task not found: {task_id}")
@@ -602,6 +609,8 @@ def assign_asset_to_task(session: Session, task_id: int, asset_id: int) -> TaskR
     if asset is None:
         raise ValueError(f"Asset not found: {asset_id}")
     refresh_asset_file_state(session)
+    if not asset.file_exists and asset.source_path.startswith(("http://", "https://", "file://")):
+        asset = ensure_local_asset_for_remote_image(session, asset, assets_root)
     if not asset.file_exists:
         raise ValueError("Asset file is missing.")
     if asset.review_state != "approved":
@@ -610,6 +619,44 @@ def assign_asset_to_task(session: Session, task_id: int, asset_id: int) -> TaskR
     if task.status == "needs asset":
         task.status = "ready to post"
     return task
+
+
+def ensure_local_asset_for_remote_image(
+    session: Session,
+    remote_asset: AssetRecord,
+    assets_root: str | Path = "assets/products",
+) -> AssetRecord:
+    image_url = remote_asset.source_path or remote_asset.preview_path or remote_asset.canonical_url
+    if not image_url:
+        raise ValueError("Remote asset has no image URL to download.")
+    existing = session.scalar(
+        select(AssetRecord).where(
+            AssetRecord.canonical_url == image_url,
+            AssetRecord.file_exists == 1,
+        )
+    )
+    if existing:
+        if existing.review_state != "approved":
+            existing.review_state = "approved"
+            existing.approval_notes = existing.approval_notes or "Approved when selected for a post."
+        return existing
+
+    local_asset = import_external_product_image(
+        session,
+        image_url,
+        product_id=remote_asset.product_id,
+        name=remote_asset.name,
+        notes=f"Downloaded when selected for a post from asset #{remote_asset.id}.",
+        assets_root=assets_root,
+        external_source=remote_asset.external_source or "external_image",
+    )
+    local_asset.review_state = "approved"
+    local_asset.approval_notes = local_asset.approval_notes or "Approved when selected for a post."
+    local_asset.platform_suitability_json = remote_asset.platform_suitability_json
+    local_asset.source_asset_id = remote_asset.id
+    session.flush()
+    refresh_asset_file_state(session)
+    return local_asset
 
 
 def metrics_due_tasks(session: Session, today: date | None = None) -> list[TaskView]:
