@@ -163,9 +163,9 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
             source_path=full_url,
             preview_path=preview_url,
             platform_suitability_json='["Etsy", "Facebook", "Instagram"]',
-            readiness_state="external source needs review",
-            notes="Imported as an external Etsy image reference.",
-            review_state="needs review",
+            readiness_state="remote Etsy reference",
+            notes="Synced from Etsy as a remote listing image reference.",
+            review_state="synced",
             file_exists=0,
         )
         session.add(existing)
@@ -179,6 +179,10 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
     existing.sync_status = "imported"
     existing.staleness_state = "fresh"
     existing.sync_error = ""
+    if not existing.file_exists:
+        existing.readiness_state = "remote Etsy reference"
+        existing.review_state = "synced"
+        existing.notes = existing.notes or "Synced from Etsy as a remote listing image reference."
     return existing
 
 

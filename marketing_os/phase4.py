@@ -949,7 +949,16 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
         if getattr(record, "manual_override_state", "") in {"locked", "override"}
     ]
     missing_assets = [asset for asset in assets if not asset.file_exists]
-    unreviewed_assets = [asset for asset in assets if asset.review_state in {"needs review", "unreviewed"}]
+    unreviewed_assets = [
+        asset
+        for asset in assets
+        if asset.review_state in {"needs review", "unreviewed"}
+        and not (
+            not asset.file_exists
+            and asset.source_path.startswith(("http://", "https://", "file://"))
+            and asset.asset_type in {"Etsy product photo", "external listing image"}
+        )
+    ]
     metrics_due = [task for task in metric_tasks if task.metric_status != "complete"]
     planned_without_candidates = [item for item in planned_items if item.status == "planned" and not item.candidates]
     candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]

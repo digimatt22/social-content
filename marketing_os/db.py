@@ -34,6 +34,7 @@ def create_db_engine(db_path: str | Path | None = None, echo: bool = False) -> E
 def init_db(engine: Engine) -> None:
     Base.metadata.create_all(engine)
     _apply_lightweight_sqlite_migrations(engine)
+    _normalize_remote_image_reference_states(engine)
 
 
 def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
@@ -153,6 +154,43 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             for name, definition in columns.items():
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+
+
+def _normalize_remote_image_reference_states(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                UPDATE assets
+                SET review_state = 'synced',
+                    readiness_state = 'remote Etsy reference'
+                WHERE external_source = 'etsy'
+                  AND asset_type = 'Etsy product photo'
+                  AND file_exists = 0
+                  AND review_state IN ('needs review', 'unreviewed')
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                UPDATE assets
+                SET review_state = 'synced',
+                    readiness_state = 'remote website reference'
+                WHERE external_source = 'mattmademe_website'
+                  AND asset_type = 'external listing image'
+                  AND file_exists = 0
+                  AND review_state IN ('needs review', 'unreviewed')
+                """
+            )
+        )
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:

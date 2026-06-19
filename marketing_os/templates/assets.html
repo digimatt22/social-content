@@ -66,8 +66,11 @@
   {% for model in assets %}
     {% set asset = model.asset %}
     <article class="panel">
+      {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
       {% if asset.file_exists %}
         <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+      {% elif remote_preview %}
+        <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}">
       {% else %}
         <div class="asset-missing">Missing file or preview</div>
       {% endif %}
@@ -75,7 +78,7 @@
       <div class="meta">
         <span class="pill">{{ asset.asset_type }}</span>
         <span class="pill {{ 'complete' if asset.review_state == 'approved' else 'blocked' if asset.review_state in ['needs review', 'unreviewed'] else '' }}">{{ asset.review_state }}</span>
-        <span class="pill {{ 'complete' if asset.file_exists else 'blocked' }}">{{ 'file found' if asset.file_exists else 'file missing' }}</span>
+        <span class="pill {{ 'complete' if asset.file_exists else '' }}">{{ 'file found' if asset.file_exists else 'remote reference' if remote_preview else 'file missing' }}</span>
       </div>
       <p class="subtle">{{ asset.product.name if asset.product else "No product linked" }}</p>
       <p>{{ asset.readiness_state }}</p>
@@ -100,16 +103,20 @@
           {% if asset.generated_prompt %}<p class="subtle">Prompt/template: {{ asset.generated_prompt }}</p>{% endif %}
         </details>
       {% endif %}
-      <form method="post" action="{{ url_for('asset_review', asset_id=asset.id) }}" style="margin-top: 12px;">
-        <label>Review notes
-          <textarea name="approval_notes">{{ asset.approval_notes }}</textarea>
-        </label>
-        <div class="button-group">
-          <button name="review_state" value="approved" type="submit">Approve</button>
-          <button class="secondary" name="review_state" value="needs review" type="submit">Needs review</button>
-          <button class="warn" name="review_state" value="rejected" type="submit">Reject</button>
-        </div>
-      </form>
+      {% if remote_preview %}
+        <p class="subtle">Remote source image. Review happens after selecting or downloading it into a local posting asset.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('asset_review', asset_id=asset.id) }}" style="margin-top: 12px;">
+          <label>Review notes
+            <textarea name="approval_notes">{{ asset.approval_notes }}</textarea>
+          </label>
+          <div class="button-group">
+            <button name="review_state" value="approved" type="submit">Approve</button>
+            <button class="secondary" name="review_state" value="needs review" type="submit">Needs review</button>
+            <button class="warn" name="review_state" value="rejected" type="submit">Reject</button>
+          </div>
+        </form>
+      {% endif %}
     </article>
   {% else %}
     <div class="panel">No assets yet. Add files under assets/products and scan local assets.</div>

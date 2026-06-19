@@ -2261,7 +2261,6 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
 
         with session_scope(factory) as session:
-            seed_database(session)
             adapter = FakeEtsyAdapter()
             config = EtsyConfig(keystring="fixture-key", shared_secret="fixture-secret", shop_id="fixture-shop")
             summary = sync_etsy_read_only(session, adapter=adapter, config=config)
@@ -2280,7 +2279,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             asset = session.scalar(select(AssetRecord).where(AssetRecord.external_source == "etsy", AssetRecord.external_id == "img-100"))
             self.assertIsNotNone(asset)
             self.assertEqual(asset.product_id, product.id)
-            self.assertEqual(asset.review_state, "needs review")
+            self.assertEqual(asset.review_state, "synced")
+            self.assertEqual(asset.readiness_state, "remote Etsy reference")
             self.assertEqual(asset.file_exists, 0)
 
             sync = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == "etsy_api"))
@@ -2288,6 +2288,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn("Imported 1 listing", sync.notes)
 
             health = data_health(session)
+            self.assertFalse(any(item.area == "Asset Review" and item.count for item in health))
             self.assertTrue(any(item.area == "Etsy Sync" and item.status == "OK" for item in health))
 
     def test_phase5_etsy_sync_recovers_from_wrong_shop_id_with_shop_name(self) -> None:
@@ -2474,7 +2475,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertIsNotNone(asset)
             self.assertEqual(asset.product_id, product.id)
-            self.assertEqual(asset.review_state, "needs review")
+            self.assertEqual(asset.review_state, "synced")
+            self.assertEqual(asset.readiness_state, "remote website reference")
 
             post = session.scalar(select(BlogPostRecord).where(BlogPostRecord.external_source == "mattmademe_website", BlogPostRecord.external_id == "blog-1"))
             self.assertIsNotNone(post)

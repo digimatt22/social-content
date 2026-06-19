@@ -140,9 +140,9 @@
                 <div class="asset-missing">No local file</div>
               {% endif %}
               <div class="image-card-meta">
-                <span class="pill">Image {{ loop.index }}</span>
+                <span class="pill">{{ asset.external_source.replace('_', ' ').title() if asset.external_source else asset.asset_type }}</span>
                 <span class="pill {{ 'complete' if asset.file_exists else 'blocked' }}">{{ 'local' if asset.file_exists else 'remote' }}</span>
-                <span class="pill">{{ asset.review_state }}</span>
+                <span class="pill">{{ asset.readiness_state }}</span>
               </div>
             </div>
           {% endfor %}

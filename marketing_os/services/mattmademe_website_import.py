@@ -110,9 +110,9 @@ def upsert_website_product_image(session: Session, product: ProductRecord, image
             source_path=image_url,
             preview_path=image_url,
             platform_suitability_json='["Website", "Facebook", "Instagram"]',
-            readiness_state="external source needs review",
-            notes="Imported as an external MattMadeMe website image reference.",
-            review_state="needs review",
+            readiness_state="remote website reference",
+            notes="Synced from MattMadeMe.com as a remote product image reference.",
+            review_state="synced",
             file_exists=0,
         )
         session.add(existing)
@@ -126,6 +126,10 @@ def upsert_website_product_image(session: Session, product: ProductRecord, image
     existing.sync_status = "imported"
     existing.staleness_state = "fresh"
     existing.sync_error = ""
+    if not existing.file_exists:
+        existing.readiness_state = "remote website reference"
+        existing.review_state = "synced"
+        existing.notes = existing.notes or "Synced from MattMadeMe.com as a remote product image reference."
     return existing
 
 
