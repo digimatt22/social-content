@@ -209,16 +209,13 @@ These endpoints are local-first and unauthenticated, like the rest of the app. D
 
 Use Settings to import a local Etsy listing CSV export.
 
-The CSV import is read-only/import-only. It can import listing title, listing ID, listing URL, and listing status into product records with sync metadata. It does not publish anything or change Etsy.
-
-If a product has `manual_override_state` set to `locked` or `override`, imports keep the local product status and record a sync note instead of overwriting the local choice.
+The CSV import is read-only/import-only. It can import listing title, listing ID, and listing URL into product records with sync metadata. It does not publish anything or change Etsy.
 
 Useful CSV headers include:
 
 - `Title`
 - `Listing ID`
 - `Listing URL`
-- `Status`
 
 ## Read-Only API Syncs
 

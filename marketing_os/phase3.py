@@ -237,14 +237,11 @@ def persist_phase2_plan(session: Session, phase2_plan: Phase2MarketingPlan, star
 def upsert_product(session: Session, product: ProductEntity) -> ProductRecord:
     existing = session.scalar(select(ProductRecord).where(ProductRecord.name == product.name))
     payload = {
-        "status": product.status,
-        "primary_audience": product.primary_audience,
         "secondary_audiences_json": json.dumps(product.secondary_audiences),
         "best_channels_json": json.dumps(product.best_channels),
         "use_cases_json": json.dumps(product.use_cases),
         "seasonality_json": json.dumps(product.seasonality),
         "sales_momentum_note": product.sales_momentum_note,
-        "launch_priority": product.launch_priority,
     }
     if existing:
         for key, value in payload.items():

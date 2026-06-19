@@ -104,7 +104,7 @@ from .services.creative_generation import (
 from .services.etsy_import import sync_etsy_read_only
 from .services.local_assets import scan_asset_root
 from .services.mattmademe_website_import import sync_mattmademe_website
-from .services.product_admin import ETSY_SHOP_URL, LAUNCH_PRIORITIES, update_product_fields
+from .services.product_admin import ETSY_SHOP_URL
 from .services.product_matching import match_product_records
 
 
@@ -880,27 +880,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 products=products,
                 assets_by_product=assets_by_product,
                 references_by_product=references_by_product,
-                launch_priorities=LAUNCH_PRIORITIES,
                 etsy_shop_url=ETSY_SHOP_URL,
             )
-
-    @app.post("/products/<int:product_id>/edit")
-    def edit_product(product_id: int) -> str:
-        with session_scope(factory) as session:
-            try:
-                product = update_product_fields(
-                    session,
-                    product_id,
-                    status=request.form.get("status", ""),
-                    primary_audience=request.form.get("primary_audience", ""),
-                    launch_priority=request.form.get("launch_priority", "medium"),
-                    use_cases_text=request.form.get("use_cases", ""),
-                    sales_momentum_note=request.form.get("sales_momentum_note", ""),
-                )
-                flash(f"Updated {product.name}.")
-            except ValueError as exc:
-                flash(str(exc))
-        return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
 
     @app.post("/assets/scan")
     def scan_assets() -> str:

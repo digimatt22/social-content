@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 
 from marketing_os.db import create_db_engine, init_db, session_factory, session_scope
 from marketing_os.db_models import (
@@ -123,6 +123,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 self.assertEqual(session.scalar(select(func.count()).select_from(ProductRecord)), 0)
                 self.assertEqual(session.scalar(select(func.count()).select_from(PlanRecord)), 0)
+            columns = {column["name"] for column in inspect(app.config["SESSION_FACTORY"].kw["bind"]).get_columns("products")}
+            self.assertFalse({"status", "primary_audience", "launch_priority"} & columns)
 
     def test_database_initializes_and_seeds_business_templates_and_assets(self) -> None:
         tmp, factory = self.build_session()
@@ -289,33 +291,14 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Match duplicate products", products_page.data)
             self.assertIn(b"Sync Etsy", products_page.data)
             self.assertIn(b"Share Etsy shop", products_page.data)
+            self.assertNotIn(b"Edit product fields", products_page.data)
+            self.assertNotIn(b"Audience:", products_page.data)
+            self.assertNotIn(b"Priority:", products_page.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
                 self.assertIsNotNone(product)
                 product_id = product.id
-
-            edit_response = client.post(
-                f"/products/{product_id}/edit",
-                data={
-                    "status": "active",
-                    "primary_audience": "Cruise Duck Hunter",
-                    "launch_priority": "high",
-                    "use_cases": "cruise hiding, gift buyer, desk mascot",
-                    "sales_momentum_note": "Edited in the product admin.",
-                },
-                follow_redirects=True,
-            )
-            self.assertEqual(edit_response.status_code, 200)
-            self.assertIn(b"Cruise Duck Hunter", edit_response.data)
-            self.assertIn(b"cruise hiding", edit_response.data)
-
-            with session_scope(app.config["SESSION_FACTORY"]) as session:
-                product = session.get(ProductRecord, product_id)
-                self.assertEqual(product.primary_audience, "Cruise Duck Hunter")
-                self.assertEqual(product.launch_priority, "high")
-                self.assertEqual(json.loads(product.use_cases_json), ["cruise hiding", "gift buyer", "desk mascot"])
-                self.assertEqual(product.manual_override_state, "override")
 
             export_response = client.post("/settings/export")
             self.assertEqual(export_response.status_code, 200)
@@ -2464,7 +2447,6 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 select(ProductRecord).where(ProductRecord.external_source == "mattmademe_website", ProductRecord.external_id == "web-200")
             )
             self.assertIsNotNone(product)
-            self.assertEqual(product.status, "available")
             self.assertEqual(product.canonical_url, "https://mattmademe.example/products/web-200")
 
             asset = session.scalar(
@@ -2558,28 +2540,22 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             seed_database(session)
             target = ProductRecord(
                 name="Manual Canonical Duck",
-                status="active",
-                primary_audience="Duck collectors",
                 secondary_audiences_json="[]",
                 best_channels_json="[]",
                 use_cases_json="[]",
                 seasonality_json="[]",
                 sales_momentum_note="",
-                launch_priority="medium",
                 external_source="mattmademe_website",
                 external_id="web-manual-canonical",
                 canonical_url="https://mattmademe.example/products/manual-canonical",
             )
             duplicate = ProductRecord(
                 name="Manual Canonical Duck Etsy Listing",
-                status="active",
-                primary_audience="Duck collectors",
                 secondary_audiences_json="[]",
                 best_channels_json="[]",
                 use_cases_json="[]",
                 seasonality_json="[]",
                 sales_momentum_note="",
-                launch_priority="medium",
                 external_source="etsy",
                 external_id="etsy-manual-canonical",
                 canonical_url="https://etsy.example/listing/etsy-manual-canonical",

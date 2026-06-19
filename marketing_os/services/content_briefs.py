@@ -933,8 +933,6 @@ def _product_facts(product: ProductRecord) -> dict[str, object]:
     return {
         "id": product.id,
         "name": product.name,
-        "status": product.status,
-        "primary_audience": product.primary_audience,
         "best_channels": json_list(product.best_channels_json),
         "use_cases": json_list(product.use_cases_json),
         "seasonality": json_list(product.seasonality_json),

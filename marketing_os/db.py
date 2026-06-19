@@ -34,6 +34,7 @@ def create_db_engine(db_path: str | Path | None = None, echo: bool = False) -> E
 def init_db(engine: Engine) -> None:
     Base.metadata.create_all(engine)
     _apply_lightweight_sqlite_migrations(engine)
+    _drop_removed_product_columns(engine)
     _normalize_remote_image_reference_states(engine)
 
 
@@ -191,6 +192,23 @@ def _normalize_remote_image_reference_states(engine: Engine) -> None:
                 """
             )
         )
+
+
+def _drop_removed_product_columns(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(engine)
+    if "products" not in set(inspector.get_table_names()):
+        return
+    existing = {column["name"] for column in inspector.get_columns("products")}
+    removed = [name for name in ["status", "primary_audience", "launch_priority"] if name in existing]
+    if not removed:
+        return
+
+    with engine.begin() as connection:
+        for name in removed:
+            connection.execute(text(f"ALTER TABLE products DROP COLUMN {name}"))
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:

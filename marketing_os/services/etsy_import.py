@@ -118,25 +118,21 @@ def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) ->
     listing_id = _text(listing, "listing_id", "id")
     title = _text(listing, "title", "name") or f"Etsy listing {listing_id}"
     url = _text(listing, "url", "listing_url") or (f"https://www.etsy.com/listing/{listing_id}" if listing_id else "")
-    state = _text(listing, "state", "status") or "active"
+    description = _text(listing, "description")
     existing = find_product_by_identity(session, "etsy", listing_id, url, title)
     if existing is None:
         existing = ProductRecord(
             name=title,
-            status=state,
-            primary_audience="Needs review",
             secondary_audiences_json="[]",
             best_channels_json='["Etsy", "Facebook", "Instagram"]',
             use_cases_json=json.dumps(_list_text(listing, "tags")[:6]),
             seasonality_json="[]",
-            sales_momentum_note=_text(listing, "description")[:500],
-            launch_priority="medium",
+            sales_momentum_note=description,
         )
         session.add(existing)
     if existing.manual_override_state not in {"locked", "override"}:
         existing.name = existing.name or title
-        existing.status = state
-        existing.sales_momentum_note = _text(listing, "description")[:500] or existing.sales_momentum_note
+        existing.sales_momentum_note = description or existing.sales_momentum_note
         existing.sync_error = ""
     else:
         existing.sync_error = "Etsy sync preserved local fields because this product has a manual override."

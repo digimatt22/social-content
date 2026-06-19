@@ -1096,23 +1096,18 @@ def import_etsy_listing_csv(session: Session, csv_path: str | Path) -> list[Prod
                 continue
             listing_id = _first_present(row, ["listing_id", "id", "Listing ID", "Listing Id", "ID"])
             url = _first_present(row, ["url", "listing_url", "URL", "Listing URL"])
-            status = _first_present(row, ["state", "status", "Status", "State"]) or "imported"
             existing = _find_product_for_import(session, title, listing_id)
             if existing is None:
                 existing = ProductRecord(
                     name=title,
-                    status=status,
-                    primary_audience="Needs review",
                     secondary_audiences_json="[]",
                     best_channels_json='["Etsy"]',
                     use_cases_json="[]",
                     seasonality_json="[]",
-                    sales_momentum_note="Imported from Etsy CSV; review audience, seasonality, and launch priority.",
-                    launch_priority="medium",
+                    sales_momentum_note="Imported from Etsy CSV.",
                 )
                 session.add(existing)
             if existing.manual_override_state not in {"locked", "override"}:
-                existing.status = status
                 existing.sync_error = ""
             else:
                 existing.sync_error = "Import skipped local fields because this product has a manual override."
@@ -1396,14 +1391,11 @@ def _export_product(record: ProductRecord) -> JsonDict:
     return {
         "id": record.id,
         "name": record.name,
-        "status": record.status,
-        "primary_audience": record.primary_audience,
         "secondary_audiences": json_list(record.secondary_audiences_json),
         "best_channels": json_list(record.best_channels_json),
         "use_cases": json_list(record.use_cases_json),
         "seasonality": json_list(record.seasonality_json),
         "sales_momentum_note": record.sales_momentum_note,
-        "launch_priority": record.launch_priority,
         "external_source": record.external_source,
         "external_id": record.external_id,
         "canonical_url": record.canonical_url,

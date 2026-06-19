@@ -64,28 +64,22 @@ def upsert_website_product(session: Session, payload: dict[str, object]) -> Prod
     external_id = _text(payload, "id", "productId", "slug")
     name = _text(payload, "name", "title") or f"Website product {external_id}"
     url = _text(payload, "url", "productUrl", "canonicalUrl")
-    status = _text(payload, "status") or "imported"
     existing = find_product_by_identity(session, "mattmademe_website", external_id, url, name)
     if existing is None:
         existing = ProductRecord(
             name=name,
-            status=status,
-            primary_audience=_join(payload.get("perfectFor")) or "Needs review",
             secondary_audiences_json=json.dumps(_list(payload.get("perfectFor"))),
             best_channels_json='["Website", "Facebook", "Instagram"]',
             use_cases_json=json.dumps(_list(payload.get("tags"))),
             seasonality_json="[]",
-            sales_momentum_note=_text(payload, "description", "why", "story")[:500],
-            launch_priority="medium",
+            sales_momentum_note=_text(payload, "description", "why", "story"),
         )
         session.add(existing)
     if existing.manual_override_state not in {"locked", "override"}:
         existing.name = name
-        existing.status = status
-        existing.primary_audience = _join(payload.get("perfectFor")) or existing.primary_audience
         existing.secondary_audiences_json = json.dumps(_list(payload.get("perfectFor"))) or existing.secondary_audiences_json
         existing.use_cases_json = json.dumps(_list(payload.get("tags"))) or existing.use_cases_json
-        existing.sales_momentum_note = _text(payload, "description", "why", "story")[:500] or existing.sales_momentum_note
+        existing.sales_momentum_note = _text(payload, "description", "why", "story") or existing.sales_momentum_note
         existing.sync_error = ""
     else:
         existing.sync_error = "Website sync preserved local fields because this product has a manual override."
