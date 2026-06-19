@@ -282,6 +282,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Export scope", settings.data)
             self.assertIn(b"Products and images", settings.data)
             self.assertIn(b"JSON exports", settings.data)
+            self.assertNotIn(b"<option value=\"json\">JSON</option>", settings.data)
             self.assertNotIn(b"Create backup", settings.data)
             self.assertNotIn(b"Sync Etsy", settings.data)
             self.assertNotIn(b"Sync website", settings.data)
@@ -322,7 +323,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(filtered_products_page.status_code, 200)
             self.assertIn(b"Bingo Duck", filtered_products_page.data)
 
-            export_response = client.post("/settings/export", data={"scope": "products", "format": "json"})
+            export_response = client.post("/settings/export", data={"scope": "products"})
             self.assertEqual(export_response.status_code, 200)
             self.assertEqual(export_response.mimetype, "application/json")
             export_payload = json.loads(export_response.data.decode("utf-8"))

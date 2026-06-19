@@ -1162,9 +1162,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.post("/settings/export")
     def export_data():
-        if request.form.get("format", "json") != "json":
-            flash("Only JSON export is supported right now.")
-            return redirect(url_for("settings"))
         scope = request.form.get("scope", "all")
         with session_scope(factory) as session:
             path = export_operating_data(session, app.config["EXPORT_DIR"], scope=scope)
