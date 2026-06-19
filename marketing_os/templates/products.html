@@ -25,7 +25,7 @@
         <label>Duplicate to merge
           <select name="source_product_id" required>
             <option value="">Choose duplicate</option>
-            {% for product in products %}
+            {% for product in all_products %}
               <option value="{{ product.id }}">{{ product.name }}{% if product.external_source %} · {{ product.external_source }}{% endif %}</option>
             {% endfor %}
           </select>
@@ -33,21 +33,46 @@
         <label>Canonical product to keep
           <select name="target_product_id" required>
             <option value="">Choose canonical</option>
-            {% for product in products %}
+            {% for product in all_products %}
               <option value="{{ product.id }}">{{ product.name }}{% if product.external_source %} · {{ product.external_source }}{% endif %}</option>
             {% endfor %}
           </select>
         </label>
       </div>
-      <button type="submit" {{ 'disabled' if products|length < 2 else '' }}>Match products</button>
+      <button type="submit" {{ 'disabled' if all_products|length < 2 else '' }}>Match products</button>
     </form>
   </details>
+</section>
+
+<section class="panel" style="margin-bottom: 14px;">
+  <form method="get" action="{{ url_for('products_admin') }}" class="grid">
+    <label>Product tag
+      <select name="tag">
+        <option value="">All tags</option>
+        {% for tag in all_tags %}
+          <option value="{{ tag }}" {{ 'selected' if selected_tag == tag|lower else '' }}>{{ tag }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Sort
+      <select name="sort">
+        <option value="name" {{ 'selected' if selected_sort == 'name' else '' }}>Name</option>
+        <option value="source" {{ 'selected' if selected_sort == 'source' else '' }}>Source</option>
+        <option value="synced" {{ 'selected' if selected_sort == 'synced' else '' }}>Last synced</option>
+      </select>
+    </label>
+    <div class="button-group" style="align-self: end; margin-bottom: 10px;">
+      <button type="submit">Apply</button>
+      <a class="button secondary" href="{{ url_for('products_admin') }}">Reset</a>
+    </div>
+  </form>
 </section>
 
 <section class="agenda">
   {% for product in products %}
     {% set assets = assets_by_product.get(product.id, []) %}
     {% set references = references_by_product.get(product.id, []) %}
+    {% set product_tags = json_list(product.use_cases_json) %}
     <article class="panel" id="product-{{ product.id }}">
       <div class="planned-header">
         <div>
@@ -55,7 +80,6 @@
           <div class="meta">
             <span class="pill">{{ product.sync_status }}</span>
             {% if product.external_source %}<span class="pill">{{ product.external_source }}</span>{% endif %}
-            {% if product.staleness_state %}<span class="pill">{{ product.staleness_state }}</span>{% endif %}
           </div>
         </div>
         <div class="button-group">
@@ -67,13 +91,25 @@
 
       <div class="grid" style="margin-top: 12px;">
         <div>
-          {% if json_list(product.use_cases_json) %}
+          <h4 style="margin: 0 0 8px;">Product tags</h4>
+          {% if product_tags %}
             <div class="image-card-meta" style="margin-bottom: 10px;">
-              {% for tag in json_list(product.use_cases_json) %}
+              {% for tag in product_tags %}
                 <span class="pill">{{ tag }}</span>
               {% endfor %}
             </div>
+          {% else %}
+            <p class="subtle">No product tags yet.</p>
           {% endif %}
+          <details class="compact-tool">
+            <summary><strong>Edit tags</strong></summary>
+            <form method="post" action="{{ url_for('update_product_tags', product_id=product.id) }}" style="margin-top: 10px;">
+              <label>Tags
+                <textarea name="tags">{{ product_tags|join(', ') }}</textarea>
+              </label>
+              <button class="secondary" type="submit">Save tags</button>
+            </form>
+          </details>
           {% if product.sync_error %}<p class="subtle">{{ product.sync_error }}</p>{% endif %}
         </div>
         <div>
@@ -93,6 +129,13 @@
           {% endif %}
         </div>
       </div>
+
+      {% if product.sales_momentum_note %}
+        <details class="compact-tool" style="margin-top: 12px;">
+          <summary><strong>Description</strong></summary>
+          <div class="copybox" style="margin-top: 8px;">{{ product.sales_momentum_note }}</div>
+        </details>
+      {% endif %}
 
       <h4 style="margin: 14px 0 8px;">Images</h4>
       {% if assets %}
@@ -119,7 +162,7 @@
       {% endif %}
     </article>
   {% else %}
-    <div class="panel">No products yet. Run Etsy sync or website sync to import product records.</div>
+    <div class="panel">{{ 'No products match this filter.' if all_products else 'No products yet. Run Etsy sync or website sync to import product records.' }}</div>
   {% endfor %}
 </section>
 {% endblock %}

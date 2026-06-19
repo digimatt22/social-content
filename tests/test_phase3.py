@@ -294,16 +294,33 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Products", products_page.data)
             self.assertIn(b"Match duplicate products", products_page.data)
             self.assertIn(b"Sync Etsy", products_page.data)
+            self.assertIn(b"Product tag", products_page.data)
+            self.assertIn(b"Product tags", products_page.data)
+            self.assertIn(b"Description", products_page.data)
             self.assertNotIn(b"Share Etsy shop", products_page.data)
             self.assertNotIn(b"Open source", products_page.data)
             self.assertNotIn(b"Edit product fields", products_page.data)
             self.assertNotIn(b"Audience:", products_page.data)
             self.assertNotIn(b"Priority:", products_page.data)
+            self.assertNotIn(b'<span class="pill">fresh</span>', products_page.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
                 self.assertIsNotNone(product)
                 product_id = product.id
+
+            tags_response = client.post(
+                f"/products/{product_id}/tags",
+                data={"tags": "desk gift, planning guide"},
+                follow_redirects=True,
+            )
+            self.assertEqual(tags_response.status_code, 200)
+            self.assertIn(b"Product tags saved.", tags_response.data)
+            self.assertIn(b"desk gift", tags_response.data)
+
+            filtered_products_page = client.get("/products?tag=desk+gift&sort=name")
+            self.assertEqual(filtered_products_page.status_code, 200)
+            self.assertIn(b"Bingo Duck", filtered_products_page.data)
 
             export_response = client.post("/settings/export", data={"scope": "products", "format": "json"})
             self.assertEqual(export_response.status_code, 200)
@@ -2239,8 +2256,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                         "title": "Fixture Duck &#39;Special&#39; &amp; Co",
                         "url": "https://etsy.example/listing/etsy-100",
                         "state": "active",
-                        "description": "A fixture listing for sync tests &39;with escaped text&39;.",
-                        "tags": ["gift &amp; collector", "duck"],
+                        "description": (
+                            "A fixture listing for sync tests &39;with escaped text&39;. "
+                            + ("Full Etsy listing detail. " * 40)
+                            + "Final untrimmed sentence."
+                        ),
+                        "tags": ["gift &amp; collector", "duck", "desk", "handmade", "small batch", "office", "funny", "collector shelf"],
                     }
                 ]
 
@@ -2269,7 +2290,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIsNotNone(product)
             self.assertEqual(product.name, "Fixture Duck 'Special' & Co")
             self.assertIn("'with escaped text'", product.sales_momentum_note)
+            self.assertIn("Final untrimmed sentence.", product.sales_momentum_note)
+            self.assertGreater(len(product.sales_momentum_note), 500)
             self.assertIn("gift & collector", product.use_cases_json)
+            self.assertIn("collector shelf", product.use_cases_json)
             self.assertEqual(product.canonical_url, "https://etsy.example/listing/etsy-100")
             self.assertEqual(product.sync_status, "imported")
 

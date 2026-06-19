@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import tempfile
 from datetime import date, datetime
@@ -853,8 +854,23 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.get("/products")
     def products_admin() -> str:
+        selected_tag = request.args.get("tag", "").strip().lower()
+        selected_sort = request.args.get("sort", "name").strip().lower()
         with session_scope(factory) as session:
-            products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            all_products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            all_tags = sorted({tag for product in all_products for tag in json_list(product.use_cases_json)})
+            products = [
+                product
+                for product in all_products
+                if not selected_tag or selected_tag in {tag.lower() for tag in json_list(product.use_cases_json)}
+            ]
+            if selected_sort == "source":
+                products.sort(key=lambda product: (product.external_source or "local", product.name.lower()))
+            elif selected_sort == "synced":
+                products.sort(key=lambda product: product.last_synced_at or datetime.min, reverse=True)
+            else:
+                selected_sort = "name"
+                products.sort(key=lambda product: product.name.lower())
             product_ids = [product.id for product in products]
             assets_by_product: dict[int, list[AssetRecord]] = {product.id: [] for product in products}
             references_by_product: dict[int, list[ProductExternalReference]] = {product.id: [] for product in products}
@@ -876,9 +892,24 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 "products.html",
                 active="products",
                 products=products,
+                all_products=all_products,
+                all_tags=all_tags,
+                selected_tag=selected_tag,
+                selected_sort=selected_sort,
                 assets_by_product=assets_by_product,
                 references_by_product=references_by_product,
             )
+
+    @app.post("/products/<int:product_id>/tags")
+    def update_product_tags(product_id: int) -> str:
+        tags = _tag_values(request.form.get("tags", ""))
+        with session_scope(factory) as session:
+            product = session.get(ProductRecord, product_id)
+            if product is None:
+                abort(404)
+            product.use_cases_json = json.dumps(tags)
+            flash("Product tags saved.")
+        return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
 
     @app.post("/assets/scan")
     def scan_assets() -> str:

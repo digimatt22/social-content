@@ -125,7 +125,7 @@ def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) ->
             name=title,
             secondary_audiences_json="[]",
             best_channels_json='["Etsy", "Facebook", "Instagram"]',
-            use_cases_json=json.dumps(_list_text(listing, "tags")[:6]),
+            use_cases_json=json.dumps(_list_text(listing, "tags")),
             seasonality_json="[]",
             sales_momentum_note=description,
         )
