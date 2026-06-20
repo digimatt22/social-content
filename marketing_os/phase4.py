@@ -41,6 +41,11 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MANAGED_IMAGE_ROOT = Path("outputs")
 MANAGED_PRODUCT_ASSETS_ROOT = Path("assets/products")
 MANAGED_GENERATED_ROOT = Path("outputs/generated")
+ASSET_TAG_LABELS = {
+    "etsy product photo": "etsy",
+    "external listing image": "etsy",
+    "generated post image": "magnific",
+}
 
 
 @dataclass(frozen=True)
@@ -122,12 +127,23 @@ class CreativeGenerationRun:
 class AssetView:
     asset: AssetRecord
     used_by: list[TaskView]
+    grouped_assets: list[AssetRecord] | None = None
+
+    @property
+    def related_assets(self) -> list[AssetRecord]:
+        return self.grouped_assets or [self.asset]
 
 
 @dataclass(frozen=True)
 class AssetOption:
     asset: AssetRecord
     label: str
+
+
+@dataclass(frozen=True)
+class AssetDeletionResult:
+    asset_ids: list[int]
+    deleted_paths: list[Path]
 
 
 JsonDict = dict[str, object]
@@ -190,6 +206,7 @@ def serialize_task_view(model: TaskView) -> JsonDict:
         "action_title": model.action_title,
         "title": task.title,
         "due_date": task.due_date.isoformat(),
+        "scheduled_time": task.scheduled_time or "09:00",
         "owner_role": task.owner_role,
         "platform": task.platform,
         "content_type": task.content_type,
@@ -289,6 +306,7 @@ def serialize_asset_view(model: AssetView) -> JsonDict:
         "staleness_state": asset.staleness_state,
         "manual_override_state": asset.manual_override_state,
         "manual_override_note": asset.manual_override_note,
+        "hidden_from_generation": bool(asset.hidden_from_generation),
         "source_asset_id": asset.source_asset_id,
         "used_by": [serialize_task_view(task) for task in model.used_by],
     }
@@ -400,6 +418,7 @@ def creative_asset_plans(session: Session, output_root: str | Path = MANAGED_GEN
         session.scalars(
             select(AssetRecord)
             .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .where(AssetRecord.hidden_from_generation == 0)
             .order_by(AssetRecord.name)
         )
     )
@@ -568,21 +587,106 @@ def generate_creative_output_files_for_source(
     return run
 
 
-def asset_inventory(session: Session) -> list[AssetView]:
-    refresh_asset_file_state(session)
-    assets = list(session.scalars(select(AssetRecord).order_by(AssetRecord.name)))
+def asset_inventory(
+    session: Session,
+    include_hidden: bool = False,
+    limit: int | None = None,
+    offset: int = 0,
+    tag: str = "",
+) -> list[AssetView]:
+    _normalize_duplicate_asset_visibility(session)
+    query = select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id)
+    assets = _representative_assets(list(session.scalars(query)), include_hidden=include_hidden)
+    grouped_assets_by_representative = _grouped_assets_by_representative(session, assets)
+    if tag:
+        assets = [
+            asset
+            for asset in assets
+            if _asset_group_matches_asset_tag(grouped_assets_by_representative.get(asset.id, [asset]), tag)
+        ]
+    if limit is not None:
+        start = max(offset, 0)
+        assets = assets[start : start + limit]
+    asset_ids = [asset.id for asset in assets]
+    grouped_assets_by_representative = {
+        asset.id: grouped_assets_by_representative.get(asset.id, [asset])
+        for asset in assets
+    }
+    grouped_asset_ids = [
+        grouped_asset.id
+        for grouped_assets in grouped_assets_by_representative.values()
+        for grouped_asset in grouped_assets
+    ]
+    refresh_asset_file_state(session, asset_ids=grouped_asset_ids or (asset_ids if limit is not None else None))
     tasks_by_asset: dict[int, list[TaskView]] = defaultdict(list)
-    tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.asset_id.is_not(None)).order_by(TaskRecord.due_date, TaskRecord.id)))
-    for task in tasks:
-        if task.asset_id is not None:
-            tasks_by_asset[task.asset_id].append(task_view(task))
-    return [AssetView(asset=asset, used_by=tasks_by_asset.get(asset.id, [])) for asset in assets]
+    if grouped_asset_ids:
+        tasks = list(
+            session.scalars(
+                select(TaskRecord).where(TaskRecord.asset_id.in_(grouped_asset_ids)).order_by(TaskRecord.due_date, TaskRecord.id)
+            )
+        )
+        for task in tasks:
+            if task.asset_id is not None:
+                tasks_by_asset[task.asset_id].append(task_view(task))
+    views: list[AssetView] = []
+    for asset in assets:
+        grouped_assets = grouped_assets_by_representative.get(asset.id, [asset])
+        used_by: list[TaskView] = []
+        seen_task_ids: set[int] = set()
+        for grouped_asset in grouped_assets:
+            for task in tasks_by_asset.get(grouped_asset.id, []):
+                if task.task.id in seen_task_ids:
+                    continue
+                seen_task_ids.add(task.task.id)
+                used_by.append(task)
+        views.append(AssetView(asset=asset, used_by=used_by, grouped_assets=grouped_assets))
+    return views
+
+
+def asset_inventory_count(session: Session, include_hidden: bool = False, tag: str = "") -> int:
+    _normalize_duplicate_asset_visibility(session)
+    assets = _representative_assets(list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id))), include_hidden=include_hidden)
+    if not tag:
+        return len(assets)
+    grouped_assets_by_representative = _grouped_assets_by_representative(session, assets)
+    return len(
+        [
+            asset
+            for asset in assets
+            if _asset_group_matches_asset_tag(grouped_assets_by_representative.get(asset.id, [asset]), tag)
+        ]
+    )
+
+
+def asset_tag_label(asset_type: str) -> str:
+    normalized = (asset_type or "").strip().lower()
+    return ASSET_TAG_LABELS.get(normalized, normalized)
+
+
+def asset_tag_options(session: Session, include_hidden: bool = False) -> list[str]:
+    _normalize_duplicate_asset_visibility(session)
+    assets = _representative_assets(
+        list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id))),
+        include_hidden=include_hidden,
+    )
+    return sorted({asset_tag_label(asset.asset_type) for asset in assets if asset_tag_label(asset.asset_type)})
+
+
+def hidden_asset_group_count(session: Session) -> int:
+    _normalize_duplicate_asset_visibility(session)
+    all_assets = list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id)))
+    hidden_groups = [
+        representative
+        for representative in _representative_assets(all_assets, include_hidden=True)
+        if representative.hidden_from_generation
+    ]
+    return len(hidden_groups)
 
 
 def task_asset_options(session: Session, task: TaskRecord) -> list[AssetOption]:
     refresh_asset_file_state(session)
     product = session.scalar(select(ProductRecord).where(ProductRecord.name == task.product_name)) if task.product_name else None
-    query = select(AssetRecord).order_by(AssetRecord.file_exists.desc(), AssetRecord.name)
+    query = select(AssetRecord).where(AssetRecord.hidden_from_generation == 0).order_by(AssetRecord.file_exists.desc(), AssetRecord.name)
     if product:
         query = query.where(AssetRecord.product_id.in_([product.id, None]))
     assets = list(session.scalars(query))
@@ -610,6 +714,8 @@ def assign_asset_to_task(session: Session, task_id: int, asset_id: int, assets_r
     asset = session.get(AssetRecord, asset_id)
     if asset is None:
         raise ValueError(f"Asset not found: {asset_id}")
+    if asset.hidden_from_generation:
+        raise ValueError("This image is hidden from automation and cannot be assigned to a task.")
     refresh_asset_file_state(session)
     if not asset.file_exists and asset.source_path.startswith(("http://", "https://", "file://")):
         asset = ensure_local_asset_for_remote_image(session, asset, assets_root)
@@ -786,9 +892,14 @@ def status_tone(status: str) -> str:
     return ""
 
 
-def refresh_asset_file_state(session: Session, base_dir: str | Path = ".") -> list[AssetRecord]:
+def refresh_asset_file_state(session: Session, base_dir: str | Path = ".", asset_ids: list[int] | None = None) -> list[AssetRecord]:
     base = Path(base_dir)
-    assets = list(session.scalars(select(AssetRecord).order_by(AssetRecord.id)))
+    query = select(AssetRecord).order_by(AssetRecord.id)
+    if asset_ids is not None:
+        if not asset_ids:
+            return []
+        query = query.where(AssetRecord.id.in_(asset_ids))
+    assets = list(session.scalars(query))
     now = utc_now()
     for asset in assets:
         path = asset_path(asset, base)
@@ -966,6 +1077,8 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     creative_jobs_attention = [job for job in creative_jobs if job.provider_error or job.review_state == "needs_review" or job.provider_status == "error"]
     etsy_sync = next((record for record in sync_metadata if record.source_name == "etsy_api"), None)
     local_asset_sync = next((record for record in sync_metadata if record.source_name == "local_asset_library"), None)
+    content_automation_sync = next((record for record in sync_metadata if record.source_name == "content_automation"), None)
+    weekly_planner_sync = next((record for record in sync_metadata if record.source_name == "weekly_social_planner"), None)
     asset_library_missing = bool(asset_library_root and not Path(asset_library_root).expanduser().exists())
     template_types = {template.template_type for template in templates}
     missing_template_types = [kind for kind in ["platform", "copy", "graphic"] if kind not in template_types]
@@ -1020,7 +1133,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             "Follow up" if metrics_due else "OK",
             len(metrics_due),
             "Posted tasks still need metrics or final review." if metrics_due else "No posted tasks are waiting for metric follow-up.",
-            "Open Metrics Due.",
+            "Open Follow-Ups.",
         ),
         DataHealthItem(
             "Content Production",
@@ -1030,6 +1143,20 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             if planned_without_candidates or candidates_needing_review
             else "No planned content is waiting for production review.",
             "Open Planning.",
+        ),
+        DataHealthItem(
+            "Automation: Content Production",
+            "OK" if content_automation_sync else "Not run",
+            0 if content_automation_sync else 1,
+            _automation_run_message(content_automation_sync, "Content automation has not run yet."),
+            "Run python -m marketing_os.jobs.content_automation --limit 10.",
+        ),
+        DataHealthItem(
+            "Automation: Weekly Planner",
+            "OK" if weekly_planner_sync else "Not run",
+            0 if weekly_planner_sync else 1,
+            _automation_run_message(weekly_planner_sync, "Weekly social planner has not run yet."),
+            "Run python -m marketing_os.jobs.weekly_social_planner.",
         ),
         DataHealthItem(
             "Learning Loop",
@@ -1254,6 +1381,211 @@ def review_asset(session: Session, asset_id: int, review_state: str, notes: str 
     return asset
 
 
+def set_asset_generation_visibility(session: Session, asset_id: int, hidden: bool, note: str = "") -> AssetRecord:
+    asset = session.get(AssetRecord, asset_id)
+    if asset is None:
+        raise ValueError(f"Asset not found: {asset_id}")
+    related_assets = _matching_asset_records(session, asset)
+    for related_asset in related_assets:
+        related_asset.hidden_from_generation = 1 if hidden else 0
+        if hidden:
+            related_asset.default_reference = 0
+            related_asset.readiness_state = "hidden from automation"
+            if not related_asset.manual_override_state:
+                related_asset.manual_override_state = "hidden"
+            related_asset.manual_override_note = note.strip() or "Hidden locally so synced remote image is not used for post generation."
+        else:
+            if related_asset.manual_override_state == "hidden":
+                related_asset.manual_override_state = ""
+                related_asset.manual_override_note = note.strip()
+            if not related_asset.file_exists and related_asset.source_path.startswith(("http://", "https://", "file://")):
+                related_asset.readiness_state = "remote Etsy reference" if related_asset.external_source == "etsy" else "remote reference"
+            elif related_asset.review_state == "approved":
+                related_asset.readiness_state = "ready to use"
+    session.flush()
+    return asset
+
+
+def delete_local_asset_file(session: Session, asset_id: int, base_dir: str | Path = ".") -> AssetDeletionResult:
+    asset = session.get(AssetRecord, asset_id)
+    if asset is None:
+        raise ValueError(f"Asset not found: {asset_id}")
+    related_assets = _matching_asset_records(session, asset)
+    refresh_asset_file_state(session, asset_ids=[related_asset.id for related_asset in related_assets])
+    local_assets = [
+        related_asset
+        for related_asset in related_assets
+        if related_asset.file_exists and _is_local_asset_path(related_asset)
+    ]
+    if not local_assets:
+        raise ValueError("Only local asset files can be deleted from the gallery.")
+
+    deleted_paths: list[Path] = []
+    for path in _unique_asset_paths(local_assets, base_dir):
+        if not path.is_file():
+            continue
+        path.unlink()
+        deleted_paths.append(path)
+
+    deleted_ids = [related_asset.id for related_asset in related_assets]
+    deleted_lookup = set(deleted_ids)
+    now = utc_now()
+    for related_asset in related_assets:
+        related_asset.product_id = None
+        related_asset.file_exists = 0
+        related_asset.file_checked_at = now
+        related_asset.file_modified_at = None
+        related_asset.file_checksum = ""
+        related_asset.file_size_bytes = None
+        related_asset.default_reference = 0
+        related_asset.hidden_from_generation = 1
+        related_asset.readiness_state = "deleted locally"
+        related_asset.sync_status = "deleted"
+        related_asset.manual_override_state = "deleted"
+        related_asset.manual_override_note = "Deleted from the local gallery and unlinked from product automation references."
+
+    for task in session.scalars(select(TaskRecord).where(TaskRecord.asset_id.in_(deleted_ids))):
+        task.asset_id = None
+        if task.status == "ready to post":
+            task.status = "needs asset"
+
+    for job in session.scalars(select(CreativeGenerationJobRecord).where(CreativeGenerationJobRecord.candidate_asset_id.in_(deleted_ids))):
+        job.candidate_asset_id = None
+
+    for item in session.scalars(select(PlannedContentRecord)):
+        item.selected_source_asset_ids_json = _json_ids_without(item.selected_source_asset_ids_json, deleted_lookup)
+
+    for candidate in session.scalars(select(GeneratedContentCandidateRecord)):
+        candidate.source_asset_ids_json = _json_ids_without(candidate.source_asset_ids_json, deleted_lookup)
+
+    session.flush()
+    return AssetDeletionResult(asset_ids=deleted_ids, deleted_paths=deleted_paths)
+
+
+def asset_identity_key(asset: AssetRecord) -> str:
+    if asset.file_checksum:
+        return f"checksum:{asset.file_checksum}"
+    for value in (asset.canonical_url, asset.source_path, asset.preview_path):
+        normalized = _normalized_asset_identity_value(value)
+        if normalized:
+            return f"url:{normalized}"
+    if asset.source_asset_id:
+        return f"source-asset:{asset.source_asset_id}"
+    return f"asset:{asset.id}"
+
+
+def _normalized_asset_identity_value(value: str | None) -> str:
+    if not value:
+        return ""
+    return value.strip()
+
+
+def _representative_assets(assets: list[AssetRecord], include_hidden: bool) -> list[AssetRecord]:
+    groups: dict[str, list[AssetRecord]] = defaultdict(list)
+    for asset in assets:
+        groups[asset_identity_key(asset)].append(asset)
+    representatives: list[AssetRecord] = []
+    for grouped_assets in groups.values():
+        if not include_hidden and all(asset.hidden_from_generation for asset in grouped_assets):
+            continue
+        visible_assets = [asset for asset in grouped_assets if not asset.hidden_from_generation]
+        candidates = visible_assets or grouped_assets
+        representatives.append(sorted(candidates, key=lambda asset: (asset.name.lower(), asset.id))[0])
+    return sorted(representatives, key=lambda asset: (asset.name.lower(), asset.id))
+
+
+def _grouped_assets_by_representative(session: Session, representatives: list[AssetRecord]) -> dict[int, list[AssetRecord]]:
+    keys = {asset_identity_key(asset) for asset in representatives}
+    if not keys:
+        return {}
+    all_assets = list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id)))
+    grouped: dict[str, list[AssetRecord]] = defaultdict(list)
+    for asset in all_assets:
+        key = asset_identity_key(asset)
+        if key in keys:
+            grouped[key].append(asset)
+    return {asset.id: grouped.get(asset_identity_key(asset), [asset]) for asset in representatives}
+
+
+def _asset_group_matches_asset_tag(assets: list[AssetRecord], tag: str) -> bool:
+    selected = tag.strip().lower()
+    if not selected:
+        return True
+    return any(
+        selected in {asset.asset_type.lower(), asset_tag_label(asset.asset_type).lower()}
+        for asset in assets
+    )
+
+
+def _matching_asset_records(session: Session, asset: AssetRecord) -> list[AssetRecord]:
+    key = asset_identity_key(asset)
+    return [
+        candidate
+        for candidate in session.scalars(select(AssetRecord).order_by(AssetRecord.id))
+        if asset_identity_key(candidate) == key
+    ]
+
+
+def _normalize_duplicate_asset_visibility(session: Session) -> None:
+    assets = list(session.scalars(select(AssetRecord).order_by(AssetRecord.id)))
+    groups: dict[str, list[AssetRecord]] = defaultdict(list)
+    for asset in assets:
+        groups[asset_identity_key(asset)].append(asset)
+    changed = False
+    for grouped_assets in groups.values():
+        if len(grouped_assets) < 2 or not any(asset.hidden_from_generation for asset in grouped_assets):
+            continue
+        for asset in grouped_assets:
+            if asset.hidden_from_generation:
+                continue
+            asset.hidden_from_generation = 1
+            asset.default_reference = 0
+            asset.readiness_state = "hidden from automation"
+            if not asset.manual_override_state:
+                asset.manual_override_state = "hidden"
+            asset.manual_override_note = asset.manual_override_note or "Hidden because another record for this same image was hidden."
+            changed = True
+    if changed:
+        session.flush()
+
+
+def _is_local_asset_path(asset: AssetRecord) -> bool:
+    path_text = asset.preview_path or asset.source_path
+    return bool(path_text) and not path_text.startswith(("http://", "https://", "file://"))
+
+
+def _unique_asset_paths(assets: list[AssetRecord], base_dir: str | Path = ".") -> list[Path]:
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for asset in assets:
+        path = asset_path(asset, base_dir)
+        resolved = path.resolve(strict=False)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        paths.append(path)
+    return paths
+
+
+def _json_ids_without(raw_json: str, deleted_ids: set[int]) -> str:
+    values: list[object] = []
+    try:
+        raw_values = json.loads(raw_json or "[]")
+    except json.JSONDecodeError:
+        raw_values = []
+    if not isinstance(raw_values, list):
+        return "[]"
+    for value in raw_values:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            values.append(value)
+            continue
+        if numeric not in deleted_ids:
+            values.append(value)
+    return json.dumps(values)
+
+
 def _task_priority_key(task: TaskRecord) -> tuple[int, date, int]:
     status_rank = {
         "ready to post": 0,
@@ -1391,6 +1723,12 @@ def _sync_message(record: SyncMetadata | None, empty_message: str) -> str:
     return f"{record.notes} Last checked {record.synced_at.isoformat()}."
 
 
+def _automation_run_message(record: SyncMetadata | None, empty_message: str) -> str:
+    if record is None:
+        return empty_message
+    return f"Last ran {record.synced_at.isoformat()}."
+
+
 def _date_text(value: date | datetime | None) -> str | None:
     return value.isoformat() if value else None
 
@@ -1451,6 +1789,7 @@ def _export_asset(record: AssetRecord) -> JsonDict:
         "staleness_state": record.staleness_state,
         "manual_override_state": record.manual_override_state,
         "manual_override_note": record.manual_override_note,
+        "hidden_from_generation": bool(record.hidden_from_generation),
         "file_exists": bool(record.file_exists),
         "file_checked_at": _date_text(record.file_checked_at),
         "file_modified_at": _date_text(record.file_modified_at),
@@ -1513,6 +1852,7 @@ def _export_planned_content_item(record: PlannedContentRecord) -> JsonDict:
     return {
         "id": record.id,
         "calendar_date": _date_text(record.calendar_date),
+        "scheduled_time": record.scheduled_time or "09:00",
         "destinations": json_list(record.destinations_json),
         "goals": json_list(record.goals_json),
         "product_ids": json_list(record.product_ids_json),
@@ -1601,6 +1941,7 @@ def _export_task(record: TaskRecord) -> JsonDict:
         "calendar_item_id": record.calendar_item_id,
         "planned_content_item_id": record.planned_content_item_id,
         "due_date": _date_text(record.due_date),
+        "scheduled_time": record.scheduled_time or "09:00",
         "title": record.title,
         "owner_role": record.owner_role,
         "platform": record.platform,

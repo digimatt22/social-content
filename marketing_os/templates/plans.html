@@ -2,12 +2,14 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Plans</h2>
-    <div class="subtle">Generate and review database-backed plans.</div>
+    <div class="eyebrow">Advanced history</div>
+    <h2>Plan History</h2>
+    <div class="subtle">A record of generated plans. Useful for provenance and troubleshooting, not required for daily posting.</div>
   </div>
 </div>
 <section class="panel" style="margin-bottom: 14px;">
-  <h3>Generate Plan</h3>
+  <h3>Generate a fresh plan</h3>
+  <p class="subtle">Use this when you want the assistant to rebuild the work queue from business context. Most weeks, start from Today, Week, Calendar, or Studio instead.</p>
   <form class="inline" method="post" action="{{ url_for('generate_plan') }}">
     <select name="mode">
       {% for mode in ["light", "standard", "launch", "holiday", "event"] %}

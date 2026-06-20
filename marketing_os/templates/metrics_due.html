@@ -2,8 +2,9 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Metrics Due</h2>
-    <div class="subtle">Follow-up work for posts that already went out.</div>
+    <div class="eyebrow">Follow-Ups</div>
+    <h2>Follow-Ups</h2>
+    <div class="subtle">Performance follow-ups that turn posted work into business signal.</div>
   </div>
 </div>
 
@@ -19,14 +20,18 @@
         <span class="pill {{ 'blocked' if model.metric_followup_reason == 'missing_post_url' else 'ready' }}">{{ model.metric_followup_label }}</span>
       </div>
       {% if model.metric_followup_reason == "missing_post_url" %}
-        <div class="subtle">Add the post URL first, then record the performance numbers.</div>
+        <div class="subtle">I need the post URL first, then the performance numbers can be recorded.</div>
       {% else %}
-        <div class="subtle">Record the platform numbers for the published post.</div>
+        <div class="subtle">Capture the platform numbers so the next content pass gets smarter.</div>
       {% endif %}
       <div class="subtle">{{ task.metric_instruction }}</div>
     </article>
   {% else %}
-    <div class="panel">No metrics are due right now.</div>
+    <div class="panel">
+      <div class="eyebrow">All caught up</div>
+      <h3>No metrics are due right now.</h3>
+      <p class="subtle">The learning loop is clear until the next published post needs follow-up.</p>
+    </div>
   {% endfor %}
 </section>
 {% endblock %}

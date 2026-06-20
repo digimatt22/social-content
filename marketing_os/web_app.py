@@ -6,18 +6,20 @@ import logging
 import os
 import tempfile
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from shutil import copyfileobj
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
-from sqlalchemy import select
+from sqlalchemy import func, select
 from werkzeug.utils import secure_filename
 
 from .config import load_local_env
 from .db import DEFAULT_DB_PATH, create_db_engine, init_db, session_factory, session_scope
 from .db_models import (
     AssetRecord,
+    EtsyReviewRecord,
+    GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
     PlannedContentRecord,
@@ -53,10 +55,14 @@ from .phase4 import (
     OPERATOR_DEFAULT_ROLE,
     assign_asset_to_task,
     asset_inventory,
+    asset_inventory_count,
     asset_path,
+    asset_tag_label,
+    asset_tag_options,
     complete_task_status,
     completed_tasks,
     data_health as build_data_health,
+    delete_local_asset_file,
     export_operating_data,
     import_etsy_listing_csv,
     import_source_photo_to_inventory,
@@ -72,22 +78,28 @@ from .phase4 import (
     serialize_task_view,
     serialize_today_view,
     serialize_week_agenda,
+    hidden_asset_group_count,
     task_view,
     task_asset_options,
     today_view,
     week_agenda,
+    set_asset_generation_visibility,
 )
 from .services.content_briefs import (
     AUDIENCE_OPTIONS,
     CANDIDATE_REVIEW_STATES,
     DESTINATION_OPTIONS,
+    GOAL_OPTIONS,
     OCCASION_OPTIONS,
     PLANNER_GOAL_OPTIONS,
+    PLATFORM_DEFAULT_SCHEDULED_TIMES,
     PROMOTION_OPTIONS,
     create_planned_content_item,
     create_task_from_planned_content,
+    default_scheduled_time_for_destination,
     delete_planned_content_item,
     localize_planned_content_reference_assets,
+    normalize_scheduled_time,
     planned_content_items,
     produce_content_for_item,
     record_candidate_review,
@@ -96,16 +108,21 @@ from .services.content_briefs import (
     serialize_candidate,
     serialize_planned_content_item,
     update_product_default_reference_assets,
+    update_planned_content_details,
+    update_planned_content_schedule,
     update_planned_copy_candidate,
 )
 from .services.creative_generation import review_creative_generation_job
 from .services.etsy_import import sync_etsy_read_only
+from .services.etsy_sales_csv import import_etsy_sales_csv
 from .services.local_assets import scan_asset_root
 
 
 LOCAL_ASSET_LIBRARY_ROOT = Path("assets")
 LOCAL_GENERATED_OUTPUT_ROOT = Path("outputs/generated")
 LOCAL_PLANNING_UPLOAD_ROOT = Path("outputs/graphics/planning/uploads")
+ASSETS_PAGE_SIZE = 36
+PRODUCTS_PAGE_SIZE = 20
 
 
 def create_app(db_path: str | Path | None = None, business_dir: str = "docs/business", bootstrap_data: bool | None = None) -> Flask:
@@ -359,6 +376,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     destinations=[str(value) for value in payload.get("destinations", [])],
                     goals=[str(value) for value in payload.get("goals", [])],
                     product_ids=product_ids,
+                    scheduled_time=str(payload.get("scheduled_time") or "09:00"),
                     selected_source_asset_ids=selected_source_asset_ids,
                     assets_root=app.config["ASSETS_ROOT"],
                     audience=str(payload.get("audience") or ""),
@@ -432,22 +450,24 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.get("/")
     def dashboard() -> str:
-        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        role = request.args.get("role", "all")
         with session_scope(factory) as session:
             plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc())).first()
             plan_tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.plan_id == plan.id).order_by(TaskRecord.due_date))) if plan else []
+            review_queue = _dashboard_review_queue(session)
             return render_template(
                 "dashboard.html",
                 active="today",
                 plan=plan,
                 today_model=today_view(session, role=role),
+                review_queue=review_queue,
                 status_counts=status_counts(plan_tasks),
                 selected_role=role,
             )
 
     @app.get("/week")
     def week() -> str:
-        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        role = request.args.get("role", "all")
         status = request.args.get("status", "open")
         platform = request.args.get("platform", "all")
         with session_scope(factory) as session:
@@ -465,7 +485,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.get("/completed")
     def completed() -> str:
-        role = request.args.get("role", OPERATOR_DEFAULT_ROLE)
+        role = request.args.get("role", "all")
         with session_scope(factory) as session:
             tasks = completed_tasks(session, role=role)
             return render_template("completed.html", active="completed", tasks=tasks, selected_role=role)
@@ -476,18 +496,40 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             guides_model = posting_guides(session)
             return render_template("guides.html", active="guides", guides=guides_model)
 
-    def _asset_management_context(session) -> dict[str, object]:
-        refresh_asset_file_state(session)
+    def _asset_management_context(session, include_hidden: bool = False, page: int = 1, selected_tag: str = "") -> dict[str, object]:
+        page = max(page, 1)
+        tag_options = asset_tag_options(session, include_hidden=include_hidden)
+        selected_tag = selected_tag.strip()
+        if selected_tag and selected_tag.lower() not in {tag.lower() for tag in tag_options}:
+            selected_tag = ""
+        total_assets = asset_inventory_count(session, include_hidden=include_hidden, tag=selected_tag)
+        pagination = _pagination(page, total_assets, ASSETS_PAGE_SIZE)
         return {
             "active": "assets",
-            "assets": asset_inventory(session),
+            "assets": asset_inventory(
+                session,
+                include_hidden=include_hidden,
+                limit=ASSETS_PAGE_SIZE,
+                offset=pagination["offset"],
+                tag=selected_tag,
+            ),
+            "show_hidden": include_hidden,
+            "selected_tag": selected_tag,
+            "tag_options": tag_options,
+            "asset_tag_label": asset_tag_label,
+            "pagination": pagination,
+            "total_asset_count": total_assets,
+            "hidden_asset_count": hidden_asset_group_count(session),
             "products": list(session.scalars(select(ProductRecord).order_by(ProductRecord.name))),
         }
 
     @app.get("/creative-assets")
     def creative_assets() -> str:
+        show_hidden = request.args.get("show_hidden") == "1"
+        page = _page_arg(request.args.get("page"))
+        selected_tag = request.args.get("tag", "")
         with session_scope(factory) as session:
-            return render_template("assets.html", **_asset_management_context(session))
+            return render_template("assets.html", **_asset_management_context(session, include_hidden=show_hidden, page=page, selected_tag=selected_tag))
 
     @app.get("/planning")
     def planning() -> str:
@@ -512,6 +554,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 promotions=PROMOTION_OPTIONS,
                 candidate_review_states=CANDIDATE_REVIEW_STATES,
                 active_planning_step=active_planning_step,
+                default_scheduled_time=default_scheduled_time_for_destination(DESTINATION_OPTIONS[0]),
+                destination_default_times=PLATFORM_DEFAULT_SCHEDULED_TIMES,
             )
 
     @app.post("/planning")
@@ -529,6 +573,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     destinations=request.form.getlist("destinations"),
                     goals=[_form_other_value(request.form.get("goals", ""), request.form.get("goals_other", ""))],
                     product_ids=product_ids,
+                    scheduled_time=request.form.get("scheduled_time"),
                     selected_source_asset_ids=selected_source_asset_ids,
                     assets_root=app.config["ASSETS_ROOT"],
                     defer_remote_assets=True,
@@ -671,7 +716,92 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             plan = session.scalars(select(PlanRecord).order_by(PlanRecord.generated_at.desc())).first()
             tasks = list(session.scalars(select(TaskRecord).where(TaskRecord.plan_id == plan.id).order_by(TaskRecord.due_date))) if plan else []
             planned_items = [serialize_planned_content_item(session, item) for item in planned_content_items(session)]
-            return render_template("calendar.html", active="calendar", plan=plan, tasks=[task_view(task) for task in tasks], planned_items=planned_items)
+            task_models = [task_view(task) for task in tasks]
+            return render_template(
+                "calendar.html",
+                active="calendar",
+                plan=plan,
+                tasks=task_models,
+                planned_items=planned_items,
+                calendar_days=_calendar_days(task_models, planned_items),
+                destinations=DESTINATION_OPTIONS,
+                goals=GOAL_OPTIONS,
+                audiences=AUDIENCE_OPTIONS,
+                occasions=OCCASION_OPTIONS,
+                promotions=PROMOTION_OPTIONS,
+            )
+
+    @app.post("/calendar/planned/<int:item_id>/update")
+    def calendar_update_planned_item(item_id: int) -> str:
+        try:
+            calendar_date = date.fromisoformat(request.form.get("calendar_date", date.today().isoformat()))
+            with session_scope(factory) as session:
+                update_planned_content_details(
+                    session,
+                    item_id,
+                    calendar_date=calendar_date,
+                    scheduled_time=request.form.get("scheduled_time", "09:00"),
+                    destinations=request.form.getlist("destinations") or [request.form.get("destination", "")],
+                    goals=[_form_other_value(request.form.get("goals", ""), request.form.get("goals_other", ""))],
+                    audience=_form_other_value(request.form.get("audience", ""), request.form.get("audience_other", "")),
+                    occasion=_form_other_value(request.form.get("occasion", ""), request.form.get("occasion_other", "")),
+                    promotion=_form_other_value(request.form.get("promotion", ""), request.form.get("promotion_other", "")),
+                    notes=request.form.get("notes", ""),
+                )
+                flash("Calendar item updated.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("calendar", _anchor=f"planned-item-{item_id}"))
+
+    @app.post("/calendar/planned/<int:item_id>/delete")
+    def calendar_delete_planned_item(item_id: int) -> str:
+        with session_scope(factory) as session:
+            try:
+                delete_planned_content_item(session, item_id)
+                flash("Scheduled post deleted.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(url_for("calendar"))
+
+    @app.post("/api/calendar/planned/<int:item_id>/reschedule")
+    def api_calendar_reschedule_planned_item(item_id: int):
+        payload = request.get_json(silent=True) or {}
+        try:
+            calendar_date = date.fromisoformat(str(payload.get("calendar_date") or ""))
+            scheduled_time = str(payload.get("scheduled_time") or "09:00")
+        except ValueError:
+            return jsonify({"error": "Use a valid schedule date."}), 400
+        with session_scope(factory) as session:
+            try:
+                item = update_planned_content_schedule(session, item_id, calendar_date, scheduled_time)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify({"planned_item": serialize_planned_content_item(session, item)})
+
+    @app.post("/api/calendar/tasks/<int:task_id>/reschedule")
+    def api_calendar_reschedule_task(task_id: int):
+        payload = request.get_json(silent=True) or {}
+        try:
+            due_date = date.fromisoformat(str(payload.get("calendar_date") or ""))
+            scheduled_time = str(payload.get("scheduled_time") or "09:00")
+        except ValueError:
+            return jsonify({"error": "Use a valid schedule date."}), 400
+        with session_scope(factory) as session:
+            task = session.get(TaskRecord, task_id)
+            if task is None:
+                return jsonify({"error": "Task not found."}), 404
+            try:
+                normalized_time = normalize_scheduled_time(scheduled_time)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            task.due_date = due_date
+            task.scheduled_time = normalized_time
+            if task.planned_content_item_id:
+                item = session.get(PlannedContentRecord, task.planned_content_item_id)
+                if item is not None:
+                    item.calendar_date = due_date
+                    item.scheduled_time = normalized_time
+            return jsonify({"task": serialize_task_view(task_view(task))})
 
     @app.get("/plans")
     def plans() -> str:
@@ -778,28 +908,41 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.get("/assets")
     def assets() -> str:
+        show_hidden = request.args.get("show_hidden") == "1"
+        page = _page_arg(request.args.get("page"))
+        selected_tag = request.args.get("tag", "")
         with session_scope(factory) as session:
-            return render_template("assets.html", **_asset_management_context(session))
+            return render_template("assets.html", **_asset_management_context(session, include_hidden=show_hidden, page=page, selected_tag=selected_tag))
 
     @app.get("/products")
     def products_admin() -> str:
         selected_sort = request.args.get("sort", "name").strip().lower()
+        show_hidden = request.args.get("show_hidden") == "1"
+        page = _page_arg(request.args.get("page"))
         with session_scope(factory) as session:
-            all_products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
             all_tags = _all_product_tags(session)
-            products = list(all_products)
+            product_count = session.scalar(select(func.count()).select_from(ProductRecord)) or 0
+            pagination = _pagination(page, product_count, PRODUCTS_PAGE_SIZE)
+            product_query = select(ProductRecord)
             if selected_sort == "source":
-                products.sort(key=lambda product: (product.external_source or "local", product.name.lower()))
+                product_query = product_query.order_by(ProductRecord.external_source, ProductRecord.name)
             elif selected_sort == "synced":
-                products.sort(key=lambda product: product.last_synced_at or datetime.min, reverse=True)
+                product_query = product_query.order_by(ProductRecord.last_synced_at.desc(), ProductRecord.name)
             else:
                 selected_sort = "name"
-                products.sort(key=lambda product: product.name.lower())
+                product_query = product_query.order_by(ProductRecord.name)
+            products = list(session.scalars(product_query.offset(pagination["offset"]).limit(PRODUCTS_PAGE_SIZE)))
             product_ids = [product.id for product in products]
             assets_by_product: dict[int, list[AssetRecord]] = {product.id: [] for product in products}
             references_by_product: dict[int, list[ProductExternalReference]] = {product.id: [] for product in products}
+            reviews_by_product: dict[int, list[dict[str, object]]] = {product.id: [] for product in products}
+            review_counts_by_product: dict[int, int] = {product.id: 0 for product in products}
+            hidden_asset_count = hidden_asset_group_count(session)
             if product_ids:
-                assets = list(session.scalars(select(AssetRecord).where(AssetRecord.product_id.in_(product_ids)).order_by(AssetRecord.product_id, AssetRecord.id)))
+                asset_query = select(AssetRecord).where(AssetRecord.product_id.in_(product_ids)).order_by(AssetRecord.product_id, AssetRecord.id)
+                if not show_hidden:
+                    asset_query = asset_query.where(AssetRecord.hidden_from_generation == 0)
+                assets = list(session.scalars(asset_query))
                 references = list(
                     session.scalars(
                         select(ProductExternalReference)
@@ -807,20 +950,44 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                         .order_by(ProductExternalReference.product_id, ProductExternalReference.source_name)
                     )
                 )
+                review_counts = session.execute(
+                    select(EtsyReviewRecord.product_id, func.count())
+                    .where(EtsyReviewRecord.product_id.in_(product_ids))
+                    .group_by(EtsyReviewRecord.product_id)
+                ).all()
+                reviews = list(
+                    session.scalars(
+                        select(EtsyReviewRecord)
+                        .where(EtsyReviewRecord.product_id.in_(product_ids))
+                        .order_by(EtsyReviewRecord.product_id, EtsyReviewRecord.created_timestamp.desc(), EtsyReviewRecord.id.desc())
+                    )
+                )
                 for asset in assets:
                     if asset.product_id is not None:
                         assets_by_product.setdefault(asset.product_id, []).append(asset)
                 for reference in references:
                     references_by_product.setdefault(reference.product_id, []).append(reference)
+                for product_id, count in review_counts:
+                    if product_id is not None:
+                        review_counts_by_product[product_id] = int(count or 0)
+                for review in reviews:
+                    if review.product_id is None or len(reviews_by_product.setdefault(review.product_id, [])) >= 3:
+                        continue
+                    reviews_by_product[review.product_id].append(_product_review_model(review))
             return render_template(
                 "products.html",
                 active="products",
                 products=products,
-                all_products=all_products,
+                all_products_count=product_count,
                 all_tags=all_tags,
                 selected_sort=selected_sort,
+                show_hidden=show_hidden,
+                pagination=pagination,
+                hidden_asset_count=hidden_asset_count,
                 assets_by_product=assets_by_product,
                 references_by_product=references_by_product,
+                reviews_by_product=reviews_by_product,
+                review_counts_by_product=review_counts_by_product,
             )
 
     @app.post("/products/<int:product_id>/tags")
@@ -848,6 +1015,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.post("/products/<int:product_id>/default-reference-assets")
     def product_default_reference_assets(product_id: int) -> str:
+        return_to = request.form.get("return_to") or url_for("products_admin", _anchor=f"product-{product_id}")
         try:
             asset_ids = [int(value) for value in request.form.getlist("asset_ids")]
             with session_scope(factory) as session:
@@ -855,7 +1023,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash("Default reference images saved.")
         except ValueError as exc:
             flash(str(exc))
-        return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
+        return redirect(return_to)
 
     @app.post("/assets/scan")
     def scan_assets() -> str:
@@ -905,13 +1073,72 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def asset_review(asset_id: int) -> str:
         review_state = request.form.get("review_state", "needs review")
         notes = request.form.get("approval_notes", "")
+        return_to = request.form.get("return_to") or url_for("assets", _anchor=f"asset-{asset_id}")
         with session_scope(factory) as session:
             try:
                 review_asset(session, asset_id, review_state, notes)
                 flash("Asset review saved.")
             except ValueError as exc:
                 flash(str(exc))
-        return redirect(url_for("assets"))
+        return redirect(return_to)
+
+    @app.post("/assets/<int:asset_id>/visibility")
+    def asset_visibility(asset_id: int) -> str:
+        hidden = request.form.get("hidden", "0") == "1"
+        return_to = request.form.get("return_to") or url_for("assets", _anchor=f"asset-{asset_id}")
+        note = request.form.get("manual_override_note", "")
+        with session_scope(factory) as session:
+            try:
+                set_asset_generation_visibility(session, asset_id, hidden, note)
+                flash("Image hidden from automation." if hidden else "Image restored for automation.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(return_to)
+
+    @app.post("/assets/<int:asset_id>/product")
+    def asset_product_link(asset_id: int) -> str:
+        return_to = request.form.get("return_to") or url_for("assets", _anchor=f"asset-{asset_id}")
+        name = request.form.get("name", "").strip()
+        product_id_text = request.form.get("product_id", "").strip()
+        try:
+            product_id = int(product_id_text) if product_id_text else None
+        except ValueError:
+            flash("Product not found.")
+            return redirect(return_to)
+        if "name" in request.form and not name:
+            flash("Photo name is required.")
+            return redirect(return_to)
+        with session_scope(factory) as session:
+            asset = session.get(AssetRecord, asset_id)
+            if asset is None:
+                flash("Asset not found.")
+                return redirect(return_to)
+            if product_id is not None and session.get(ProductRecord, product_id) is None:
+                flash("Product not found.")
+                return redirect(return_to)
+            if "name" in request.form:
+                asset.name = name
+            asset.product_id = product_id
+            if product_id is None:
+                asset.default_reference = 0
+            flash("Photo details saved.")
+        return redirect(return_to)
+
+    @app.post("/assets/<int:asset_id>/delete-local")
+    def asset_delete_local(asset_id: int) -> str:
+        return_to = request.form.get("return_to") or url_for("assets")
+        with session_scope(factory) as session:
+            try:
+                result = delete_local_asset_file(session, asset_id)
+                deleted_count = len(result.deleted_paths)
+                asset_count = len(result.asset_ids)
+                flash(
+                    f"Deleted {deleted_count} local file{'s' if deleted_count != 1 else ''} "
+                    f"and unlinked {asset_count} asset record{'s' if asset_count != 1 else ''}."
+                )
+            except (OSError, ValueError) as exc:
+                flash(str(exc))
+        return redirect(return_to)
 
     @app.get("/assets/<int:asset_id>/preview")
     def asset_preview(asset_id: int):
@@ -981,7 +1208,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     reviewed_by=request.form.get("reviewed_by", ""),
                     edited_copy_text=request.form.get("copy_text", ""),
                 )
-                flash("Phase 5 copy review saved.")
+                flash("Copy approval saved.")
             except ValueError as exc:
                 flash(str(exc))
         return redirect(url_for("phase5_readiness", _anchor="facebook-copy-review"))
@@ -1001,7 +1228,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     review_notes=request.form.get("review_notes", ""),
                     reviewed_by=request.form.get("reviewed_by", ""),
                 )
-                flash("Phase 5 creative review saved.")
+                flash("Creative approval saved.")
             except ValueError as exc:
                 flash(str(exc))
         return redirect(url_for("phase5_readiness", _anchor="generated-creative-review"))
@@ -1027,6 +1254,32 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(str(exc))
         return redirect(url_for("data_health"))
 
+    @app.post("/imports/etsy-sales-csv")
+    def import_etsy_sales_csv_upload() -> str:
+        upload = request.files.get("sales_csv")
+        if upload is None or not upload.filename:
+            flash("Choose an Etsy order items CSV to upload.")
+            return redirect(url_for("settings"))
+        filename = secure_filename(upload.filename)
+        if not filename or Path(filename).suffix.lower() != ".csv":
+            flash("Choose a valid .csv file.")
+            return redirect(url_for("settings"))
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_path = Path(tmp) / filename
+            upload.save(temp_path)
+            with session_scope(factory) as session:
+                try:
+                    summary = import_etsy_sales_csv(session, temp_path)
+                    flash(
+                        f"Imported Etsy order items CSV: {summary.imported} new row(s), "
+                        f"{summary.updated} updated, {summary.skipped} skipped, {summary.unmatched} unmatched."
+                    )
+                except FileNotFoundError as exc:
+                    flash(str(exc))
+                except ValueError as exc:
+                    flash(str(exc))
+        return redirect(url_for("data_health"))
+
     @app.post("/integrations/etsy/sync")
     def sync_etsy() -> str:
         with session_scope(factory) as session:
@@ -1034,7 +1287,10 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             if summary.errors:
                 flash(summary.errors[0])
             else:
-                flash(f"Synced Etsy: {summary.products_imported} listing(s), {summary.assets_imported} image(s).")
+                flash(
+                    f"Synced Etsy: {summary.products_imported} listing(s), "
+                    f"{summary.assets_imported} image(s), {summary.reviews_imported} review(s)."
+                )
         return redirect(_safe_return_url(request.form.get("return_to"), "data_health"))
 
     @app.post("/assets/library/scan")
@@ -1139,6 +1395,7 @@ def _planner_reference_assets(session, products: list[ProductRecord]) -> list[di
             select(AssetRecord)
             .where(AssetRecord.product_id.in_(product_ids))
             .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .where(AssetRecord.hidden_from_generation == 0)
             .order_by(AssetRecord.product_id, (AssetRecord.review_state == "approved").desc(), AssetRecord.file_exists.desc(), AssetRecord.id)
         )
     )
@@ -1194,6 +1451,42 @@ def _start_reference_asset_download(factory, item_id: int, assets_root: Path) ->
     thread.start()
 
 
+def _calendar_days(task_models: list[object], planned_items: list[dict[str, object]]) -> list[dict[str, object]]:
+    today = date.today()
+    dates = [today]
+    for model in task_models:
+        task = getattr(model, "task", None)
+        if task is not None:
+            dates.append(task.due_date)
+    for item in planned_items:
+        try:
+            dates.append(date.fromisoformat(str(item.get("calendar_date"))))
+        except ValueError:
+            continue
+    anchor = min(dates)
+    start = anchor - timedelta(days=(anchor.weekday() + 1) % 7)
+    days: list[dict[str, object]] = []
+    for offset in range(35):
+        day = start + timedelta(days=offset)
+        day_tasks = [model for model in task_models if getattr(getattr(model, "task", None), "due_date", None) == day]
+        day_planned = [item for item in planned_items if item.get("calendar_date") == day.isoformat()]
+        day_planned.sort(key=lambda item: str(item.get("scheduled_time") or "09:00"))
+        day_tasks.sort(key=lambda model: (getattr(model.task, "scheduled_time", "") or "09:00", model.task.id))
+        days.append(
+            {
+                "date": day,
+                "iso": day.isoformat(),
+                "label": day.strftime("%b %-d") if os.name != "nt" else day.strftime("%b %#d"),
+                "day_number": day.day,
+                "is_today": day == today,
+                "is_weekend": day.weekday() >= 5,
+                "planned_items": day_planned,
+                "tasks": day_tasks,
+            }
+        )
+    return days
+
+
 def _tag_values(value: object) -> list[str]:
     if value is None:
         return []
@@ -1207,6 +1500,130 @@ def _tag_values(value: object) -> list[str]:
         if tag and tag not in tags:
             tags.append(tag)
     return tags
+
+
+def _page_arg(value: str | None) -> int:
+    try:
+        return max(int(value or "1"), 1)
+    except ValueError:
+        return 1
+
+
+def _pagination(page: int, total: int, page_size: int) -> dict[str, int | bool]:
+    page_size = max(page_size, 1)
+    total_pages = max((total + page_size - 1) // page_size, 1)
+    current_page = min(max(page, 1), total_pages)
+    return {
+        "page": current_page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+        "offset": (current_page - 1) * page_size,
+        "has_previous": current_page > 1,
+        "has_next": current_page < total_pages,
+        "previous_page": max(current_page - 1, 1),
+        "next_page": min(current_page + 1, total_pages),
+        "start": 0 if total == 0 else (current_page - 1) * page_size + 1,
+        "end": min(current_page * page_size, total),
+    }
+
+
+def _dashboard_review_queue(session, limit: int = 6) -> list[dict[str, object]]:
+    review_states = {"needs_review", "needs review", "rewrite_requested"}
+    candidates = list(
+        session.scalars(
+            select(GeneratedContentCandidateRecord)
+            .where(GeneratedContentCandidateRecord.review_state.in_(review_states))
+            .order_by(GeneratedContentCandidateRecord.updated_at.desc(), GeneratedContentCandidateRecord.id.desc())
+        )
+    )
+    candidates_by_item: dict[int, list[GeneratedContentCandidateRecord]] = {}
+    for candidate in candidates:
+        if candidate.planned_item_id is None:
+            continue
+        candidates_by_item.setdefault(candidate.planned_item_id, []).append(candidate)
+
+    item_ids = set(candidates_by_item)
+    item_query = select(PlannedContentRecord).where(
+        (PlannedContentRecord.status == "needs_review") | (PlannedContentRecord.id.in_(item_ids) if item_ids else False)
+    ).order_by(PlannedContentRecord.calendar_date, PlannedContentRecord.id)
+    items = list(session.scalars(item_query).unique())[:limit]
+
+    product_ids: set[int] = set()
+    for item in items:
+        for value in json_list(item.product_ids_json):
+            try:
+                product_ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
+    products_by_id = {
+        product.id: product.name
+        for product in session.scalars(select(ProductRecord).where(ProductRecord.id.in_(product_ids))).all()
+    } if product_ids else {}
+
+    queue: list[dict[str, object]] = []
+    for item in items:
+        item_candidates = candidates_by_item.get(item.id, [])
+        first_candidate = item_candidates[0] if item_candidates else None
+        destinations = json_list(item.destinations_json)
+        primary_destination = destinations[0] if destinations else ""
+        review_labels = sorted(
+            label
+            for label in {_candidate_review_label(candidate.candidate_type, primary_destination) for candidate in item_candidates}
+            if label
+        )
+        product_names = [
+            products_by_id.get(int(value))
+            for value in json_list(item.product_ids_json)
+            if str(value).isdigit() and products_by_id.get(int(value))
+        ]
+        queue.append(
+            {
+                "id": item.id,
+                "calendar_date": item.calendar_date.isoformat(),
+                "scheduled_time": item.scheduled_time or "09:00",
+                "status": item.status,
+                "destinations": destinations,
+                "product_names": product_names,
+                "candidate_count": len(item_candidates),
+                "review_labels": review_labels,
+                "review_path": f"/planning#candidate-{first_candidate.id}" if first_candidate else f"/planning#planned-item-{item.id}",
+            }
+        )
+    return queue
+
+
+def _candidate_review_label(candidate_type: str, destination: str) -> str:
+    candidate_key = str(candidate_type or "").strip().lower()
+    destination_key = str(destination or "").strip().lower()
+    if candidate_key == "facebook_post":
+        if destination_key == "instagram":
+            return "Instagram Caption"
+        if destination_key == "pinterest":
+            return "Pinterest Pin Copy"
+        if destination:
+            return f"{destination} Post"
+        return "Social Copy"
+    if candidate_key == "image_asset_option":
+        return ""
+    return candidate_key.replace("_", " ").title() if candidate_key else ""
+
+
+def _product_review_model(record: EtsyReviewRecord) -> dict[str, object]:
+    created_on = ""
+    if record.created_timestamp:
+        try:
+            created_on = datetime.fromtimestamp(record.created_timestamp).date().isoformat()
+        except (OSError, OverflowError, ValueError):
+            created_on = ""
+    return {
+        "rating": record.rating,
+        "review": record.review,
+        "language": record.language,
+        "image_url": record.image_url_fullxfull,
+        "created_on": created_on,
+        "listing_id": record.listing_id,
+    }
 
 
 def _all_product_tags(session) -> list[str]:

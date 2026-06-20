@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from ..db import create_db_engine, init_db, session_factory, session_scope
-from ..db_models import PlannedContentRecord
+from ..db_models import PlannedContentRecord, SyncMetadata, utc_now
 from ..services.content_briefs import (
     build_content_brief,
     has_copy_rewrite_request,
@@ -77,9 +77,30 @@ def run(
                     summary["image_request_files"].append(item_summary["image_request_path"])
                 if item_summary.get("copy_request_path"):
                     summary["copy_request_files"].append(item_summary["copy_request_path"])
+            _record_automation_run(session, "content_automation", output_dir, summary)
     finally:
         engine.dispose()
     return summary
+
+
+def _record_automation_run(session: Session, source_name: str, source_path: str | Path, summary: dict[str, object]) -> None:
+    record = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == source_name))
+    if record is None:
+        record = SyncMetadata(source_name=source_name, source_path=str(source_path), notes="")
+        session.add(record)
+    record.source_path = str(source_path)
+    record.synced_at = utc_now()
+    record.notes = json.dumps(
+        {
+            "processed": summary.get("processed", 0),
+            "asset_downloaded": summary.get("asset_downloaded", 0),
+            "asset_download_errors": len(summary.get("asset_download_errors", [])),
+            "copy_request_files": len(summary.get("copy_request_files", [])),
+            "image_request_files": len(summary.get("image_request_files", [])),
+            "dry_run": dict(summary.get("filters", {})).get("dry_run", False),
+        },
+        sort_keys=True,
+    )
 
 
 def _asset_download_items(session: Session, target_date: date, limit: int) -> list[PlannedContentRecord]:
@@ -136,9 +157,10 @@ def _prepare_item(
     image_request_path = ""
     image_request_count = 0
     copy_request_path = ""
-    if _needs_copy_workflow(item):
+    needs_copy_workflow = _needs_copy_workflow(item)
+    if needs_copy_workflow:
         copy_request_path = str(write_copy_workflow_request(session, item, output_dir, business_dir=business_dir))
-    if item.status in IMAGE_QUEUE_STATUSES:
+    if item.status in IMAGE_QUEUE_STATUSES and not needs_copy_workflow and _has_reviewable_copy(item):
         image_request_path = str(write_image_requests(session, item, output_dir, business_dir=business_dir))
         image_request_count = 3
 
@@ -198,6 +220,13 @@ def _needs_copy_workflow(item: PlannedContentRecord) -> bool:
     if item.status in {"planned", "waiting_content_generation", "waiting_copy_regeneration"}:
         return True
     return any(candidate.candidate_type == "facebook_post" and candidate.review_state == "rewrite_requested" for candidate in item.candidates)
+
+
+def _has_reviewable_copy(item: PlannedContentRecord) -> bool:
+    return any(
+        candidate.candidate_type == "facebook_post" and candidate.review_state in {"needs_review", "approved"}
+        for candidate in item.candidates
+    )
 
 
 def write_image_requests(

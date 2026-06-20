@@ -13,15 +13,16 @@ Act like a social media copywriter, not a product description summarizer. Use pr
 2. Read `references/social-context.md`.
 3. Read `references/social-post-playbook.md`.
 4. If the work is for MattMadeMe, read `references/mattmademe-social-context.md`.
-5. Normalize the brief into: `platform`, `format`, `audience`, `goal`, `product_or_topic`, `source_facts`, `visual_context`, `angle`, `hook_pattern`, `cta_type`, `must_include`, `avoid`, and `unknowns`.
-6. Select one primary angle before drafting. Do not draft directly from an Etsy title or product description.
+5. Normalize the brief into: `platform`, `format`, `audience`, `goal`, `product_or_topic`, `source_facts`, `visual_context`, `angle`, `story_move`, `story_thesis`, `proof_points`, `hook_pattern`, `cta_type`, `must_include`, `avoid`, and `unknowns`.
+6. Select one primary angle and one story move before drafting. Do not draft directly from an Etsy title or product description.
 7. Generate 5-7 hook candidates using `references/social-hooks.md`; pick the best hook for the platform and goal.
-8. Draft 3 variants when the user has not specified otherwise:
+8. Draft the body around a proof-led product story, origin story, audience story, tiny scene, surprise, opinion, community prompt, collector observation, gift moment, or maker detail before using product facts. Product facts are optional. Use them only when they add attention value, prove the story, reveal something specific, or make the post more human. If a detail feels forced, generic, or flow-breaking, leave it out.
+9. Draft 3 variants when the user has not specified otherwise:
    - `Engagement`: optimized for comments, replies, saves, or shares.
    - `Follower-building`: optimized for brand affinity and page personality.
    - `Shop-click`: optimized for product interest and a clear next action.
-9. Run `$social-media-copy-chief` as the challenge step before finalizing when automation or the user requests review-ready output.
-10. Return ready-to-review copy with metadata: strategy, angle, hook pattern, CTA, source facts used, placeholders, challenge status, and review notes.
+10. Run `$social-media-copy-chief` as the challenge step before finalizing when automation or the user requests review-ready output.
+11. Return ready-to-review copy with metadata: strategy, angle, story move, hook pattern, CTA, source facts used, placeholders, challenge status, and review notes.
 
 ## Placeholder Rule
 
@@ -33,6 +34,9 @@ Common placeholders:
 - `[MATT_TO_CONFIRM: strongest audience segment for this post]`
 - `[MATT_TO_CONFIRM: product personality cue]`
 - `[MATT_TO_CONFIRM: real customer/community detail]`
+- `[MATT_TO_CONFIRM: order count or recent demand signal]`
+- `[MATT_TO_CONFIRM: who has been buying/requesting this product]`
+- `[MATT_TO_CONFIRM: why this product seems to be resonating]`
 - `[MATT_TO_CONFIRM: upcoming occasion or launch timing]`
 
 After drafting, list the 3-5 most useful questions needed to replace placeholders.
@@ -47,6 +51,81 @@ Do not invent:
 
 For MattMadeMe, never call products rubber ducks. Use "3D printed duck," "collectible," "desk mascot," or a source-supported product phrase.
 
+## Story-First Rule
+
+Avoid the stale pattern: quick hook, product description, CTA. It is accurate, but it reads like a listing.
+
+Before naming features, make the post earn attention through one of these moves:
+
+- `proof_led_product_story`: explain what happened around the product, who responded, and why it matters.
+- `origin_story`: tell why this product exists or what sparked it.
+- `audience_story`: center the group of people the product honors, serves, or delights.
+- `tiny_scene`: imagine where the duck is, what it is doing, or what tiny job it seems to have.
+- `surprise_detail`: point at one odd or delightful detail and let it carry the caption.
+- `playful_opinion`: make a small, human claim someone can agree with or react to.
+- `community_prompt`: invite the audience to place, name, hide, collect, or choose the duck.
+- `collector_observation`: speak to the joy of tiny themes, sets, shelf moments, or flock-building.
+- `gift_moment`: frame the recipient or occasion before the product.
+- `maker_detail`: use a grounded craft/process detail when supplied.
+
+Product facts should usually arrive as proof after the moment, not as the main paragraph. They are not required. If the body could be pasted into an Etsy listing with almost no changes, rewrite it.
+
+## Social Middle Rule
+
+The middle of the post must continue the chosen story move. Do not use the middle as a product-description sentence.
+
+Before mentioning product details, write at least one sentence that adds personality, scene, opinion, audience emotion, community meaning, or a tiny bit of character behavior.
+
+Product facts are optional and may appear only as:
+
+- a punchline;
+- proof of the personality;
+- a detail that sharpens the scene;
+- a reason the audience would gift, collect, hide, name, or share it;
+- a genuinely interesting detail that would make the right person stop scrolling.
+
+Do not stack visual features in a list unless the platform is Pinterest or the user explicitly asks for product-forward copy.
+
+If the post is stronger without a product fact, do not add one just to satisfy structure. A clean social moment beats a forced proof point.
+
+Bad middle:
+
+```text
+Biker Duck feels like the shelf-side rebel of the group, with a black helmet, black vest, grey accents, and the kind of collectible 3D printed attitude that makes a desk setup feel a little more fun.
+```
+
+Better middle:
+
+```text
+This one feels like it would lean against the edge of the shelf, refuse to explain where it has been, and somehow convince three other ducks to follow it anyway.
+
+The black helmet and vest just make the attitude official.
+```
+
+## Proof-Led Product Stories
+
+Use this when source facts show demand, timing, repeated requests, order volume, a customer group, comments, or a surprising use case.
+
+Good structure:
+
+1. What happened: a specific demand signal or audience behavior.
+2. Who it is for: the real people, role, hobby, relationship, or occasion.
+3. Why it is resonating: appreciation, identity, inside joke, giftability, collectibility, personalization, or timing.
+4. Optional supporting detail: a review theme, sales signal, customer group, personalization behavior, or product detail that makes the story more credible.
+5. CTA: invite the audience into the story, not just to buy.
+
+Never invent order counts, virality, customer reactions, reviews, or "took off" claims. If the brief implies a hot product but lacks proof, use a placeholder or make the post about the audience instead.
+
+Prefer real proof over product features when available:
+
+- recent sales or order volume;
+- repeated customer requests;
+- review themes or short review snippets;
+- buyer groups or gifting patterns;
+- personalization choices;
+- customer photos or use cases;
+- comment patterns from social posts.
+
 ## Output Shape
 
 For each variant:
@@ -54,6 +133,8 @@ For each variant:
 ```text
 Variant: [Engagement | Follower-building | Shop-click]
 Angle: [chosen angle]
+Story move: [chosen story move]
+Story thesis: [why this post exists beyond describing the product]
 Hook pattern: [pattern]
 CTA: [cta type]
 
@@ -61,6 +142,7 @@ CTA: [cta type]
 
 Review notes:
 - Source facts used: [...]
+- Proof points used: [...]
 - Placeholders: [...]
 - Quality gate: [ready | needs_light_edit | needs_rewrite | blocked]
 ```

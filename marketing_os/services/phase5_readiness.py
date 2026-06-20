@@ -327,7 +327,7 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
             "- Keep the generated image attached to the planned post.",
             f"- Suggested output path: {import_defaults['output_path'] or 'choose a local path that Marketing OS can read'}",
             f"- Suggested absolute output path: {import_defaults['absolute_output_path'] or 'choose a local path that Marketing OS can read'}",
-            "- Import the output as `Facebook post image` and leave it in `needs_review` until Matt approves it.",
+            "- Import the output as `Facebook post image` and leave it in `needs_review` until a human approves it.",
             "",
         ]
     )
@@ -366,7 +366,7 @@ def _copy_review_item(session: Session) -> ReadinessItem:
     if approved:
         return ReadinessItem(
             key="facebook_copy_review",
-            label="Matt-approved Facebook copy",
+            label="Human-approved Facebook copy",
             complete=True,
             message="A Facebook generated-copy candidate has reviewer evidence.",
             evidence=f"Candidate #{approved.id} approved by {approved.reviewed_by}.",
@@ -376,7 +376,7 @@ def _copy_review_item(session: Session) -> ReadinessItem:
     if latest and latest.review_state == "rewrite_requested":
         return ReadinessItem(
             key="facebook_copy_review",
-            label="Matt-approved Facebook copy",
+            label="Human-approved Facebook copy",
             complete=False,
             message="Latest Facebook copy candidate is waiting on a rewrite.",
             evidence=f"Candidate #{latest.id} has rewrite notes: {latest.revision_notes or 'no notes recorded'}.",
@@ -387,11 +387,11 @@ def _copy_review_item(session: Session) -> ReadinessItem:
         )
     return ReadinessItem(
         key="facebook_copy_review",
-        label="Matt-approved Facebook copy",
+        label="Human-approved Facebook copy",
         complete=False,
         message="No approved Facebook generated-copy candidate has reviewer evidence yet.",
         evidence="Missing approved facebook_post candidate with reviewed_by and reviewed_at.",
-        action="Open Planning, review a Facebook candidate, set Reviewed by to Matt, and save review.",
+        action="Open Planning, review a Facebook candidate, set Reviewed by to the reviewer, and save review.",
     )
 
 
@@ -409,7 +409,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
     if approved:
         return ReadinessItem(
             key="creative_generation_review",
-            label="Matt-approved generated creative",
+            label="Human-approved generated creative",
             complete=True,
             message="A generated creative job has reviewer evidence and a candidate asset.",
             evidence=f"Creative job #{approved.id} approved by {approved.reviewed_by}.",
@@ -419,25 +419,25 @@ def _creative_review_item(session: Session) -> ReadinessItem:
     if latest and latest.review_state == "needs_review":
         return ReadinessItem(
             key="creative_generation_review",
-            label="Matt-approved generated creative",
+            label="Human-approved generated creative",
             complete=False,
-            message="Latest generated creative is imported and waiting for Matt review.",
+            message="Latest generated creative is imported and waiting for human review.",
             evidence=_creative_job_evidence(latest),
-            action="Open Assets, compare the source and generated candidate, set Reviewed by to Matt, then approve or reject.",
+            action="Open Assets, compare the source and generated candidate, set Reviewed by to the reviewer, then approve or reject.",
         )
     if latest and latest.review_state == "approved":
         return ReadinessItem(
             key="creative_generation_review",
-            label="Matt-approved generated creative",
+            label="Human-approved generated creative",
             complete=False,
             message="Latest generated creative is approved but missing final proof evidence.",
             evidence=_creative_job_evidence(latest),
-            action="Open Assets, confirm the candidate asset exists, set Reviewed by to Matt, and save creative review.",
+            action="Open Assets, confirm the candidate asset exists, set Reviewed by to the reviewer, and save creative review.",
         )
     if latest and latest.review_state == "rejected":
         return ReadinessItem(
             key="creative_generation_review",
-            label="Matt-approved generated creative",
+            label="Human-approved generated creative",
             complete=False,
             message="Latest generated creative was rejected.",
             evidence=_creative_job_evidence(latest),
@@ -445,7 +445,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
         )
     return ReadinessItem(
         key="creative_generation_review",
-        label="Matt-approved generated creative",
+        label="Human-approved generated creative",
         complete=False,
         message="No approved generated creative job has reviewer evidence yet.",
         evidence="Missing approved creative generation job with reviewed_by, reviewed_at, and candidate asset.",
@@ -605,7 +605,7 @@ def _creative_handoff_prompt(prompt_candidate: GeneratedContentCandidateRecord |
         "Preserve the duck's shape, color, printed details, proportions, and 3D-printed collectible feel. "
         "Do not invent new markings, characters, logos, text overlays, or packaging. "
         "Use a clean, warm product-photo composition suitable for a Facebook post. "
-        "Leave the output unapproved until Matt reviews it in Marketing OS."
+        "Leave the output unapproved until a human reviews it in Marketing OS."
         + (f"\n\nPlanning prompt context: {base_prompt}" if base_prompt else "")
     )
 

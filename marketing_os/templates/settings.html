@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Settings</h2>
+<div class="topline">
+  <div>
+    <div class="eyebrow">Local Control</div>
+    <h2>Settings</h2>
+    <div class="subtle">Local paths, export controls, and maintenance actions for the assistant workspace.</div>
+  </div>
+</div>
 <div class="grid">
   <section class="panel">
     <h3>Local Files</h3>
@@ -16,6 +22,26 @@
     <p class="subtle">Scan the local asset library configured by `MARKETING_OS_ASSET_ROOT` and update indexed assets, thumbnails, and manifest metadata.</p>
     <form method="post" action="{{ url_for('scan_asset_library') }}">
       <button type="submit">Scan asset library</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Etsy Order Items</h3>
+    <p class="subtle">Upload an Etsy sold order items CSV so planning can use product-level sales signals.</p>
+    <form method="post" action="{{ url_for('import_etsy_sales_csv_upload') }}" enctype="multipart/form-data">
+      <label>Order items CSV
+        <input type="file" name="sales_csv" accept=".csv,text/csv" required>
+      </label>
+      <button type="submit">Import order items</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h3>Etsy Listings CSV</h3>
+    <p class="subtle">Import a local Etsy listing CSV by path when API sync is not available.</p>
+    <form method="post" action="{{ url_for('import_etsy_csv') }}">
+      <label>Local CSV path
+        <input type="text" name="csv_path" placeholder="/path/to/etsy-listings.csv">
+      </label>
+      <button type="submit">Import listings</button>
     </form>
   </section>
   <section class="panel">

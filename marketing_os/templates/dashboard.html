@@ -2,32 +2,63 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Today</h2>
+    <div class="eyebrow">Today</div>
+    <h2>Daily Briefing</h2>
     <div class="subtle">
       {% if today_model.attention_count %}
-        {{ today_model.attention_count }} item{{ '' if today_model.attention_count == 1 else 's' }} need attention.
+        I found {{ today_model.attention_count }} item{{ '' if today_model.attention_count == 1 else 's' }} that can move the business forward today.
+      {% elif review_queue %}
+        {{ review_queue|length }} planned post{{ '' if review_queue|length == 1 else 's' }} need human review before they can move forward.
       {% else %}
-        Nothing urgent for this role.
+        No urgent handoffs are blocking the flock right now.
       {% endif %}
     </div>
   </div>
-  <form class="inline" method="get" action="{{ url_for('dashboard') }}">
-    <select name="role">
-      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
-      {% for role in roles %}
-        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
-      {% endfor %}
-    </select>
-    <button class="secondary" type="submit">Filter</button>
-  </form>
+  <a class="button secondary" href="{{ url_for('calendar') }}">Open calendar</a>
 </div>
+
+<section class="assistant-brief">
+  <div class="brief-layout">
+    <div class="brief-title">
+      <div class="eyebrow">Growth assistant</div>
+      {% if today_model.recommended %}
+        <h2>I’d work this next.</h2>
+        <p>{{ today_model.recommended.action_title }} is the highest-leverage move in the queue. I’m keeping the rest of the week visible so you can decide whether to create, review, publish, or measure.</p>
+      {% elif review_queue %}
+        <h2>Review is the next move.</h2>
+        <p>Generated copy or image options are waiting for a human decision. Approve, reject, or request a rewrite so the calendar can keep moving.</p>
+      {% else %}
+        <h2>The desk is clear.</h2>
+        <p>No open due items need attention today. The next useful move is to scan the week, tighten upcoming posts, or review proof gates.</p>
+      {% endif %}
+    </div>
+    <div class="brief-stats" aria-label="Today briefing stats">
+      <div class="stat-tile">
+        <strong>{{ today_model.attention_count }}</strong>
+        <span>needs attention</span>
+      </div>
+      <div class="stat-tile">
+        <strong>{{ today_model.upcoming|length }}</strong>
+        <span>coming up</span>
+      </div>
+      <div class="stat-tile">
+        <strong>{{ today_model.remaining|length }}</strong>
+        <span>also due today</span>
+      </div>
+      <div class="stat-tile">
+        <strong>{{ review_queue|length }}</strong>
+        <span>needs review</span>
+      </div>
+    </div>
+  </div>
+</section>
 
 {% if today_model.recommended %}
   {% set model = today_model.recommended %}
   {% set task = model.task %}
   <section class="hero-task">
     <div>
-      <div class="subtle">Recommended next action</div>
+      <div class="eyebrow">Recommended next action</div>
       <h3>{{ model.action_title }}</h3>
     </div>
     <div class="meta">
@@ -36,22 +67,84 @@
       <span class="pill {{ model.status_tone }}">{{ model.status_label }}</span>
       {% if model.metric_due %}<span class="pill ready">Metrics due</span>{% endif %}
     </div>
-    <div class="subtle">{{ task.product_name or "Owner/admin task" }}</div>
+    <div class="subtle">{{ task.product_name or "Owner handoff" }}</div>
     <div class="button-group">
       <a class="button" href="{{ url_for('task_detail', task_id=task.id) }}">Start task</a>
-      <a class="button secondary" href="{{ url_for('week', role=selected_role) }}">See this week</a>
+      <a class="button secondary" href="{{ url_for('week') }}">Open week</a>
     </div>
   </section>
 {% else %}
-  <section class="hero-task">
-    <h3>All clear for now</h3>
-    <p class="subtle">No open tasks are due today for this role. Check the week if you want to look ahead.</p>
-    <a class="button secondary" href="{{ url_for('week', role=selected_role) }}">Open this week</a>
+  {% if review_queue %}
+    <section class="hero-task">
+      <div class="eyebrow">Recommended next action</div>
+      <h3>Review queued post options.</h3>
+      <p class="subtle">{{ review_queue[0].product_names|join(', ') or 'A planned post' }} has generated work waiting for approval.</p>
+      <div class="meta">
+        <span class="pill">{{ review_queue[0].calendar_date }}</span>
+        <span class="pill">{{ review_queue[0].scheduled_time }}</span>
+        {% for review_label in review_queue[0].review_labels %}
+          <span class="pill">{{ review_label }}</span>
+        {% endfor %}
+      </div>
+      <div class="button-group">
+        <a class="button" href="{{ review_queue[0].review_path }}">Start review</a>
+        <a class="button secondary" href="{{ url_for('planning') }}">Open Studio</a>
+      </div>
+    </section>
+  {% else %}
+    <section class="hero-task">
+      <div class="eyebrow">All clear for now</div>
+      <h3>No due work is blocking today.</h3>
+      <p class="subtle">I’d use the breathing room to inspect the week, review proof items, or prepare the next post.</p>
+      <div class="button-group">
+        <a class="button secondary" href="{{ url_for('week') }}">Open week</a>
+        <a class="button secondary" href="{{ url_for('phase5_readiness') }}">Open review gate</a>
+      </div>
+    </section>
+  {% endif %}
+{% endif %}
+
+{% if review_queue %}
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">Review Queue</div>
+      <h3>Waiting for approval</h3>
+    </div>
+    <a class="button secondary" href="{{ url_for('planning') }}">Open Studio</a>
+  </div>
+  <section class="review-queue-grid">
+    {% for item in review_queue %}
+      <article class="panel review-queue-card">
+        <div class="review-card-top">
+          <div class="meta">
+            <span class="pill">{{ item.calendar_date }}</span>
+            <span class="pill">{{ item.scheduled_time }}</span>
+          </div>
+        </div>
+        <h3>{{ item.destinations|join(', ') or 'Planned' }} post</h3>
+        <p class="subtle">{{ item.product_names|join(', ') or 'Selected product' }}</p>
+        {% if item.review_labels %}
+          <div class="meta review-card-labels">
+            {% for review_label in item.review_labels %}
+              <span class="pill">{{ review_label }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <div class="review-card-actions">
+          <a class="button" href="{{ item.review_path }}">Review</a>
+        </div>
+      </article>
+    {% endfor %}
   </section>
 {% endif %}
 
 {% if today_model.remaining %}
-  <h3 style="margin-top: 22px;">Also Today</h3>
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">Also Today</div>
+      <h3>Secondary moves</h3>
+    </div>
+  </div>
   <section class="grid">
     {% for model in today_model.remaining %}
       {% set task = model.task %}
@@ -61,7 +154,13 @@
 {% endif %}
 
 {% if today_model.upcoming %}
-  <h3 style="margin-top: 22px;">Coming Up</h3>
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">Coming Up</div>
+      <h3>Next signals to watch</h3>
+    </div>
+    <a class="button secondary" href="{{ url_for('week') }}">See all</a>
+  </div>
   <section class="grid">
     {% for model in today_model.upcoming %}
       {% set task = model.task %}

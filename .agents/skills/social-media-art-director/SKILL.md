@@ -7,15 +7,16 @@ description: Social media visual art director for product-preserving creative. U
 
 ## Core Workflow
 
-1. Normalize the request into: `platform`, `format`, `audience`, `goal`, `subject`, `social_angle`, `brand_style`, `details`, `reference_images`, `aspect_ratio`, `provider_path`, `must_include`, and `avoid`.
+1. Normalize the request into: `platform`, `format`, `audience`, `goal`, `subject`, `social_angle`, `post_story`, `story_move`, `brand_style`, `details`, `reference_images`, `aspect_ratio`, `provider_path`, `must_include`, and `avoid`.
 2. Select the destination playbook from `references/destination-image-playbooks.md`.
 3. Choose the provider path:
    - Use **Magnific/Freepik MCP** as the primary path for MattMadeMe product images, reference-image product preservation, Freepik/Magnific requests, or external handoff packages.
    - Use **built-in image generation/image editing** only as a fallback when Magnific MCP is unavailable, blocked, or explicitly declined by the user. For product work, fallback must still pass actual reference images through an image-editing path, not just describe them in text.
 4. Choose a social creative role before prompting: product-in-use, giftable moment, collector detail, maker/process, seasonal/occasion, or community prompt.
-5. Build a prompt from `references/prompt-format.md`.
-6. Run the quality checklist in `references/image-quality-rubric.md`.
-7. If generating, keep generated output reviewable. Do not claim product accuracy without human or visual verification.
+5. If social copy exists, translate the copy's story move into the image scene. The visual must feel like the same idea as the caption, not a generic product image.
+6. Build a prompt from `references/prompt-format.md`.
+7. Run the quality checklist in `references/image-quality-rubric.md`.
+8. If generating, keep generated output reviewable. Do not claim product accuracy without human or visual verification.
 
 Normalize a loose image request:
 
@@ -52,6 +53,13 @@ For product images:
 - download the completed output to the requested local path, normally `outputs/graphics/planning/planned-item-<id>/option-<n>.png`,
 - register or hand off the downloaded file so Marketing OS can preview it,
 - keep the result in review until product accuracy is confirmed.
+
+When a post/caption has already been drafted:
+
+- include the hook, story move, and body gist in the image prompt,
+- choose props/environment that reinforce the story,
+- avoid visual ideas that only restate the product category,
+- reject image options that could belong to any caption.
 
 When Magnific MCP is unavailable, produce a complete handoff:
 

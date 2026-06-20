@@ -29,6 +29,9 @@ python -m marketing_os.jobs.phase5_readiness --fail-on-incomplete
 Use repo skills in `.agents/skills/` for specialized work. This is the standard Codex repo-discovery location, so natural prompts should trigger them without requiring a file path. They are reusable beyond this repo, with optional MattMadeMe references where needed:
 
 - `.agents/skills/copywriter/SKILL.md`
-- `.agents/skills/image-creator/SKILL.md`
+- `.agents/skills/social-media-strategist/SKILL.md`
+- `.agents/skills/social-media-copywriter/SKILL.md`
+- `.agents/skills/social-media-copy-chief/SKILL.md`
+- `.agents/skills/social-media-art-director/SKILL.md`
 
 See `SKILLS.md` for the skill index.

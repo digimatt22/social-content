@@ -82,7 +82,9 @@ def _sale_from_row(row: dict[str, str], source_name: str) -> dict[str, object] |
     external_id = _first(row, "transaction_id", "transaction id", "order_id", "order id", "receipt_id", "receipt id")
     sold_at = _parse_datetime(_first(row, "sale_date", "sale date", "date", "paid_date", "paid date", "created_timestamp"))
     quantity = _parse_int(_first(row, "quantity", "qty"), default=1)
-    revenue_cents = _parse_money_cents(_first(row, "price", "item total", "order value", "gross sales", "amount", "revenue"))
+    revenue_cents = _parse_money_cents(
+        _first(row, "item total", "price", "order value", "gross sales", "amount", "revenue")
+    )
     currency = _first(row, "currency", "currency_code", "currency code")
     if not listing_id and not listing_title:
         return None

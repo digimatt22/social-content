@@ -120,6 +120,12 @@ class EtsyReadOnlyAdapter(Protocol):
     def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
         ...
 
+    def get_reviews_by_shop(self, shop_id: str) -> list[dict[str, object]]:
+        ...
+
+    def get_reviews_by_listing(self, listing_id: str) -> list[dict[str, object]]:
+        ...
+
 
 class MattMadeMeWebsiteAdapter(Protocol):
     def list_published_blog_posts(self) -> list[dict[str, object]]:
@@ -160,6 +166,12 @@ class EtsyOpenApiAdapter:
     def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
         payload = self._get(f"/listings/{listing_id}/images")
         return _extract_results(payload)
+
+    def get_reviews_by_shop(self, shop_id: str) -> list[dict[str, object]]:
+        return self._get_paginated(f"/shops/{shop_id}/reviews")
+
+    def get_reviews_by_listing(self, listing_id: str) -> list[dict[str, object]]:
+        return self._get_paginated(f"/listings/{listing_id}/reviews")
 
     def _get_paginated(self, path: str, limit: int = 100) -> list[dict[str, object]]:
         results: list[dict[str, object]] = []

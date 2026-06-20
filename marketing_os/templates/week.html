@@ -2,16 +2,11 @@
 {% block content %}
 <div class="topline">
   <div>
+    <div class="eyebrow">Week</div>
     <h2>This Week</h2>
-    <div class="subtle">A day-by-day agenda for the selected role.</div>
+    <div class="subtle">All active marketing moves for the next seven days, grouped by day.</div>
   </div>
   <form class="inline" method="get" action="{{ url_for('week') }}">
-    <select name="role">
-      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
-      {% for role in roles %}
-        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
-      {% endfor %}
-    </select>
     <select name="status">
       <option value="open" {{ 'selected' if selected_status == 'open' else '' }}>Open</option>
       <option value="all" {{ 'selected' if selected_status == 'all' else '' }}>All statuses</option>
@@ -32,7 +27,12 @@
 <section class="agenda">
   {% for day in agendas %}
     <div class="agenda-day">
-      <h3>{{ day.day }}</h3>
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow">Field plan</div>
+          <h3>{{ day.day }}</h3>
+        </div>
+      </div>
       <div class="grid">
         {% for model in day.tasks %}
           {% set task = model.task %}
@@ -41,7 +41,12 @@
       </div>
     </div>
   {% else %}
-    <div class="panel">No matching tasks this week.</div>
+    <div class="panel">
+      <div class="eyebrow">No active missions</div>
+      <h3>No matching work this week.</h3>
+      <p class="subtle">Try a broader status or platform filter, or plan the next post from Campaign Studio.</p>
+      <a class="button secondary" href="{{ url_for('planning') }}">Plan a post</a>
+    </div>
   {% endfor %}
 </section>
 {% endblock %}

@@ -29,9 +29,20 @@ def copywriter_contract(brief: dict[str, object], destination: str) -> SkillCont
         "details": _copy_details(brief),
         "social_angle": _social_angle(brief, destination),
         "content_pillar": _content_pillar(brief, destination),
+        "creative_directive": _social_creative_directive(brief, destination),
+        "story_thesis": _story_thesis(brief, destination),
+        "proof_points": _proof_points(brief),
+        "missing_proof": _missing_proof(brief),
+        "story_moves": _story_moves(destination),
         "cta_type": _cta_type(goals),
         "must_include": products,
-        "avoid": [str(item) for item in brief.get("avoid", []) if str(item).strip()],
+        "avoid": [
+            *[str(item) for item in brief.get("avoid", []) if str(item).strip()],
+            "Product-description-first body copy.",
+            "Etsy listing summaries presented as social captions.",
+            "A hook followed immediately by features and a CTA.",
+            "Unsupported claims that the product is hot, viral, popular, or widely ordered.",
+        ],
         "review_level": "polished_draft",
         "source_facts": {
             "planned_item_id": brief.get("planned_item_id"),
@@ -57,21 +68,21 @@ def social_copy_workflow_contract(brief: dict[str, object], destination: str) ->
             "skill": "social-media-strategist",
             "input": {
                 **contract.request,
-                "task": "Choose platform strategy, content pillar, social angle, CTA type, and variant plan. Do not write final copy.",
+                "task": "Choose platform strategy, content pillar, social angle, CTA type, story move, and variant plan. Do not write final copy.",
             },
         },
         "writing_request": {
             "skill": "social-media-copywriter",
             "input": {
                 **contract.request,
-                "task": "Write social copy from the strategy brief. Produce engagement, follower-building, and shop-click variants unless the plan says otherwise.",
+                "task": "Write social copy from the strategy brief. Lead with a tiny story, surprise, opinion, scene, or community moment before product facts. Produce engagement, follower-building, and shop-click variants unless the plan says otherwise.",
             },
         },
         "challenge_request": {
             "skill": "social-media-copy-chief",
             "input": {
                 **contract.request,
-                "task": "Challenge the strategy and draft before human review. Return ready_for_human_review, revise_before_review, or blocked.",
+                "task": "Challenge the strategy and draft before human review. Reject drafts that read like hook + product description + CTA. Return ready_for_human_review, revise_before_review, or blocked.",
             },
         },
         "contract_check": contract.check,
@@ -88,25 +99,28 @@ def social_media_art_director_contracts(brief: dict[str, object], count: int = 3
     approved_ids = _approved_source_asset_ids(brief)
     references = _reference_images(brief, approved_ids)
     reference_roles = _reference_roles(references)
+    copy_context = _copy_context_for_visuals(brief)
+    visual_story = str(copy_context.get("visual_story") or "").strip()
+    story_suffix = f" Match the post story: {visual_story}" if visual_story else ""
     concepts = [
         (
             "Product-In-Use Scene",
             "A clear product-forward social post.",
-            f"Show {product_text} in a believable workspace or shelf scene tied to {brief.get('occasion') or 'an evergreen product story'}.",
+            f"Show {product_text} in a believable workspace or shelf scene tied to {brief.get('occasion') or 'an evergreen product story'}.{story_suffix}",
             "Product in the foreground, simple background, eye-level crop, strong thumbnail readability.",
             "warm, handmade, playful, natural light",
         ),
         (
             "Giftable Moment",
             "Sales growth and buyer consideration.",
-            f"Present {product_text} as a small gift idea for {brief.get('audience') or 'gift buyers'}.",
+            f"Present {product_text} as a small gift idea for {brief.get('audience') or 'gift buyers'}.{story_suffix}",
             "Tidy flat-lay or three-quarter tabletop scene with room for caption pairing, no baked-in text.",
             "bright, friendly, tangible, not overly polished",
         ),
         (
             "Collector Detail",
             "Engagement and comments from returning fans.",
-            f"Feature the detail and personality of {product_text} for {destination}.",
+            f"Feature the detail and personality of {product_text} for {destination}.{story_suffix}",
             "Closer crop with one focal point, shallow depth of field, visible product details, safe edges.",
             "curious, crafted, conversational",
         ),
@@ -130,9 +144,12 @@ def social_media_art_director_contracts(brief: dict[str, object], count: int = 3
                     "composition": composition,
                     "mood": mood,
                     "planned_item_id": brief.get("planned_item_id"),
+                    "post_visual_context": copy_context,
                 },
                 indent=2,
             ),
+            "post_visual_context": copy_context,
+            "post_story_alignment": "Image must reinforce the generated copy's story move and should not feel like a generic product scene.",
             "reference_images": references,
             "reference_image_roles": reference_roles,
             "aspect_ratio": _aspect_ratio_for_destinations(destinations),
@@ -152,12 +169,15 @@ def social_media_art_director_contracts(brief: dict[str, object], count: int = 3
 def image_option_from_contract(contract: SkillContract) -> dict[str, object]:
     request = dict(contract.request)
     details = _json_dict(str(request.get("details") or "{}"))
+    copy_context = details.get("post_visual_context") if isinstance(details.get("post_visual_context"), dict) else {}
+    story_alignment = _story_alignment_prompt(copy_context)
     source_ids = [int(value) for value in request.get("source_asset_ids", [])] if isinstance(request.get("source_asset_ids"), list) else []
     reference_images = request.get("reference_images")
     reference_roles = request.get("reference_image_roles")
     prompt = (
         "Create a realistic photographic scene for "
         f"{request.get('destination')} / {request.get('format')}.\n\n"
+        f"{story_alignment}"
         f"Scene: {details.get('scene') or request.get('details')}\n"
         "Environment: simple real-world setting with minimal props and no clutter; surrounding objects must remain full-size so the duck reads as a miniature 2.5 inch collectible.\n"
         f"Mood and lighting: {details.get('mood') or 'natural, warm, clear'}; authentic photographic lighting with believable contact shadows.\n\n"
@@ -196,11 +216,49 @@ def image_option_from_contract(contract: SkillContract) -> dict[str, object]:
         ],
         "user_actions": [
             "Generate with Magnific MCP using Google Nano Banana 2 and the listed reference images.",
+            "Check the generated image against the post copy so the visual and caption feel like one idea.",
             "Download the finished file to the listed output path and register it with Marketing OS.",
             "Regenerate options if none fit.",
             "Upload your own image instead and review it in Assets.",
         ],
     }
+
+
+def _copy_context_for_visuals(brief: dict[str, object]) -> dict[str, object]:
+    raw = brief.get("reviewable_copy")
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    strategy = raw.get("social_strategy") if isinstance(raw.get("social_strategy"), dict) else {}
+    hook = str(raw.get("hook") or "").strip()
+    body = str(raw.get("body") or "").strip()
+    cta = str(raw.get("cta") or "").strip()
+    story_move = str(strategy.get("story_move") or strategy.get("social_angle") or "").strip()
+    visual_story = " ".join(part for part in [hook, body] if part).strip()
+    return {
+        "copy_candidate_id": raw.get("candidate_id"),
+        "hook": hook,
+        "body": body,
+        "cta": cta,
+        "story_move": story_move,
+        "visual_story": visual_story[:900],
+    }
+
+
+def _story_alignment_prompt(copy_context: dict[str, object]) -> str:
+    if not copy_context:
+        return ""
+    parts = [
+        "Post story to match:",
+        f"Hook: {copy_context.get('hook')}",
+        f"Body: {copy_context.get('body')}",
+    ]
+    if copy_context.get("story_move"):
+        parts.append(f"Story move: {copy_context.get('story_move')}")
+    parts.append(
+        "Visual alignment rule: the scene, props, environment, and mood must support this story. "
+        "Do not create a generic product image that could pair with any caption.\n\n"
+    )
+    return "\n".join(str(part) for part in parts if str(part).strip())
 
 
 def _copywriter_check(request: dict[str, object]) -> dict[str, object]:
@@ -301,6 +359,115 @@ def _social_angle(brief: dict[str, object], destination: str) -> str:
     if _recommended_copy_skill(destination) == "social-media-copywriter":
         return "personality"
     return ""
+
+
+def _social_creative_directive(brief: dict[str, object], destination: str) -> str:
+    products = [str(item) for item in brief.get("products", []) if str(item).strip()]
+    product_text = products[0] if products else "the featured duck"
+    occasion = str(brief.get("occasion") or "").strip()
+    audience = str(brief.get("audience") or "").strip()
+    destination_name = destination.strip() or "social"
+    return (
+        f"For {destination_name}, make {product_text} feel like a character in a tiny moment, not an item being described. "
+        "Use one specific scene, joke, tension, question, or collector/community observation before naming product features. "
+        f"Tie the moment to {occasion or audience or 'the planned audience'} when useful, then use source facts only when they add proof, search value, or attention value."
+    )
+
+
+def _story_thesis(brief: dict[str, object], destination: str) -> str:
+    products = [str(item) for item in brief.get("products", []) if str(item).strip()]
+    product_text = products[0] if products else "the featured product"
+    audience = str(brief.get("audience") or "").strip()
+    proof_points = _proof_points(brief)
+    if proof_points:
+        return (
+            f"Tell why {product_text} is resonating with {audience or 'the intended audience'} using the supplied proof, "
+            "then use product details only as support."
+        )
+    return (
+        f"Tell why {product_text} matters to {audience or 'the intended audience'} without claiming demand; "
+        "ask for proof if popularity, order volume, or customer response would strengthen the story."
+    )
+
+
+def _proof_points(brief: dict[str, object]) -> list[str]:
+    points: list[str] = []
+    for fact in brief.get("product_facts", []):
+        if not isinstance(fact, dict):
+            continue
+        name = str(fact.get("name") or "Product").strip()
+        note = str(fact.get("sales_momentum_note") or "").strip()
+        if note:
+            points.append(f"{name} listing/source note: {note[:500]}")
+        reviews = fact.get("etsy_reviews")
+        if isinstance(reviews, list):
+            for review in reviews[:3]:
+                if not isinstance(review, dict):
+                    continue
+                review_text = str(review.get("review") or "").strip()
+                rating = review.get("rating")
+                if review_text:
+                    prefix = f"{name} Etsy review"
+                    if rating:
+                        prefix += f" ({rating}/5)"
+                    points.append(f"{prefix}: {review_text[:240]}")
+    performance = brief.get("performance_context")
+    if isinstance(performance, dict):
+        for key in ("winning_patterns", "top_products", "top_ctas"):
+            value = performance.get(key)
+            if value:
+                points.append(f"Performance context {key}: {value}")
+    notes = str(brief.get("notes") or "").strip()
+    if any(token in notes.lower() for token in ["order", "sold", "requested", "hot", "took off", "popular"]):
+        points.append(f"Planning note demand signal: {notes}")
+    return points[:5]
+
+
+def _missing_proof(brief: dict[str, object]) -> list[str]:
+    notes = str(brief.get("notes") or "").lower()
+    product_notes = " ".join(
+        str(fact.get("sales_momentum_note") or "").lower()
+        for fact in brief.get("product_facts", [])
+        if isinstance(fact, dict)
+    )
+    source_text = f"{notes} {product_notes}"
+    missing: list[str] = []
+    if any(token in source_text for token in ["hot", "took off", "popular", "storm", "demand"]):
+        missing.append("[MATT_TO_CONFIRM: order count or recent demand signal]")
+        missing.append("[MATT_TO_CONFIRM: who is buying or requesting this product]")
+    if "appreciat" in source_text or "thank" in source_text:
+        missing.append("[MATT_TO_CONFIRM: real recipient/customer group if known]")
+    return missing
+
+
+def _story_moves(destination: str) -> list[str]:
+    normalized = destination.lower()
+    if "pinterest" in normalized:
+        return [
+            "Use proof-led product story when source facts show demand, gifting behavior, or a specific audience trend.",
+            "Start with the search occasion or gift problem, then add one charming detail.",
+            "Make the title useful, but make the description feel like a small idea someone would save.",
+            "Use product facts as keywords, not as a catalog paragraph.",
+        ]
+    if "instagram" in normalized:
+        return [
+            "Use proof-led product story when source facts show demand, customer group, or why the product is resonating.",
+            "Add a visual caption payoff that gives the image personality.",
+            "Use a tiny imagined scene, inner monologue, or collector detail.",
+            "Keep product facts secondary to the feeling someone would save or share.",
+        ]
+    if "facebook" in normalized:
+        return [
+            "Use proof-led product story when source facts show what happened, who responded, and why it matters.",
+            "Open a conversation around the duck's tiny job, personality, or where it would show up.",
+            "Use a small story or playful opinion before any feature list.",
+            "Make the CTA feel like a reply prompt, not a shop instruction, unless shop traffic is the only goal.",
+        ]
+    return [
+        "Choose one human moment before product facts.",
+        "Use only the product details needed to ground the story.",
+        "Avoid listing features in the same order as the source description.",
+    ]
 
 
 def _content_pillar(brief: dict[str, object], destination: str) -> str:

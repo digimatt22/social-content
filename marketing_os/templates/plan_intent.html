@@ -2,8 +2,9 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Planning</h2>
-    <div class="subtle">Queue one post at a time, then review the generated copy and image options when automation finishes.</div>
+    <div class="eyebrow">Plan A Post</div>
+    <h2>Campaign Studio</h2>
+    <div class="subtle">Give the assistant a destination, product, and intent. It will queue reviewed copy and image options for human approval.</div>
   </div>
 </div>
 
@@ -54,11 +55,16 @@
         <input type="date" name="calendar_date" value="{{ today.isoformat() }}" required>
       </label>
 
+      <label>
+        What time should it be scheduled for?
+        <input type="time" name="scheduled_time" value="{{ default_scheduled_time }}" required data-scheduled-time-input>
+      </label>
+
       <div class="field-label">Where is it going?</div>
       <div class="destination-picker">
         {% for destination in destinations %}
           <label class="destination-card">
-            <input type="radio" name="destinations" value="{{ destination }}" required {{ 'checked' if loop.first else '' }}>
+            <input type="radio" name="destinations" value="{{ destination }}" required {{ 'checked' if loop.first else '' }} data-default-scheduled-time="{{ destination_default_times.get(destination, default_scheduled_time) }}">
             <span class="destination-icon">{{ destination_icons.get(destination, destination[0]) }}</span>
             <span>{{ destination }}</span>
           </label>
@@ -66,7 +72,7 @@
       </div>
 
       <label>
-        What would you like this post to focus on?
+        What should this move accomplish?
         <select name="goals" required data-other-select="goal-other">
           {% for goal in goals %}
             <option value="{{ goal }}">{{ goal_labels.get(goal, goal) }}</option>
@@ -184,21 +190,36 @@
   </form>
 </section>
 
-<h3 style="margin-top: 22px;">Queued And Planned Posts</h3>
+<div class="section-heading">
+  <div>
+    <div class="eyebrow">Production Queue</div>
+    <h3>Queued And Planned Posts</h3>
+  </div>
+</div>
 <section class="agenda">
   {% for item in planned_items %}
-    <div class="panel" id="planned-item-{{ item.id }}">
+    <div class="panel planned-post-card" id="planned-item-{{ item.id }}">
       <div class="planned-header">
         <div>
           <div class="meta">
             <span class="pill">{{ item.calendar_date }}</span>
+            <span class="pill">{{ item.scheduled_time }}</span>
             <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else 'blocked' if item.waiting_for_generation or item.waiting_for_asset_download else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
             <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
           </div>
           <h3>{{ item.destinations|join(', ') or 'No destination' }} post for {{ item.products|map(attribute='name')|join(', ') or 'selected product' }}</h3>
         </div>
         <form method="post" action="{{ url_for('delete_planning_item', item_id=item.id) }}" onsubmit="return confirm('Delete this queued post?');">
-          <button class="warn" type="submit">Delete</button>
+          <button class="warn icon-button" type="submit" aria-label="Delete queued post" title="Delete queued post">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4h8v2"></path>
+              <path d="M19 6l-1 14H6L5 6"></path>
+              <path d="M10 11v5"></path>
+              <path d="M14 11v5"></path>
+            </svg>
+            <span class="sr-only">Delete queued post</span>
+          </button>
         </form>
       </div>
 
@@ -219,18 +240,22 @@
             <dd>{{ item.occasion }}</dd>
           </div>
         {% endif %}
-        {% if item.promotion %}
-          <div>
-            <dt>Offer</dt>
-            <dd>{{ item.promotion }}</dd>
-          </div>
-        {% endif %}
       </dl>
-      {% if item.notes %}<p class="subtle">{{ item.notes }}</p>{% endif %}
-      {% if item.source_assets %}
-        <details style="margin-top: 10px;" open>
-          <summary class="subtle">Reference images for generation</summary>
+
+      {% if item.notes or item.source_assets or item.production_error or item.promotion %}
+        <details class="generation-details">
+          <summary>Generation Details</summary>
+          {% if item.promotion %}
+            <p><strong>Offer:</strong> {{ item.promotion }}</p>
+          {% endif %}
+          {% if item.notes %}
+            <p><strong>Planning notes:</strong> {{ item.notes }}</p>
+          {% endif %}
+          {% if item.production_error %}
+            <p><strong>Automation status:</strong> {{ item.production_error }}</p>
+          {% endif %}
           {% if item.selected_source_assets %}
+            <p><strong>Reference images</strong></p>
             <div class="reference-strip">
               {% for asset in item.selected_source_assets %}
                 <figure>
@@ -255,10 +280,6 @@
         </div>
       {% endif %}
 
-      {% if item.waiting_for_generation %}
-        {% if item.production_error %}<p class="subtle">{{ item.production_error }}</p>{% endif %}
-      {% endif %}
-
       <div class="review-grid">
         <section class="review-column">
           <div class="review-heading">
@@ -267,8 +288,15 @@
           </div>
           {% if item.copy_candidates %}
             {% for candidate in item.copy_candidates %}
-              <div class="task" id="candidate-{{ candidate.id }}">
-                <pre class="copybox" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</pre>
+              <article class="post-preview" id="candidate-{{ candidate.id }}" data-platform="{{ item.destinations[0]|lower if item.destinations else 'social' }}">
+                <div class="post-preview-header">
+                  <span class="channel-icon {{ item.destinations[0]|lower if item.destinations else '' }}">{{ (item.destinations[0][0] if item.destinations else 'S') }}</span>
+                  <div>
+                    <strong>{{ item.destinations[0] if item.destinations else 'Social' }}</strong>
+                    <span>{{ item.products|map(attribute='name')|join(', ') or 'Selected product' }}</span>
+                  </div>
+                </div>
+                <div class="post-preview-body" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</div>
 
                 <form method="post" action="{{ url_for('update_planning_copy', candidate_id=candidate.id) }}" class="copy-edit-form" data-edit-panel="copy-{{ candidate.id }}">
                   <label>Edit post copy
@@ -291,11 +319,25 @@
                   </div>
                 </form>
 
-                <div class="button-group">
-                  <button class="secondary" type="button" data-show-panel="copy-{{ candidate.id }}" {{ 'disabled' if item.waiting_for_copy else '' }}>Edit</button>
-                  <button class="secondary" type="button" data-show-panel="rewrite-{{ candidate.id }}" {{ 'disabled' if item.waiting_for_copy else '' }}>Rewrite</button>
+                <div class="button-group icon-button-group" aria-label="Copy actions">
+                  <button class="secondary icon-button" type="button" data-show-panel="copy-{{ candidate.id }}" aria-label="Edit copy" title="Edit copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9"></path>
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                    </svg>
+                    <span class="sr-only">Edit copy</span>
+                  </button>
+                  <button class="secondary icon-button" type="button" data-show-panel="rewrite-{{ candidate.id }}" aria-label="Rewrite copy" title="Rewrite copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                      <path d="M3 21v-5h5"></path>
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                      <path d="M16 8h5V3"></path>
+                    </svg>
+                    <span class="sr-only">Rewrite copy</span>
+                  </button>
                 </div>
-              </div>
+              </article>
             {% endfor %}
           {% else %}
             <div class="empty-state">Copy will appear here after automation runs.</div>
@@ -307,13 +349,15 @@
             <h3>Images</h3>
             {% if item.waiting_for_images %}<span class="pill blocked">Queued</span>{% endif %}
           </div>
-          {% if item.image_candidates %}
-            <div class="image-option-grid">
+          <div class="image-option-grid">
+            {% if item.image_candidates %}
               {% for candidate in item.image_candidates %}
                 {% if candidate.image_asset %}
                   <article class="image-review-card" id="candidate-{{ candidate.id }}">
-                    <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" alt="{{ candidate.image_asset.title }}">
-                    <h3>{{ candidate.image_asset.title }}</h3>
+                    <div class="image-thumb-frame">
+                      <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" alt="{{ candidate.image_asset.title }}">
+                      <button class="image-zoom-button" type="button" aria-label="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" data-image-zoom-title="{{ candidate.image_asset.title }}">+</button>
+                    </div>
                     <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
                       <input type="hidden" name="review_state" value="approved">
                       <input type="hidden" name="reviewed_by" value="Matt">
@@ -323,27 +367,15 @@
                   </article>
                 {% endif %}
               {% endfor %}
-            </div>
-          {% endif %}
-
-          {% if item.waiting_for_images or item.image_candidates|length < 3 %}
-            <div class="image-option-grid">
-              {% for slot in range(item.image_candidates|length + 1, 4) %}
-                <article class="image-placeholder-card" aria-disabled="true">
-                  <div class="placeholder-image"></div>
-                  <h3>Image option {{ slot }}</h3>
-                  <p class="subtle">Waiting for generation</p>
-                </article>
-              {% endfor %}
-            </div>
-          {% endif %}
-
-          <div class="button-group">
-            <button class="secondary" type="button" data-show-panel="upload-image-{{ item.id }}">Use your own image</button>
-            <button class="secondary" type="button" data-show-panel="rewrite-images-{{ item.id }}">Regenerate images</button>
+            {% endif %}
+            <article class="image-upload-card" data-show-panel="upload-image-{{ item.id }}" role="button" tabindex="0" aria-controls="upload-image-{{ item.id }}">
+              <div class="upload-glyph">+</div>
+              <h3>Use your own image</h3>
+              <p>Upload a finished visual instead of using a generated option.</p>
+            </article>
           </div>
 
-          <form method="post" action="{{ url_for('upload_planning_image', item_id=item.id) }}" enctype="multipart/form-data" class="upload-panel" data-edit-panel="upload-image-{{ item.id }}">
+          <form method="post" action="{{ url_for('upload_planning_image', item_id=item.id) }}" enctype="multipart/form-data" class="upload-panel" id="upload-image-{{ item.id }}" data-edit-panel="upload-image-{{ item.id }}">
             <h3>Use your own image</h3>
             <label>Image file
               <input type="file" name="image_file" accept="image/*" required>
@@ -360,6 +392,7 @@
             </div>
           </form>
 
+          <button class="text-link" type="button" data-show-panel="rewrite-images-{{ item.id }}">Regenerate images</button>
           <form method="post" action="{{ url_for('regenerate_planning_item', item_id=item.id) }}" class="rewrite-form image-rewrite" data-edit-panel="rewrite-images-{{ item.id }}">
             <input type="hidden" name="target" value="images">
             <label>What should the next images do differently?
@@ -374,25 +407,41 @@
       </div>
 
       {% set can_create_task = item.has_current_copy and not item.waiting_for_copy and item.has_selected_image %}
+      {% set create_task_disabled_reason = "A post can be created after fresh copy is ready and an image is selected." %}
       {% if item.copy_candidates %}
         <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 14px;">
           <input type="hidden" name="destination" value="{{ item.destinations[0] if item.destinations else '' }}">
           <input type="hidden" name="candidate_id" value="{{ item.copy_candidates[0].id }}">
-          <button class="secondary" type="submit" {{ '' if can_create_task else 'disabled' }}>Create posting task</button>
+          {% if can_create_task %}
+            <button class="secondary" type="submit">Create posting task</button>
+          {% else %}
+            <button class="secondary" type="submit" disabled title="{{ create_task_disabled_reason }}">Create posting task</button>
+          {% endif %}
         </form>
       {% else %}
         <div style="margin-top: 14px;">
-          <button class="secondary" type="button" disabled>Create posting task</button>
+          <button class="secondary" type="button" disabled title="{{ create_task_disabled_reason }}">Create posting task</button>
         </div>
-      {% endif %}
-      {% if not can_create_task %}
-        <div class="subtle" style="margin-top: 6px;">A post can be created after fresh copy is ready and an image is selected.</div>
       {% endif %}
     </div>
   {% else %}
     <div class="panel">No posts queued yet.</div>
   {% endfor %}
 </section>
+
+<div class="image-modal" data-image-modal hidden>
+  <div class="image-modal-backdrop" data-image-modal-close></div>
+  <div class="image-modal-panel" role="dialog" aria-modal="true" aria-label="Image preview">
+    <button class="drawer-close image-modal-close icon-button" type="button" data-image-modal-close aria-label="Close image preview" title="Close">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6 6 18"></path>
+        <path d="m6 6 12 12"></path>
+      </svg>
+      <span class="sr-only">Close image preview</span>
+    </button>
+    <img data-image-modal-img alt="">
+  </div>
+</div>
 
 <script>
   function syncOtherField(select) {
@@ -433,6 +482,40 @@
       const panel = document.querySelector(`[data-edit-panel="${hidePanel.dataset.hidePanel}"]`);
       if (panel) panel.classList.remove("active");
     }
+  });
+
+  function closeImageModal() {
+    const modal = document.querySelector("[data-image-modal]");
+    if (!modal) return;
+    modal.hidden = true;
+    const img = modal.querySelector("[data-image-modal-img]");
+    if (img) img.removeAttribute("src");
+  }
+
+  document.addEventListener("click", (event) => {
+    const zoom = event.target.closest("[data-image-zoom-src]");
+    if (zoom) {
+      const modal = document.querySelector("[data-image-modal]");
+      if (!modal) return;
+      const img = modal.querySelector("[data-image-modal-img]");
+      if (img) {
+        img.src = zoom.dataset.imageZoomSrc;
+        img.alt = zoom.dataset.imageZoomTitle || "Image preview";
+      }
+      modal.hidden = false;
+      modal.querySelector("[data-image-modal-close]")?.focus();
+      return;
+    }
+    if (event.target.closest("[data-image-modal-close]")) closeImageModal();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeImageModal();
+    const uploadCard = event.target.closest(".image-upload-card[data-show-panel]");
+    if (!uploadCard || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    const panel = document.querySelector(`[data-edit-panel="${uploadCard.dataset.showPanel}"]`);
+    if (panel) panel.classList.add("active");
   });
 </script>
 {% endblock %}

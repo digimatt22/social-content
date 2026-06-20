@@ -36,7 +36,7 @@ The app helps a solo business owner generate and execute marketing plans from a 
 
 The Phase 2 planner remains active behind the web app. Old Phase 1/2 executable entry points are archived under `archive/phase1-phase2-executables`, and executed planning docs are archived under `docs/archive`.
 
-Repo-specific Codex skills live under `skills/`; see [SKILLS.md](SKILLS.md) and [AGENTS.md](AGENTS.md).
+Repo-specific Codex skills live under `.agents/skills/`; see [SKILLS.md](SKILLS.md) and [AGENTS.md](AGENTS.md).
 
 ## Installation
 
@@ -130,6 +130,8 @@ python -m marketing_os.jobs.content_production --limit 10
 ```
 
 The wrapper defaults to planned items due within the next 14 days and is intended for manual or Codex-managed runs.
+
+See [docs/operating-guides/codex-content-automation.md](docs/operating-guides/codex-content-automation.md) for the weekly Codex App automation prompt.
 
 Do not expose this local app to the public internet.
 

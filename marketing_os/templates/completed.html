@@ -2,18 +2,11 @@
 {% block content %}
 <div class="topline">
   <div>
+    <div class="eyebrow">Completed Work</div>
     <h2>Completed</h2>
-    <div class="subtle">Recent completed or skipped tasks for the selected role.</div>
+    <div class="subtle">Recent work that has left the active queue.</div>
   </div>
-  <form class="inline" method="get" action="{{ url_for('completed') }}">
-    <select name="role">
-      <option value="all" {{ 'selected' if selected_role == 'all' else '' }}>All roles</option>
-      {% for role in roles %}
-        <option value="{{ role }}" {{ 'selected' if selected_role == role else '' }}>{{ role }}</option>
-      {% endfor %}
-    </select>
-    <button class="secondary" type="submit">Filter</button>
-  </form>
+  <a class="button secondary" href="{{ url_for('week') }}">Back to week</a>
 </div>
 
 <section class="grid">
@@ -21,7 +14,11 @@
     {% set task = model.task %}
     {% include "_task_card.html" %}
   {% else %}
-    <div class="panel">No completed tasks for this role yet.</div>
+    <div class="panel">
+      <div class="eyebrow">No history yet</div>
+      <h3>No completed tasks yet.</h3>
+      <p class="subtle">Completed work will land here after posts are handled or intentionally skipped.</p>
+    </div>
   {% endfor %}
 </section>
 {% endblock %}

@@ -5,7 +5,10 @@ import json
 from datetime import date
 from pathlib import Path
 
+from sqlalchemy import select
+
 from ..db import create_db_engine, init_db, session_factory, session_scope
+from ..db_models import SyncMetadata, utc_now
 from ..services.weekly_social_planner import build_weekly_social_plan, next_monday
 
 
@@ -32,9 +35,29 @@ def run(
                 dry_run=dry_run,
                 sales_lookback_days=sales_lookback_days,
             )
+            _record_automation_run(session, "weekly_social_planner", output_dir, result.__dict__)
             return result.__dict__
     finally:
         engine.dispose()
+
+
+def _record_automation_run(session, source_name: str, source_path: str | Path, summary: dict[str, object]) -> None:
+    record = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == source_name))
+    if record is None:
+        record = SyncMetadata(source_name=source_name, source_path=str(source_path), notes="")
+        session.add(record)
+    record.source_path = str(source_path)
+    record.synced_at = utc_now()
+    record.notes = json.dumps(
+        {
+            "created": summary.get("created", 0),
+            "skipped": summary.get("skipped", 0),
+            "dry_run": summary.get("dry_run", False),
+            "week_start": str(summary.get("week_start", "")),
+            "sales_source": summary.get("sales_source", ""),
+        },
+        sort_keys=True,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

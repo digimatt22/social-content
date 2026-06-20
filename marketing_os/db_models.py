@@ -87,6 +87,32 @@ class ProductSalesRecord(Base):
     __table_args__ = (UniqueConstraint("source_name", "external_id", name="uq_product_sales_source_id"),)
 
 
+class EtsyReviewRecord(Base):
+    __tablename__ = "etsy_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    external_source: Mapped[str] = mapped_column(String(80), default="etsy_api", nullable=False)
+    external_id: Mapped[str] = mapped_column(String(220), nullable=False)
+    shop_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    listing_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    transaction_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    buyer_user_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    review: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    language: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    image_url_fullxfull: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    created_timestamp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_timestamp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    raw_data_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord | None] = relationship()
+
+    __table_args__ = (UniqueConstraint("external_source", "external_id", name="uq_etsy_review_source_id"),)
+
+
 class TemplateRecord(Base):
     __tablename__ = "templates"
 
@@ -142,6 +168,7 @@ class AssetRecord(Base):
     generated_prompt: Mapped[str] = mapped_column(Text, default="", nullable=False)
     source_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     default_reference: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hidden_from_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     product: Mapped[ProductRecord | None] = relationship(back_populates="assets")
 
@@ -223,6 +250,7 @@ class PlannedContentRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     calendar_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_time: Mapped[str] = mapped_column(String(5), default="09:00", nullable=False)
     destinations_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     goals_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
@@ -301,6 +329,7 @@ class TaskRecord(Base):
     calendar_item_id: Mapped[int | None] = mapped_column(ForeignKey("calendar_items.id"), nullable=True)
     planned_content_item_id: Mapped[int | None] = mapped_column(ForeignKey("planned_content_items.id"), nullable=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_time: Mapped[str] = mapped_column(String(5), default="09:00", nullable=False)
     title: Mapped[str] = mapped_column(String(260), nullable=False)
     owner_role: Mapped[str] = mapped_column(String(80), nullable=False)
     platform: Mapped[str] = mapped_column(String(80), nullable=False)

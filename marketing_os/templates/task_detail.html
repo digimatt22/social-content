@@ -2,10 +2,11 @@
 {% block content %}
 <div class="topline">
   <div>
+    <div class="eyebrow">Task Brief</div>
     <h2>{{ task_model.action_title }}</h2>
-    <div class="subtle">{{ task.due_date }} · {{ task.owner_role }} · {{ task.platform }} {{ task.content_type }}</div>
+    <div class="subtle">{{ task.due_date }} · {{ task.scheduled_time or '09:00' }} · {{ task.platform }} {{ task.content_type }}</div>
   </div>
-  <a class="button secondary" href="{{ url_for('dashboard') }}">Back to today</a>
+  <a class="button secondary" href="{{ url_for('dashboard') }}">Back to briefing</a>
 </div>
 
 <div class="step-list" aria-label="Task steps">
@@ -18,7 +19,7 @@
 <section class="grid">
   <div class="panel">
     <h3>Prepare</h3>
-    <p><strong>{{ task.product_name or "Owner/admin task" }}</strong></p>
+    <p><strong>{{ task.product_name or "Owner handoff" }}</strong></p>
     {% if task.asset and task.asset.file_exists %}
       <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=task.asset.id) }}" alt="{{ task.asset.name }}">
       <p class="subtle">{{ task.asset.name }} · {{ task.asset.readiness_state }}</p>
@@ -109,7 +110,7 @@
       <label>Published URL <span>Optional now. Helpful for metrics later.</span>
         <input name="post_url" value="{{ task.published_url }}">
       </label>
-      <label>Notes <span>What changed, what was confusing, or what Matt needs to know.</span>
+      <label>Notes <span>What changed, what was confusing, or what should be remembered next time.</span>
         <textarea name="notes">{{ task.notes }}</textarea>
       </label>
       <div class="button-group">

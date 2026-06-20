@@ -119,10 +119,12 @@ def build_weekly_social_plan(
     slots: int = 7,
     dry_run: bool = False,
     sales_lookback_days: int = 90,
+    freshness_lookback_days: int = 45,
 ) -> WeeklyPlanResult:
     sales = load_etsy_product_sales_signals(session, lookback_days=sales_lookback_days)
     selected_slots = WEEKLY_SLOTS[: max(1, min(slots, len(WEEKLY_SLOTS)))]
-    assignments = _assign_products(selected_slots, sales.product_signals)
+    recent_product_ids = _recently_featured_product_ids(session, week_start, lookback_days=freshness_lookback_days)
+    assignments = _assign_products(selected_slots, sales.product_signals, recent_product_ids=recent_product_ids)
     created_ids: list[int] = []
     skipped = 0
 
@@ -153,6 +155,8 @@ def build_weekly_social_plan(
         output_dir=output_dir,
         sales=sales,
         assignments=assignments,
+        recent_product_ids=recent_product_ids,
+        freshness_lookback_days=freshness_lookback_days,
         created_ids=created_ids,
         skipped=skipped,
         dry_run=dry_run,
@@ -173,10 +177,13 @@ def write_weekly_strategy_export(
     output_dir: str | Path,
     sales: EtsySalesSummary,
     assignments: list[tuple[WeeklySlot, ProductSalesSignal]],
+    recent_product_ids: set[int] | None,
+    freshness_lookback_days: int,
     created_ids: list[int],
     skipped: int,
     dry_run: bool = False,
 ) -> Path:
+    recent_product_ids = recent_product_ids or set()
     target_dir = Path(output_dir) / week_start.isoformat()
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / "weekly-social-strategy.json"
@@ -190,6 +197,8 @@ def write_weekly_strategy_export(
                 "sales_source": sales.source,
                 "sales_lookback_days": sales.lookback_days,
                 "sales_errors": sales.errors,
+                "freshness_lookback_days": freshness_lookback_days,
+                "recently_featured_product_ids": sorted(recent_product_ids),
                 "created_planned_item_ids": created_ids,
                 "skipped_existing_items": skipped,
                 "strategy": {
@@ -199,7 +208,7 @@ def write_weekly_strategy_export(
                         "Flock Building": "20%",
                         "Maker Process": "10%",
                     },
-                    "product_mix": "Balance popular Etsy products with slow products that need a better social angle.",
+                    "product_mix": "Balance popular Etsy products with slow products that need a better social angle, while avoiding products featured in the recent lookback window when fresh alternatives exist.",
                     "platform_mix": ["Facebook", "Instagram", "Pinterest"],
                     "human_review": "All generated copy and images remain in Planning review.",
                 },
@@ -212,6 +221,7 @@ def write_weekly_strategy_export(
                         "occasion": slot.occasion,
                         "promotion": slot.promotion,
                         "product_bucket": slot.product_bucket,
+                        "recently_featured": product.product_id in recent_product_ids,
                         "reasoning": slot.reasoning,
                         "product": asdict(product),
                     }
@@ -235,9 +245,14 @@ def next_monday(today: date | None = None) -> date:
     return base + timedelta(days=days_until_monday or 7)
 
 
-def _assign_products(slots: list[WeeklySlot], signals: list[ProductSalesSignal]) -> list[tuple[WeeklySlot, ProductSalesSignal]]:
+def _assign_products(
+    slots: list[WeeklySlot],
+    signals: list[ProductSalesSignal],
+    recent_product_ids: set[int] | None = None,
+) -> list[tuple[WeeklySlot, ProductSalesSignal]]:
     if not signals:
         return []
+    recent_product_ids = recent_product_ids or set()
     popular = [signal for signal in signals if signal.recent_quantity > 0] or signals
     slow = [signal for signal in sorted(signals, key=lambda item: (item.recent_quantity, item.product_name.lower())) if signal_recently_selectable(signal)]
     slow = slow or list(reversed(signals))
@@ -248,9 +263,9 @@ def _assign_products(slots: list[WeeklySlot], signals: list[ProductSalesSignal])
     for slot in slots:
         pool = popular if slot.product_bucket == "popular" else slow
         index = popular_index if slot.product_bucket == "popular" else slow_index
-        product = _next_product(pool, index, used)
+        product = _next_product(pool, index, used, recent_product_ids)
         if product is None:
-            product = _next_product(signals, 0, used) or signals[0]
+            product = _next_product(signals, 0, used, recent_product_ids) or _next_product(signals, 0, used, set()) or signals[0]
         assignments.append((slot, product))
         used.add(product.product_id)
         if slot.product_bucket == "popular":
@@ -264,14 +279,41 @@ def signal_recently_selectable(signal: ProductSalesSignal) -> bool:
     return signal.signal == "slow_boost" or signal.recent_quantity <= 1
 
 
-def _next_product(pool: list[ProductSalesSignal], start_index: int, used: set[int]) -> ProductSalesSignal | None:
+def _next_product(
+    pool: list[ProductSalesSignal],
+    start_index: int,
+    used: set[int],
+    recent_product_ids: set[int],
+) -> ProductSalesSignal | None:
     if not pool:
         return None
+    for offset in range(len(pool)):
+        candidate = pool[(start_index + offset) % len(pool)]
+        if candidate.product_id not in used and candidate.product_id not in recent_product_ids:
+            return candidate
     for offset in range(len(pool)):
         candidate = pool[(start_index + offset) % len(pool)]
         if candidate.product_id not in used:
             return candidate
     return pool[start_index % len(pool)]
+
+
+def _recently_featured_product_ids(session: Session, week_start: date, lookback_days: int = 45) -> set[int]:
+    cutoff = week_start - timedelta(days=lookback_days)
+    ids: set[int] = set()
+    items = session.scalars(
+        select(PlannedContentRecord)
+        .where(PlannedContentRecord.calendar_date >= cutoff)
+        .where(PlannedContentRecord.calendar_date < week_start)
+        .where(PlannedContentRecord.status.not_in(["skipped"]))
+    )
+    for item in items:
+        for value in json_list(item.product_ids_json):
+            try:
+                ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
+    return ids
 
 
 def _already_planned(session: Session, post_date: date, platform: str, product_id: int, week_start: date) -> bool:

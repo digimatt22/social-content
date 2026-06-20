@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from urllib.error import HTTPError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_models import AssetRecord, ProductRecord, SyncMetadata, utc_now
+from ..db_models import AssetRecord, EtsyReviewRecord, ProductRecord, SyncMetadata, utc_now
 from ..integrations import EtsyConfig, EtsyOpenApiAdapter, EtsyReadOnlyAdapter
 from ..phase3 import json_list
 from .product_identity import find_product_by_identity, remember_product_reference
@@ -22,6 +23,7 @@ class EtsySyncSummary:
     products_imported: int
     assets_imported: int
     errors: list[str]
+    reviews_imported: int = 0
 
 
 def sync_etsy_read_only(
@@ -43,6 +45,7 @@ def sync_etsy_read_only(
     errors: list[str] = []
     products_imported = 0
     assets_imported = 0
+    reviews_imported = 0
     try:
         try:
             listings = adapter.list_active_shop_listings(shop_id)
@@ -61,16 +64,22 @@ def sync_etsy_read_only(
                 for image in _listing_images(adapter, listing_id, listing_payload):
                     upsert_etsy_listing_image(session, product, listing_id, image)
                     assets_imported += 1
-        _record_sync(session, "etsy_api", shop_id, f"Imported {products_imported} listing(s) and {assets_imported} image(s).")
+        reviews_imported = _sync_reviews(session, adapter, shop_id)
+        _record_sync(
+            session,
+            "etsy_api",
+            shop_id,
+            f"Imported {products_imported} listing(s), {assets_imported} image(s), and {reviews_imported} review(s).",
+        )
     except Exception as exc:  # pragma: no cover - exercised via fake/service-level tests for normal flow.
         if _is_rate_limit_error(exc):
             message = _record_rate_limit(session, shop_id)
-            return EtsySyncSummary("etsy", products_imported, assets_imported, [message])
+            return EtsySyncSummary("etsy", products_imported, assets_imported, [message], reviews_imported=reviews_imported)
         message = str(exc)
         errors.append(message)
         _record_sync(session, "etsy_api", shop_id, f"error: {message}")
     session.flush()
-    return EtsySyncSummary("etsy", products_imported, assets_imported, errors)
+    return EtsySyncSummary("etsy", products_imported, assets_imported, errors, reviews_imported=reviews_imported)
 
 
 def _resolve_shop_id_after_not_found(adapter: EtsyReadOnlyAdapter, config: EtsyConfig, exc: HTTPError) -> str | None:
@@ -217,6 +226,63 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
     return existing
 
 
+def _sync_reviews(session: Session, adapter: EtsyReadOnlyAdapter, shop_id: str) -> int:
+    review_reader = getattr(adapter, "get_reviews_by_shop", None)
+    if not callable(review_reader):
+        return 0
+    reviews = review_reader(shop_id)
+    imported = 0
+    for review in reviews:
+        if not isinstance(review, dict):
+            continue
+        upsert_etsy_review(session, review)
+        imported += 1
+    return imported
+
+
+def upsert_etsy_review(session: Session, review: dict[str, object]) -> EtsyReviewRecord:
+    listing_id = _text(review, "listing_id")
+    transaction_id = _text(review, "transaction_id")
+    external_id = _review_external_id(review, listing_id, transaction_id)
+    existing = session.scalar(
+        select(EtsyReviewRecord).where(EtsyReviewRecord.external_source == "etsy_api", EtsyReviewRecord.external_id == external_id)
+    )
+    if existing is None:
+        existing = EtsyReviewRecord(external_source="etsy_api", external_id=external_id)
+        session.add(existing)
+    product = _product_for_listing_id(session, listing_id)
+    existing.product_id = product.id if product is not None else None
+    existing.shop_id = _text(review, "shop_id")
+    existing.listing_id = listing_id
+    existing.transaction_id = transaction_id
+    existing.buyer_user_id = _text(review, "buyer_user_id")
+    existing.rating = _int_or_none(review.get("rating"))
+    existing.review = _text(review, "review")
+    existing.language = _text(review, "language")
+    existing.image_url_fullxfull = _text(review, "image_url_fullxfull")
+    existing.created_timestamp = _int_or_none(review.get("created_timestamp") or review.get("create_timestamp"))
+    existing.updated_timestamp = _int_or_none(review.get("updated_timestamp") or review.get("update_timestamp"))
+    existing.raw_data_json = json.dumps(review, sort_keys=True, default=str)
+    existing.imported_at = existing.imported_at or utc_now()
+    existing.updated_at = utc_now()
+    return existing
+
+
+def _product_for_listing_id(session: Session, listing_id: str) -> ProductRecord | None:
+    if not listing_id:
+        return None
+    return session.scalar(select(ProductRecord).where(ProductRecord.external_source == "etsy", ProductRecord.external_id == listing_id))
+
+
+def _review_external_id(review: dict[str, object], listing_id: str, transaction_id: str) -> str:
+    if transaction_id:
+        return f"transaction:{transaction_id}"
+    created = _text(review, "created_timestamp", "create_timestamp")
+    review_text = _text(review, "review")
+    digest = hashlib.sha1(f"{listing_id}|{created}|{review_text}".encode("utf-8")).hexdigest()[:16]
+    return f"listing:{listing_id or 'unknown'}:{created or 'unknown'}:{digest}"
+
+
 def _listing_image_external_id(listing_id: str, image_id: str) -> str:
     return f"{listing_id}:{image_id or 'unranked'}"
 
@@ -238,6 +304,13 @@ def _text(payload: dict[str, object], *keys: str) -> str:
             continue
         return _clean_text(str(value))
     return ""
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _list_text(payload: dict[str, object], key: str) -> list[str]:

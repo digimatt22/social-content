@@ -1,25 +1,88 @@
 {% extends "base.html" %}
+{% macro gallery_controls() %}
+  <div class="pagination-bar gallery-control-bar" aria-label="Gallery controls">
+    <span class="subtle">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+    <form method="get" action="{{ url_for('assets') }}" class="gallery-filter-form">
+      {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
+      <input type="hidden" name="page" value="1">
+      <span class="sr-only">Image tag</span>
+      <select name="tag" aria-label="Image tag" data-auto-submit>
+        <option value="">All tags</option>
+        {% for tag in tag_options %}
+          <option value="{{ tag }}" {{ 'selected' if selected_tag == tag else '' }}>{{ tag }}</option>
+        {% endfor %}
+      </select>
+      <a
+        class="button secondary icon-button"
+        href="{{ url_for('assets', show_hidden=1 if show_hidden else none) }}"
+        aria-label="Reset image tag filter"
+        title="Reset image tag filter"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+          <path d="M3 3v6h6"></path>
+        </svg>
+        <span class="sr-only">Reset image tag filter</span>
+      </a>
+    </form>
+    <div class="button-group pagination-actions">
+      {% if pagination.has_previous %}
+        <a class="button secondary" href="{{ url_for('assets', page=pagination.previous_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}">Previous</a>
+      {% endif %}
+      {% if pagination.has_next %}
+        <a class="button secondary" href="{{ url_for('assets', page=pagination.next_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}" data-load-next>Next</a>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Assets</h2>
-    <div class="subtle">Manage source photos, generated image candidates, review status, and file checks in one place.</div>
+    <div class="eyebrow">Gallery</div>
+    <h2>Creative Assets</h2>
+    <div class="subtle">Scan the flock visually first. Open an item when you need review controls, source paths, or usage details.</div>
   </div>
   <div class="button-group">
+    {% if show_hidden %}
+      <a class="button secondary" href="{{ url_for('assets', tag=selected_tag if selected_tag else none) }}">Hide hidden images</a>
+    {% elif hidden_asset_count %}
+      <a class="button secondary" href="{{ url_for('assets', show_hidden=1, tag=selected_tag if selected_tag else none) }}">Show hidden images ({{ hidden_asset_count }})</a>
+    {% endif %}
     <form method="post" action="{{ url_for('scan_assets') }}">
       <button type="submit">Scan local assets</button>
     </form>
   </div>
 </div>
 
-<section class="panel" style="margin-bottom: 14px;">
-  <h3>Upload Source Photo</h3>
-  <p class="subtle">Uploaded files are copied into the local managed image library before they become asset records.</p>
-  <form method="post" action="{{ url_for('upload_source_asset') }}" enctype="multipart/form-data">
-    <div class="grid">
-      <label>Upload photo
-        <input type="file" name="photo" accept="image/*">
-      </label>
+<div class="gallery-toolbar">
+  <div>
+    <div class="eyebrow">Visual inventory</div>
+    <h3>{{ pagination.start }}-{{ pagination.end }} of {{ pagination.total }} asset{{ '' if pagination.total == 1 else 's' }}</h3>
+    {% if selected_tag %}
+      <p class="subtle">Filtered to image tag: {{ selected_tag }}</p>
+    {% endif %}
+    {% if not show_hidden and hidden_asset_count %}
+      <p class="subtle">{{ hidden_asset_count }} hidden image{{ '' if hidden_asset_count == 1 else 's' }} excluded from this view.</p>
+    {% endif %}
+  </div>
+</div>
+
+{{ gallery_controls() }}
+
+<section class="gallery-grid">
+  <form class="gallery-card add-photo-card" method="post" action="{{ url_for('upload_source_asset') }}" enctype="multipart/form-data">
+    <label class="add-photo-placeholder" data-photo-dropzone>
+      <input class="sr-only" type="file" name="photo" accept="image/*" data-photo-input>
+      <span class="add-photo-plus" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14"></path>
+          <path d="M5 12h14"></path>
+        </svg>
+      </span>
+      <span class="add-photo-drop-copy">Drop image</span>
+      <span class="add-photo-file-name" data-photo-filename>No file selected</span>
+    </label>
+    <div class="gallery-card-body">
       <label>Product
         <select name="product_id">
           <option value="">No product link yet</option>
@@ -28,62 +91,199 @@
           {% endfor %}
         </select>
       </label>
-      <label>Asset name
+      <label>Name
         <input name="name" placeholder="Optional">
       </label>
+      <button type="submit">Upload</button>
     </div>
-    <label>Notes
-      <textarea name="notes" placeholder="Optional review or source notes"></textarea>
-    </label>
-    <button type="submit">Upload source photo</button>
   </form>
-</section>
-
-<section class="asset-list">
   {% for model in assets %}
     {% set asset = model.asset %}
-    <article class="panel" id="asset-{{ asset.id }}">
+    {% set related_assets = model.related_assets %}
+    {% set related_products = related_assets | map(attribute='product') | select | map(attribute='name') | unique | list %}
+    <article class="gallery-card" id="asset-{{ asset.id }}" role="button" tabindex="0" data-open-drawer="#asset-drawer-{{ asset.id }}" aria-label="Open details for {{ asset.name }}">
       {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
       {% if asset.file_exists %}
-        <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+        <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
       {% elif remote_preview %}
-        <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}">
+        <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
       {% else %}
         <div class="asset-missing">Missing file or preview</div>
       {% endif %}
-      <h3 style="margin-top: 12px;">{{ asset.name }}</h3>
-      <div class="meta">
-        <span class="pill">{{ asset.asset_type }}</span>
-        <span class="pill {{ 'complete' if asset.review_state == 'approved' else 'blocked' if asset.review_state in ['needs review', 'unreviewed'] else '' }}">{{ asset.review_state }}</span>
-        <span class="pill {{ 'complete' if asset.file_exists else '' }}">{{ 'file found' if asset.file_exists else 'remote reference' if remote_preview else 'file missing' }}</span>
-      </div>
-      <p class="subtle">{{ asset.product.name if asset.product else "No product linked" }}</p>
-      <p>{{ asset.readiness_state }}</p>
-      <details {{ 'open' if model.used_by else '' }}>
-        <summary class="subtle">Used by {{ model.used_by|length }} task{{ '' if model.used_by|length == 1 else 's' }}</summary>
-        {% if model.used_by %}
-          <ul>
-            {% for task_model in model.used_by[:5] %}
-              <li><a href="{{ url_for('task_detail', task_id=task_model.task.id) }}">{{ task_model.action_title }}</a></li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="subtle">No current tasks reference this asset.</p>
+      <div class="gallery-card-body">
+        <h3>{{ asset.name }}</h3>
+        <div class="meta">
+          <span class="pill">{{ asset_tag_label(asset.asset_type) }}</span>
+          {% if asset.hidden_from_generation %}<span class="pill blocked">hidden from automation</span>{% endif %}
+          <span class="pill {{ 'complete' if asset.review_state == 'approved' else 'blocked' if asset.review_state in ['needs review', 'unreviewed'] else '' }}">{{ asset.review_state }}</span>
+        </div>
+        <div class="subtle">{{ asset.product.name if asset.product else "No product linked" }}</div>
+        {% if related_assets|length > 1 %}
+          <div class="subtle">Shared across {{ related_assets|length }} product record{{ '' if related_assets|length == 1 else 's' }}</div>
         {% endif %}
-      </details>
-      {% if asset.source_path %}
-        <details>
-          <summary class="subtle">Source details</summary>
-          <p class="subtle">{{ asset.source_path }}</p>
-          {% if asset.external_source %}<p class="subtle">Source: {{ asset.external_source }} · {{ asset.sync_status }}</p>{% endif %}
-          {% if asset.file_checked_at %}<p class="subtle">Checked {{ asset.file_checked_at }}</p>{% endif %}
-          {% if asset.generated_prompt %}<p class="subtle">Prompt/template: {{ asset.generated_prompt }}</p>{% endif %}
-        </details>
-      {% endif %}
-      {% if remote_preview %}
-        <p class="subtle">Remote source image. Review happens after selecting or downloading it into a local posting asset.</p>
+      </div>
+    </article>
+  {% else %}
+    <div class="panel">
+      <div class="eyebrow">Library empty</div>
+      <h3>No visual assets yet.</h3>
+      <p class="subtle">Upload a source photo or sync Etsy product images so the assistant has product truth to work from.</p>
+    </div>
+  {% endfor %}
+</section>
+
+{{ gallery_controls() }}
+
+<div class="drawer-backdrop" data-drawer-backdrop></div>
+
+{% for model in assets %}
+  {% set asset = model.asset %}
+  {% set related_assets = model.related_assets %}
+  {% set related_products = related_assets | map(attribute='product') | select | map(attribute='name') | unique | list %}
+  {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
+  <aside class="drawer-panel" id="asset-drawer-{{ asset.id }}" aria-label="Asset details">
+    <div class="drawer-header">
+      <div>
+        <div class="eyebrow">Gallery item</div>
+        <h3>{{ asset.name }}</h3>
+        <p class="subtle">
+          {% if related_products %}
+            {{ related_products | join(', ') }}
+          {% else %}
+            No product linked
+          {% endif %}
+        </p>
+      </div>
+      <div class="drawer-header-actions">
+        <form method="post" action="{{ url_for('asset_visibility', asset_id=asset.id) }}" data-preserve-scroll>
+          <input type="hidden" name="hidden" value="{{ '0' if asset.hidden_from_generation else '1' }}">
+          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden or asset.hidden_from_generation else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
+          <button
+            class="{{ 'secondary' if asset.hidden_from_generation else 'warn' }} icon-button"
+            type="submit"
+            aria-label="{{ 'Restore image for automation' if asset.hidden_from_generation else 'Hide image from automation' }}"
+            title="{{ 'Restore image for automation' if asset.hidden_from_generation else 'Hide image from automation' }}"
+          >
+            {% if asset.hidden_from_generation %}
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span class="sr-only">Restore image for automation</span>
+            {% else %}
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3l18 18"></path>
+                <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"></path>
+                <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 8 10 8a17.8 17.8 0 0 1-3.1 4.4"></path>
+                <path d="M6.6 6.6C3.8 8.5 2 12 2 12s3.5 8 10 8a9.7 9.7 0 0 0 4.4-1.1"></path>
+              </svg>
+              <span class="sr-only">Hide image from automation</span>
+            {% endif %}
+          </button>
+        </form>
+        {% if asset.file_exists and not remote_preview %}
+          <form
+            method="post"
+            action="{{ url_for('asset_delete_local', asset_id=asset.id) }}"
+            onsubmit="return confirm('Delete this local image file and unlink it from products? This cannot be undone.');"
+          >
+            <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}">
+            <button class="warn icon-button" type="submit" aria-label="Delete local image" title="Delete local image">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4h8v2"></path>
+                <path d="M19 6l-1 14H6L5 6"></path>
+                <path d="M10 11v5"></path>
+                <path d="M14 11v5"></path>
+              </svg>
+              <span class="sr-only">Delete local image</span>
+            </button>
+          </form>
+        {% endif %}
+        <button class="drawer-close icon-button" type="button" data-drawer-close aria-label="Close drawer" title="Close">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+          <span class="sr-only">Close drawer</span>
+        </button>
+      </div>
+    </div>
+
+    {% if asset.file_exists %}
+      <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
+    {% elif remote_preview %}
+      <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
+    {% else %}
+      <div class="asset-missing">Missing file or preview</div>
+    {% endif %}
+
+    <div class="meta" style="margin-top: 12px;">
+      <span class="pill">{{ asset_tag_label(asset.asset_type) }}</span>
+      {% if asset.hidden_from_generation %}<span class="pill blocked">hidden from automation</span>{% endif %}
+      <span class="pill {{ 'complete' if asset.review_state == 'approved' else 'blocked' if asset.review_state in ['needs review', 'unreviewed'] else '' }}">{{ asset.review_state }}</span>
+      <span class="pill {{ 'complete' if asset.file_exists else '' }}">{{ 'file found' if asset.file_exists else 'remote reference' if remote_preview else 'file missing' }}</span>
+    </div>
+    <p>{{ asset.readiness_state }}</p>
+    {% if related_assets|length > 1 %}
+      <section class="panel">
+        <h3>Shared Image</h3>
+        <p class="subtle">This one gallery card manages {{ related_assets|length }} product asset record{{ '' if related_assets|length == 1 else 's' }} that point to the same image.</p>
+        {% if related_products %}
+          <p class="subtle">Products: {{ related_products | join(', ') }}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
+    <section class="panel">
+      <h3>Photo Details</h3>
+      <form method="post" action="{{ url_for('asset_product_link', asset_id=asset.id) }}">
+        <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
+        <label>Name
+          <input name="name" value="{{ asset.name }}" required>
+        </label>
+        <label>Product
+          <select name="product_id">
+            <option value="">No product link</option>
+            {% for product in products %}
+              <option value="{{ product.id }}" {{ 'selected' if asset.product_id == product.id else '' }}>{{ product.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="secondary" type="submit">Save details</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h3>Used by</h3>
+      {% if model.used_by %}
+        <ul>
+          {% for task_model in model.used_by[:5] %}
+            <li><a href="{{ url_for('task_detail', task_id=task_model.task.id) }}">{{ task_model.action_title }}</a></li>
+          {% endfor %}
+        </ul>
       {% else %}
+        <p class="subtle">No current tasks reference this asset.</p>
+      {% endif %}
+    </section>
+
+    {% if asset.source_path %}
+      <details class="drawer-disclosure">
+        <summary>Source details</summary>
+        <p class="subtle">{{ asset.source_path }}</p>
+        {% if asset.external_source %}<p class="subtle">Source: {{ asset.external_source }} · {{ asset.sync_status }}</p>{% endif %}
+        {% if asset.file_checked_at %}<p class="subtle">Checked {{ asset.file_checked_at }}</p>{% endif %}
+        {% if asset.generated_prompt %}<p class="subtle">Prompt/template: {{ asset.generated_prompt }}</p>{% endif %}
+      </details>
+    {% endif %}
+
+    {% if remote_preview %}
+      <p class="subtle">Remote source image. Review happens after selecting or downloading it into a local posting asset.</p>
+    {% else %}
+      <section class="panel">
+        <h3>Review</h3>
         <form method="post" action="{{ url_for('asset_review', asset_id=asset.id) }}" style="margin-top: 12px;">
+          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
           <label>Review notes
             <textarea name="approval_notes">{{ asset.approval_notes }}</textarea>
           </label>
@@ -93,10 +293,39 @@
             <button class="warn" name="review_state" value="rejected" type="submit">Reject</button>
           </div>
         </form>
-      {% endif %}
-    </article>
-  {% else %}
-    <div class="panel">No assets yet. Upload a source photo or sync Etsy product images from Products.</div>
-  {% endfor %}
-</section>
+      </section>
+    {% endif %}
+  </aside>
+{% endfor %}
+<script>
+  document.querySelectorAll("[data-photo-dropzone]").forEach((dropzone) => {
+    const input = dropzone.querySelector("[data-photo-input]");
+    const filename = dropzone.querySelector("[data-photo-filename]");
+    if (!input || !filename) return;
+
+    function updateFilename() {
+      filename.textContent = input.files?.[0]?.name || "No file selected";
+    }
+
+    input.addEventListener("change", updateFilename);
+    dropzone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropzone.classList.add("drag-over");
+    });
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("drag-over");
+    });
+    dropzone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("drag-over");
+      const files = event.dataTransfer?.files;
+      if (!files?.length) return;
+      input.files = files;
+      updateFilename();
+    });
+  });
+  document.querySelectorAll("[data-auto-submit]").forEach((input) => {
+    input.addEventListener("change", () => input.form?.requestSubmit());
+  });
+</script>
 {% endblock %}

@@ -1,6 +1,6 @@
 # Codex Content Automation Setup
 
-Use this guide to create the scheduled Codex app automation that processes Marketing OS Planning requests.
+Use this guide to create the scheduled Codex App automation that processes Marketing OS Planning requests.
 
 ## What The Automation Does
 
@@ -24,6 +24,8 @@ Import a weekly Etsy sales CSV export before the planner runs:
 ```bash
 ./scripts/import-etsy-sales-csv.sh /path/to/etsy-sales.csv
 ```
+
+You can also upload the Etsy order items CSV in the local web app under `Settings -> Etsy Order Items -> Import order items`.
 
 The import is idempotent. Rows are deduped by transaction/order/receipt ID when present, or by a generated row key when the export does not include an ID. Overlapping weekly exports are safe to import.
 
@@ -135,7 +137,13 @@ This is Sunday at 8:00 PM local machine time. If the runner uses UTC, convert th
 
 Run it in the local project checkout, not a worktree. Use workspace-write permissions so Codex can update SQLite runtime data, logs, exports, and the repo-local ignored asset/output folders.
 
-Use this automation prompt:
+Use the shared automation prompt:
+
+```text
+docs/operating-guides/codex-weekly-automation-prompt.md
+```
+
+The prompt is repeated below for Codex app setup:
 
 ```text
 Run the weekly Marketing OS social planner and content production for /Users/matt/Documents/marketing-os.
@@ -190,20 +198,30 @@ Each run:
 If no pending requests exist, report that nothing needed generation.
 ```
 
+## Manual Codex App Setup
+
+If the automation must be created manually in the Codex App, use the prompt in:
+
+```text
+docs/operating-guides/codex-weekly-automation-prompt.md
+```
+
+Create it as a standalone project automation for `/Users/matt/Documents/marketing-os`, scheduled for Sunday at 8:00 PM local time, running in the local project checkout with workspace-write permissions.
+
 ## Etsy Sales CSV
 
-Sales-aware weekly planning uses imported CSV rows only. The regular Etsy API sync remains limited to listings and listing images. The planner does not call Etsy's private sales/transactions API.
+Sales-aware weekly planning uses imported CSV rows for order-item data. The regular Etsy API sync imports listings, listing images, and shop reviews. The planner does not call Etsy's private sales/transactions API.
 
 Recommended weekly order:
 
 1. Export recent Etsy sales/orders as CSV.
-2. Import the file:
+2. Import the file from `Settings -> Etsy Order Items` or with:
 
 ```bash
 ./scripts/import-etsy-sales-csv.sh /path/to/etsy-sales.csv
 ```
 
-3. Let the Sunday 8 PM automation run, or run it manually:
+3. Let the Sunday 8 PM Codex App automation run, or run the deterministic prepare commands manually:
 
 ```bash
 ./scripts/run-weekly-social-planner.sh

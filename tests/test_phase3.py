@@ -16,6 +16,7 @@ from marketing_os.db_models import (
     AssetRecord,
     BlogPostRecord,
     CreativeGenerationJobRecord,
+    EtsyReviewRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
     PlanRecord,
@@ -67,6 +68,7 @@ from marketing_os.phase4 import (
     register_local_source_photo,
     review_asset,
     scan_local_asset_folder,
+    set_asset_generation_visibility,
     task_asset_options,
     today_view,
     week_agenda,
@@ -75,6 +77,7 @@ from marketing_os.services.content_briefs import (
     build_content_brief,
     create_planned_content_item,
     create_task_from_planned_content,
+    default_reference_asset_ids_for_products,
     localize_planned_content_reference_assets,
     planned_items_needing_production,
     produce_content_for_item,
@@ -85,7 +88,7 @@ from marketing_os.services.content_briefs import (
 from marketing_os.services.creative_generation import import_manual_generated_output, review_creative_generation_job
 from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
-from marketing_os.services.skill_adapters import copywriter_contract, image_option_from_contract, social_media_art_director_contracts
+from marketing_os.services.skill_adapters import copywriter_contract, image_option_from_contract, social_copy_workflow_contract, social_media_art_director_contracts
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
 from marketing_os.services.phase5_readiness import (
@@ -168,6 +171,469 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertGreaterEqual(len(assets), 10)
             self.assertTrue(any(t.platform == "Instagram" and t.format == "reel" for t in templates))
             self.assertTrue(any(t.template_type == "graphic" for t in templates))
+
+    def test_gallery_page_paginates_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "asset-pages.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Pagination Duck")
+                session.add(product)
+                session.flush()
+                for index in range(50):
+                    session.add(
+                        AssetRecord(
+                            product_id=product.id,
+                            name=f"Paged Asset {index:03d}",
+                            asset_type="source photo",
+                            source_path=f"missing/paged-asset-{index:03d}.jpg",
+                            readiness_state="needs review",
+                        )
+                    )
+
+            client = app.test_client()
+            first_page = client.get("/assets")
+            second_page = client.get("/assets?page=2")
+
+            self.assertEqual(first_page.status_code, 200)
+            self.assertEqual(second_page.status_code, 200)
+            self.assertIn(b"1-36 of 50 assets", first_page.data)
+            self.assertIn(b"37-50 of 50 assets", second_page.data)
+            self.assertIn(b"Paged Asset 000", first_page.data)
+            self.assertNotIn(b"Paged Asset 036", first_page.data)
+            self.assertIn(b"Paged Asset 036", second_page.data)
+
+    def test_gallery_filters_assets_by_image_tag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "asset-tags.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                gift_product = ProductRecord(name="Gift Duck", use_cases_json=json.dumps(["gift buyer"]))
+                display_product = ProductRecord(name="Display Duck", use_cases_json=json.dumps(["desk display"]))
+                session.add_all([gift_product, display_product])
+                session.flush()
+                session.add_all(
+                    [
+                        AssetRecord(
+                            product_id=gift_product.id,
+                            name="Gift Duck image",
+                            asset_type="Etsy product photo",
+                            source_path="https://example.test/gift.jpg",
+                            preview_path="https://example.test/gift-preview.jpg",
+                            readiness_state="remote Etsy reference",
+                            review_state="synced",
+                        ),
+                        AssetRecord(
+                            product_id=display_product.id,
+                            name="Display Duck image",
+                            asset_type="generated post image",
+                            source_path="https://example.test/display.jpg",
+                            preview_path="https://example.test/display-preview.jpg",
+                            readiness_state="remote Etsy reference",
+                            review_state="synced",
+                        ),
+                    ]
+                )
+
+            client = app.test_client()
+            gallery = client.get("/assets")
+            self.assertEqual(gallery.status_code, 200)
+            self.assertIn(b"Image tag", gallery.data)
+            self.assertIn(b"etsy", gallery.data)
+            self.assertIn(b"magnific", gallery.data)
+            self.assertNotIn(b"Etsy product photo", gallery.data)
+            self.assertNotIn(b"generated post image", gallery.data)
+            self.assertIn(b"Gift Duck image", gallery.data)
+            self.assertIn(b"Display Duck image", gallery.data)
+
+            filtered = client.get("/assets?tag=etsy")
+            self.assertEqual(filtered.status_code, 200)
+            self.assertIn(b"Filtered to image tag: etsy", filtered.data)
+            self.assertIn(b"Gift Duck image", filtered.data)
+            self.assertNotIn(b"Display Duck image", filtered.data)
+
+    def test_gallery_groups_duplicate_images_and_visibility_applies_everywhere(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "duplicate-gallery.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            shared_url = "https://images.example/shared-duck.jpg"
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                first_product = ProductRecord(name="First Shared Duck")
+                second_product = ProductRecord(name="Second Shared Duck")
+                session.add_all([first_product, second_product])
+                session.flush()
+                first_asset = AssetRecord(
+                    product_id=first_product.id,
+                    name="Shared Duck Etsy image A",
+                    asset_type="Etsy product photo",
+                    source_path=shared_url,
+                    preview_path=shared_url,
+                    canonical_url=shared_url,
+                    readiness_state="remote Etsy reference",
+                    external_source="etsy",
+                    review_state="synced",
+                    file_exists=0,
+                )
+                second_asset = AssetRecord(
+                    product_id=second_product.id,
+                    name="Shared Duck Etsy image B",
+                    asset_type="Etsy product photo",
+                    source_path=shared_url,
+                    preview_path=shared_url,
+                    canonical_url=shared_url,
+                    readiness_state="remote Etsy reference",
+                    external_source="etsy",
+                    review_state="synced",
+                    file_exists=0,
+                )
+                session.add_all([first_asset, second_asset])
+                session.flush()
+                first_asset_id = first_asset.id
+                second_asset_id = second_asset.id
+
+            client = app.test_client()
+            gallery = client.get("/assets")
+            self.assertEqual(gallery.status_code, 200)
+            self.assertIn(b"1-1 of 1 asset", gallery.data)
+            self.assertIn(b"Shared Duck Etsy image A", gallery.data)
+            self.assertNotIn(b"Shared Duck Etsy image B", gallery.data)
+            self.assertIn(b"Shared across 2 product records", gallery.data)
+            self.assertIn(b"First Shared Duck, Second Shared Duck", gallery.data)
+
+            products = client.get("/products")
+            self.assertEqual(products.status_code, 200)
+            self.assertIn(b"Shared Duck Etsy image A", products.data)
+            self.assertIn(b"Shared Duck Etsy image B", products.data)
+
+            response = client.post(
+                f"/assets/{first_asset_id}/visibility",
+                data={"hidden": "1", "return_to": "/assets?show_hidden=1"},
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Image hidden from automation.", response.data)
+            self.assertIn(b"Restore image for automation", response.data)
+            self.assertNotIn(b"Automation visibility", response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                first = session.get(AssetRecord, first_asset_id)
+                second = session.get(AssetRecord, second_asset_id)
+                self.assertEqual(first.hidden_from_generation, 1)
+                self.assertEqual(second.hidden_from_generation, 1)
+
+            gallery_without_hidden = client.get("/assets")
+            self.assertNotIn(b"Shared Duck Etsy image A", gallery_without_hidden.data)
+            products_without_hidden = client.get("/products")
+            self.assertNotIn(b"Shared Duck Etsy image A", products_without_hidden.data)
+            self.assertNotIn(b"Shared Duck Etsy image B", products_without_hidden.data)
+
+    def test_gallery_deletes_local_shared_file_and_unlinks_asset_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "delete-local-gallery.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            first_path = tmp_path / "shared-local-a.jpg"
+            second_path = tmp_path / "shared-local-b.jpg"
+            first_path.write_bytes(b"same local duck image")
+            second_path.write_bytes(b"same local duck image")
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                first_product = ProductRecord(name="First Local Duck")
+                second_product = ProductRecord(name="Second Local Duck")
+                session.add_all([first_product, second_product])
+                session.flush()
+                first_asset = register_local_source_photo(session, first_path, product_id=first_product.id, name="Shared local duck A")
+                second_asset = register_local_source_photo(session, second_path, product_id=second_product.id, name="Shared local duck B")
+                review_asset(session, first_asset.id, "approved", "Approved local source.")
+                review_asset(session, second_asset.id, "approved", "Approved local source.")
+                first_asset.default_reference = 1
+                second_asset.default_reference = 1
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 28),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[first_product.id, second_product.id],
+                    selected_source_asset_ids=[first_asset.id, second_asset.id],
+                )
+                first_asset_id = first_asset.id
+                second_asset_id = second_asset.id
+                planned_item_id = item.id
+
+            client = app.test_client()
+            gallery = client.get("/assets")
+            self.assertEqual(gallery.status_code, 200)
+            self.assertIn(b'aria-label="Delete local image"', gallery.data)
+            self.assertIn(b"Delete this local image file and unlink it from products?", gallery.data)
+            self.assertIn(b'aria-label="Close drawer"', gallery.data)
+            self.assertNotIn(b"<h3>Local file</h3>", gallery.data)
+
+            response = client.post(f"/assets/{first_asset_id}/delete-local", follow_redirects=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Deleted 2 local files and unlinked 2 asset records.", response.data)
+            self.assertFalse(first_path.exists())
+            self.assertFalse(second_path.exists())
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                first = session.get(AssetRecord, first_asset_id)
+                second = session.get(AssetRecord, second_asset_id)
+                item = session.get(PlannedContentRecord, planned_item_id)
+                for asset in (first, second):
+                    self.assertIsNone(asset.product_id)
+                    self.assertEqual(asset.file_exists, 0)
+                    self.assertEqual(asset.default_reference, 0)
+                    self.assertEqual(asset.hidden_from_generation, 1)
+                    self.assertEqual(asset.manual_override_state, "deleted")
+                self.assertEqual(json.loads(item.selected_source_asset_ids_json), [])
+
+            products = client.get("/products")
+            self.assertEqual(products.status_code, 200)
+            self.assertNotIn(b"Shared local duck A", products.data)
+            self.assertNotIn(b"Shared local duck B", products.data)
+
+    def test_planning_hides_deleted_image_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "deleted-planning-image.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            reference_path = tmp_path / "deleted-planning-reference.jpg"
+            option_path = tmp_path / "deleted-planning-image.jpg"
+            reference_path.write_bytes(b"deleted planning reference bytes")
+            option_path.write_bytes(b"deleted planning image bytes")
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Deleted Planning Image Duck")
+                session.add(product)
+                session.flush()
+                reference_asset = register_local_source_photo(
+                    session,
+                    reference_path,
+                    product_id=product.id,
+                    name="Deleted planning reference",
+                )
+                review_asset(session, reference_asset.id, "approved", "Approved planning reference.")
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 30),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                    selected_source_asset_ids=[reference_asset.id],
+                )
+                image_candidate = register_uploaded_image_option(session, item.id, option_path, name="Deleted planning image option")
+                image_asset_id = json.loads(image_candidate.body)["asset_id"]
+
+            client = app.test_client()
+            planning_before_delete = client.get("/planning")
+            self.assertEqual(planning_before_delete.status_code, 200)
+            self.assertIn(b"Deleted planning image option", planning_before_delete.data)
+            self.assertIn(b"Use this image", planning_before_delete.data)
+
+            delete_response = client.post(f"/assets/{image_asset_id}/delete-local", follow_redirects=True)
+            self.assertEqual(delete_response.status_code, 200)
+
+            planning_after_delete = client.get("/planning")
+            self.assertEqual(planning_after_delete.status_code, 200)
+            self.assertNotIn(b"Deleted planning image option", planning_after_delete.data)
+            self.assertNotIn(f"/assets/{image_asset_id}/preview".encode(), planning_after_delete.data)
+            self.assertIn(b"class=\"image-upload-card\"", planning_after_delete.data)
+            self.assertNotIn(b"Waiting for generation", planning_after_delete.data)
+
+    def test_products_page_paginates_products_and_page_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "product-pages.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                for index in range(25):
+                    product = ProductRecord(name=f"Paged Product {index:03d}")
+                    session.add(product)
+                    session.flush()
+                    session.add(
+                        AssetRecord(
+                            product_id=product.id,
+                            name=f"Paged Product Asset {index:03d}",
+                            asset_type="Etsy product photo",
+                            source_path=f"https://example.test/product-{index:03d}.jpg",
+                            readiness_state="remote Etsy reference",
+                        )
+                    )
+
+            client = app.test_client()
+            first_page = client.get("/products")
+            second_page = client.get("/products?page=2")
+
+            self.assertEqual(first_page.status_code, 200)
+            self.assertEqual(second_page.status_code, 200)
+            self.assertIn(b"Products 1-20 of 25", first_page.data)
+            self.assertIn(b"Products 21-25 of 25", second_page.data)
+            self.assertIn(b"Paged Product 000", first_page.data)
+            self.assertNotIn(b"Paged Product 020", first_page.data)
+            self.assertNotIn(b"Paged Product Asset 020", first_page.data)
+            self.assertIn(b"Paged Product 020", second_page.data)
+            self.assertIn(b"Paged Product Asset 020", second_page.data)
+
+    def test_dashboard_surfaces_planned_review_queue_without_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "review-queue.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Review Queue Duck")
+                session.add(product)
+                session.flush()
+                item = PlannedContentRecord(
+                    calendar_date=date(2026, 6, 26),
+                    scheduled_time="14:30",
+                    destinations_json='["Facebook"]',
+                    goals_json='["Sales growth"]',
+                    product_ids_json=json.dumps([product.id]),
+                    status="needs_review",
+                    brief_status="generated",
+                )
+                session.add(item)
+                session.flush()
+                session.add(
+                    GeneratedContentCandidateRecord(
+                        planned_item_id=item.id,
+                        candidate_type="facebook_post",
+                        provider="codex",
+                        body="Draft copy waiting for review.",
+                        review_state="needs_review",
+                    )
+                )
+
+            dashboard = app.test_client().get("/")
+
+            self.assertEqual(dashboard.status_code, 200)
+            self.assertIn(b"Review Queue", dashboard.data)
+            self.assertIn(b"Start review", dashboard.data)
+            self.assertIn(b"Review Queue Duck", dashboard.data)
+            self.assertIn(b"/planning#candidate-", dashboard.data)
+            self.assertNotIn(b"The desk is clear", dashboard.data)
+
+    def test_dashboard_review_queue_uses_destination_specific_candidate_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "review-queue-labels.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Platform Label Duck")
+                session.add(product)
+                session.flush()
+                item = PlannedContentRecord(
+                    calendar_date=date(2026, 6, 26),
+                    scheduled_time="12:30",
+                    destinations_json='["Instagram"]',
+                    goals_json='["Follower growth"]',
+                    product_ids_json=json.dumps([product.id]),
+                    status="needs_review",
+                    brief_status="generated",
+                )
+                session.add(item)
+                session.flush()
+                session.add(
+                    GeneratedContentCandidateRecord(
+                        planned_item_id=item.id,
+                        candidate_type="facebook_post",
+                        provider="codex",
+                        body="Instagram draft waiting for review.",
+                        review_state="needs_review",
+                    )
+                )
+                session.add(
+                    GeneratedContentCandidateRecord(
+                        planned_item_id=item.id,
+                        candidate_type="image_asset_option",
+                        provider="codex",
+                        body="Image option waiting for review.",
+                        review_state="needs_review",
+                    )
+                )
+
+            dashboard = app.test_client().get("/")
+
+            self.assertEqual(dashboard.status_code, 200)
+            self.assertIn(b"Instagram Caption", dashboard.data)
+            self.assertNotIn(b"Facebook Post", dashboard.data)
+            self.assertNotIn(b"Image Option", dashboard.data)
+            self.assertNotIn(b"2 candidates", dashboard.data)
+
+    def test_planned_content_uses_platform_default_schedule_when_time_is_blank(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Timed Duck")
+            session.add(product)
+            session.flush()
+            facebook = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 22),
+                destinations=["Facebook"],
+                goals=["Follower growth"],
+                product_ids=[product.id],
+            )
+            instagram = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 23),
+                destinations=["Instagram"],
+                goals=["Follower growth"],
+                product_ids=[product.id],
+            )
+            pinterest = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 24),
+                destinations=["Pinterest"],
+                goals=["Gift consideration"],
+                product_ids=[product.id],
+            )
+
+            self.assertEqual(facebook.scheduled_time, "18:30")
+            self.assertEqual(instagram.scheduled_time, "12:30")
+            self.assertEqual(pinterest.scheduled_time, "20:30")
+
+    def test_calendar_planned_items_are_drawer_triggers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "calendar-drawers.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Calendar Drawer Duck")
+                session.add(product)
+                session.flush()
+                item = PlannedContentRecord(
+                    calendar_date=date(2026, 6, 26),
+                    scheduled_time="11:15",
+                    destinations_json='["Facebook"]',
+                    goals_json='["Sales growth"]',
+                    product_ids_json=json.dumps([product.id]),
+                    status="needs_review",
+                    brief_status="generated",
+                )
+                session.add(item)
+                session.flush()
+                item_id = item.id
+
+            calendar_page = app.test_client().get("/calendar")
+
+            self.assertEqual(calendar_page.status_code, 200)
+            self.assertLess(calendar_page.data.index(b">Sun<"), calendar_page.data.index(b">Mon<"))
+            self.assertLess(calendar_page.data.index(b">Mon<"), calendar_page.data.index(b">Sat<"))
+            self.assertIn(f'data-open-drawer="#planned-drawer-{item_id}"'.encode(), calendar_page.data)
+            self.assertIn(f'id="planned-drawer-{item_id}"'.encode(), calendar_page.data)
+            self.assertIn(b"Review in Planning", calendar_page.data)
 
     def test_plan_generation_persists_calendar_tasks_and_beginner_fields(self) -> None:
         tmp, factory = self.build_session()
@@ -275,7 +741,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             guides = client.get("/guides")
             self.assertEqual(guides.status_code, 200)
-            self.assertIn(b"Posting Guides", guides.data)
+            self.assertIn(b"Posting Help", guides.data)
             self.assertIn(b"Instagram Reel", guides.data)
 
             completed = client.get("/completed")
@@ -285,13 +751,20 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             assets = client.get("/assets")
             self.assertEqual(assets.status_code, 200)
             self.assertIn(b"Assets", assets.data)
-            self.assertIn(b"Upload Source Photo", assets.data)
-            self.assertIn(b"Upload source photo", assets.data)
+            self.assertIn(b"data-photo-dropzone", assets.data)
+            self.assertIn(b"Drop image", assets.data)
+            self.assertIn(b"Upload</button>", assets.data)
+            self.assertNotIn(b"Upload Photo", assets.data)
+            self.assertNotIn(b"Upload Source Photo", assets.data)
+            self.assertNotIn(b"Feed the assistant", assets.data)
+            self.assertNotIn(b"Review or source notes", assets.data)
             self.assertNotIn(b"Register source photo", assets.data)
             self.assertNotIn(b"Photo path", assets.data)
             self.assertNotIn(b"Add Generated or Uploaded Image", assets.data)
             self.assertNotIn(b"Prepare Generation Runs", assets.data)
             self.assertNotIn(b"Generation Jobs", assets.data)
+            self.assertIn(b"Photo Details", assets.data)
+            self.assertIn(b"Save details", assets.data)
             self.assertIn(b"Used by", assets.data)
 
             upload_response = client.post(
@@ -305,6 +778,26 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(upload_response.status_code, 200)
             self.assertIn(b"Uploaded source photo", upload_response.data)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                uploaded = session.scalar(select(AssetRecord).where(AssetRecord.name == "Uploaded web source"))
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                self.assertIsNotNone(uploaded)
+                self.assertIsNotNone(product)
+                uploaded_id = uploaded.id
+                product_id = product.id
+
+            link_response = client.post(
+                f"/assets/{uploaded_id}/product",
+                data={"product_id": str(product_id), "name": "Renamed web source"},
+                follow_redirects=True,
+            )
+            self.assertEqual(link_response.status_code, 200)
+            self.assertIn(b"Photo details saved.", link_response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                uploaded = session.get(AssetRecord, uploaded_id)
+                self.assertEqual(uploaded.product_id, product_id)
+                self.assertEqual(uploaded.name, "Renamed web source")
 
             settings = client.get("/settings")
             self.assertEqual(settings.status_code, 200)
@@ -323,6 +816,21 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
                 self.assertIsNotNone(product)
                 product.sales_momentum_note = "Long imported description. " * 30
+                session.add(
+                    EtsyReviewRecord(
+                        product_id=product.id,
+                        external_source="etsy_api",
+                        external_id="transaction:web-products-review",
+                        shop_id="fixture-shop",
+                        listing_id=product.external_id,
+                        transaction_id="web-products-review",
+                        buyer_user_id="buyer-1",
+                        rating=5,
+                        review="Exactly the kind of tiny duck joy I wanted.",
+                        language="en",
+                        created_timestamp=1_725_321_600,
+                    )
+                )
 
             products_page = client.get("/products")
             self.assertEqual(products_page.status_code, 200)
@@ -333,12 +841,17 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"data-tag-combobox", products_page.data)
             self.assertIn(b"data-tag-suggestions", products_page.data)
             self.assertIn(b"Save default references", products_page.data)
-            self.assertIn(b"Use for automation", products_page.data)
+            self.assertIn(b"reference-toggle", products_page.data)
+            self.assertIn(b"Toggle default reference image", products_page.data)
             self.assertNotIn(b"Local product tag", products_page.data)
             self.assertNotIn(b"Local product tags", products_page.data)
             self.assertIn(b"Description", products_page.data)
             self.assertIn(b"See more", products_page.data)
             self.assertIn(b'<div class="copybox description-preview"><span>Long imported description.', products_page.data)
+            self.assertIn(b"Reviews", products_page.data)
+            self.assertIn(b"1 review", products_page.data)
+            self.assertIn(b"5/5", products_page.data)
+            self.assertIn(b"Exactly the kind of tiny duck joy I wanted.", products_page.data)
             self.assertIn(b"product-source-footer", products_page.data)
             self.assertNotIn(b"Source identities", products_page.data)
             self.assertNotIn(b"Share Etsy shop", products_page.data)
@@ -434,7 +947,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             metrics_due = client.get("/metrics-due")
             self.assertEqual(metrics_due.status_code, 200)
-            self.assertIn(b"Metrics Due", metrics_due.data)
+            self.assertIn(b"Follow-Ups", metrics_due.data)
             self.assertIn(b"Metrics needed", metrics_due.data)
 
             metric_response = client.post(
@@ -1101,17 +1614,36 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(session.scalars(select(GeneratedContentCandidateRecord).where(GeneratedContentCandidateRecord.candidate_type == "image_asset_option")).all(), [])
             self.assertEqual(session.scalars(select(GeneratedContentCandidateRecord).where(GeneratedContentCandidateRecord.candidate_type == "facebook_post")).all(), [])
 
-            rerun = produce_content_for_item(session, item)
-            self.assertEqual(rerun.created, 0)
-            self.assertEqual(rerun.skipped, 0)
-            candidates = session.scalars(select(GeneratedContentCandidateRecord)).all()
-            self.assertEqual(len(candidates), 0)
-            self.assertIn("Image generation is queued", item.production_error)
-            self.assertIn("3 social-media-art-director requests", item.production_error)
-            self.assertIn("Copy generation is queued", item.production_error)
+    def test_phase5_image_contract_matches_reviewable_copy_story(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
 
-            health = data_health(session)
-            self.assertFalse(any(row.area == "Content Production" and row.count >= 1 for row in health))
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 28),
+                destinations=["Instagram"],
+                goals=["Follower growth"],
+                product_ids=[product.id],
+                audience="Collectors / Flock Builders",
+                occasion="Desk mascot moment",
+            )
+            register_generated_copy_candidate(
+                session,
+                item.id,
+                "This duck looks like it has a lucky table and a tiny victory dance ready.\n\nGive the image a bingo-night desk moment, not a plain product shelf.\n\nFollow for more small ducks with big personality.",
+                social_strategy={"story_move": "tiny_scene", "social_angle": "community_prompt"},
+            )
+
+            contracts = social_media_art_director_contracts(build_content_brief(session, item), count=1)
+            option = image_option_from_contract(contracts[0])
+
+            self.assertIn("Post story to match", option["prompt"])
+            self.assertIn("lucky table", option["prompt"])
+            self.assertIn("tiny_scene", option["prompt"])
+            self.assertIn("post_visual_context", option["skill_request"])
 
     def test_phase5_planning_page_uses_social_strategy_options(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1152,6 +1684,66 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(contract.request["content_pillar"], "Cruise And Sharing")
             self.assertEqual(contract.request["social_angle"], "community_prompt")
             self.assertEqual(contract.request["cta_type"], "comment")
+            self.assertIn("creative_directive", contract.request)
+            self.assertIn("story_thesis", contract.request)
+            self.assertIn("proof_points", contract.request)
+            self.assertIn("missing_proof", contract.request)
+            self.assertIn("story_moves", contract.request)
+            self.assertIn("tiny moment", contract.request["creative_directive"])
+            self.assertIn("using the supplied proof", contract.request["story_thesis"])
+            self.assertTrue(any("community" in move.lower() or "conversation" in move.lower() for move in contract.request["story_moves"]))
+            self.assertIn("Product-description-first body copy.", contract.request["avoid"])
+            self.assertIn("Unsupported claims that the product is hot, viral, popular, or widely ordered.", contract.request["avoid"])
+
+    def test_phase5_social_copy_workflow_rejects_listing_summary_pattern(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 27),
+                destinations=["Instagram"],
+                goals=["Follower growth"],
+                product_ids=[product.id],
+                audience="Collectors / Flock Builders",
+                occasion="Desk mascot moment",
+            )
+            workflow = social_copy_workflow_contract(build_content_brief(session, item), "Instagram")
+
+            writing_task = workflow["writing_request"]["input"]["task"]
+            challenge_task = workflow["challenge_request"]["input"]["task"]
+            self.assertIn("tiny story", writing_task)
+            self.assertIn("product facts", writing_task)
+            self.assertIn("hook + product description + CTA", challenge_task)
+            self.assertIn("story_moves", workflow["writing_request"]["input"])
+            self.assertIn("creative_directive", workflow["strategy_request"]["input"])
+
+    def test_phase5_copy_contract_requests_proof_for_hot_product_story(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name.ilike("%Mailman Duck%")))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 29),
+                destinations=["Facebook"],
+                goals=["Follower growth"],
+                product_ids=[product.id],
+                audience="mail carriers and postal coworkers",
+                occasion="postal worker appreciation",
+                notes="Mail Duck took the world by storm and is hot with people appreciating carriers.",
+            )
+            contract = copywriter_contract(build_content_brief(session, item), "Facebook")
+
+            self.assertIn("proof-led product story", " ".join(contract.request["story_moves"]).lower())
+            self.assertIn("[MATT_TO_CONFIRM: order count or recent demand signal]", contract.request["missing_proof"])
+            self.assertIn("[MATT_TO_CONFIRM: who is buying or requesting this product]", contract.request["missing_proof"])
+            self.assertIn("Planning note demand signal", " ".join(contract.request["proof_points"]))
 
     def test_phase5_content_production_picks_up_rewrite_requests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1207,6 +1799,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         codex_runner = repo_root / "scripts" / "run-codex-content-automation.sh"
         weekly_runner = repo_root / "scripts" / "run-weekly-social-planner.sh"
         sales_import_runner = repo_root / "scripts" / "import-etsy-sales-csv.sh"
+        weekly_codex_prompt = repo_root / "docs" / "operating-guides" / "codex-weekly-automation-prompt.md"
 
         self.assertTrue(runner.is_file())
         runner_text = runner.read_text(encoding="utf-8")
@@ -1219,6 +1812,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         self.assertIn("marketing_os.jobs.content_automation", codex_runner_text)
         self.assertIn("MARKETING_OS_CODEX_AUTOMATION_DIR", codex_runner_text)
         self.assertIn("codex-content-automation.log", codex_runner_text)
+        self.assertTrue(weekly_codex_prompt.is_file())
+        weekly_codex_prompt_text = weekly_codex_prompt.read_text(encoding="utf-8")
+        self.assertIn("$social-media-strategist", weekly_codex_prompt_text)
+        self.assertIn("$social-media-copywriter", weekly_codex_prompt_text)
+        self.assertIn("$social-media-copy-chief", weekly_codex_prompt_text)
+        self.assertIn("$social-media-art-director", weekly_codex_prompt_text)
         self.assertTrue(weekly_runner.is_file())
         self.assertTrue(weekly_runner.stat().st_mode & 0o111)
         weekly_runner_text = weekly_runner.read_text(encoding="utf-8")
@@ -1377,6 +1976,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 "/api/planned-content",
                 json={
                     "calendar_date": "2026-06-26",
+                    "scheduled_time": "14:30",
                     "destinations": ["Facebook"],
                     "goals": ["Sales growth"],
                     "product_ids": product_ids,
@@ -1389,6 +1989,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             created_item = response.get_json()["planned_item"]
             item_id = created_item["id"]
             self.assertEqual(created_item["status"], "waiting_content_generation")
+            self.assertEqual(created_item["scheduled_time"], "14:30")
             self.assertTrue(created_item["waiting_for_generation"])
 
             produce_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
@@ -1406,16 +2007,23 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"<dt>Intent</dt>", rendered_review.data)
             self.assertIn(b"<dd>Sales growth</dd>", rendered_review.data)
             self.assertIn(b"<dt>Audience</dt>", rendered_review.data)
-            self.assertIn(b"Delete", rendered_review.data)
+            self.assertIn(b"aria-label=\"Delete queued post\"", rendered_review.data)
+            self.assertIn(b"class=\"warn icon-button\"", rendered_review.data)
+            self.assertIn(b"class=\"image-upload-card\"", rendered_review.data)
+            self.assertIn(b"Upload a finished visual", rendered_review.data)
             self.assertIn(b"Upload image option", rendered_review.data)
-            self.assertIn(b"Waiting for generation", rendered_review.data)
+            self.assertNotIn(b"Waiting for generation", rendered_review.data)
+            self.assertIn(b"class=\"text-link\" type=\"button\"", rendered_review.data)
             self.assertIn(b"Regenerate images", rendered_review.data)
             self.assertIn(b"Create posting task", rendered_review.data)
-            self.assertIn(b"disabled>Create posting task", rendered_review.data)
+            self.assertIn(b"disabled title=\"A post can be created after fresh copy is ready and an image is selected.\"", rendered_review.data)
+            self.assertNotIn(b"<div class=\"subtle\" style=\"margin-top: 6px;\">A post can be created", rendered_review.data)
             self.assertNotIn(b"Run queued copy generation now", rendered_review.data)
             self.assertNotIn(b"Review state", rendered_review.data)
             self.assertNotIn(b"Reviewed by", rendered_review.data)
             self.assertNotIn(b"Approved copy", rendered_review.data)
+            self.assertIn(b'aria-label="Close image preview"', rendered_review.data)
+            self.assertNotIn(b'data-image-modal-close>Close</button>', rendered_review.data)
 
             upload_response = client.post(
                 f"/planning/{item_id}/upload-image",
@@ -1430,6 +2038,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(upload_response.status_code, 200)
             self.assertIn(b"Custom planned post image", upload_response.data)
             self.assertIn(b"Use this image", upload_response.data)
+            self.assertIn(b"data-image-zoom-src", upload_response.data)
+            self.assertIn(b"data-image-modal", upload_response.data)
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
                 image_candidate = next(candidate for candidate in item.candidates if candidate.candidate_type == "image_asset_option")
@@ -1452,6 +2062,38 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(calendar_page.status_code, 200)
             self.assertIn(b"Planned Intent", calendar_page.data)
             self.assertIn(b"Review in Planning", calendar_page.data)
+            self.assertIn(b"14:30", calendar_page.data)
+
+            reschedule_response = client.post(
+                f"/api/calendar/planned/{item_id}/reschedule",
+                json={"calendar_date": "2026-06-28", "scheduled_time": "15:45"},
+            )
+            self.assertEqual(reschedule_response.status_code, 200)
+            rescheduled_item = reschedule_response.get_json()["planned_item"]
+            self.assertEqual(rescheduled_item["calendar_date"], "2026-06-28")
+            self.assertEqual(rescheduled_item["scheduled_time"], "15:45")
+
+            update_response = client.post(
+                f"/calendar/planned/{item_id}/update",
+                data={
+                    "calendar_date": "2026-06-29",
+                    "scheduled_time": "10:15",
+                    "destinations": "Facebook",
+                    "goals": "Sales growth",
+                    "audience": "returning collectors",
+                    "occasion": "Gift season",
+                    "promotion": "Feature the flock story.",
+                    "notes": "Updated from calendar drawer.",
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(update_response.status_code, 200)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                item = session.get(PlannedContentRecord, item_id)
+                self.assertEqual(item.calendar_date, date(2026, 6, 29))
+                self.assertEqual(item.scheduled_time, "10:15")
+                self.assertEqual(item.audience, "returning collectors")
+                self.assertEqual(item.notes, "Updated from calendar drawer.")
 
             second_response = client.post(f"/api/planned-content/{item_id}/produce", json={})
             self.assertEqual(second_response.status_code, 200)
@@ -1480,8 +2122,10 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(rewrite_response.status_code, 200)
             self.assertIn(b"data-show-panel=\"copy-", rewrite_response.data)
-            self.assertIn(b"disabled>Edit", rewrite_response.data)
-            self.assertIn(b"disabled>Rewrite", rewrite_response.data)
+            self.assertIn(b"class=\"secondary icon-button\"", rewrite_response.data)
+            self.assertIn(b"aria-label=\"Edit copy\"", rewrite_response.data)
+            self.assertIn(b"aria-label=\"Rewrite copy\"", rewrite_response.data)
+            self.assertIn(b"disabled", rewrite_response.data)
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
                 self.assertEqual(item.status, "waiting_copy_regeneration")
@@ -1519,6 +2163,23 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 task = session.get(TaskRecord, task_payload["id"])
                 self.assertIn("This edited Facebook draft", task.draft_caption)
                 self.assertNotIn("Quality checklist", task.draft_caption)
+                self.assertEqual(task.due_date, date(2026, 6, 29))
+                self.assertEqual(task.scheduled_time, "10:15")
+
+            task_reschedule_response = client.post(
+                f"/api/calendar/tasks/{task_payload['id']}/reschedule",
+                json={"calendar_date": "2026-06-30", "scheduled_time": "16:05"},
+            )
+            self.assertEqual(task_reschedule_response.status_code, 200)
+            self.assertEqual(task_reschedule_response.get_json()["task"]["due_date"], "2026-06-30")
+            self.assertEqual(task_reschedule_response.get_json()["task"]["scheduled_time"], "16:05")
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                task = session.get(TaskRecord, task_payload["id"])
+                item = session.get(PlannedContentRecord, item_id)
+                self.assertEqual(task.due_date, date(2026, 6, 30))
+                self.assertEqual(task.scheduled_time, "16:05")
+                self.assertEqual(item.calendar_date, date(2026, 6, 30))
+                self.assertEqual(item.scheduled_time, "16:05")
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
@@ -1539,6 +2200,43 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertIsNotNone(reviewed_candidate["reviewed_at"])
                 planned_task = next(record for record in export_payload["tasks"] if record["planned_content_item_id"] == item_id)
                 self.assertEqual(planned_task["generated_content_candidate_id"], candidate_id)
+
+    def test_calendar_delete_removes_planned_item_from_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "calendar-delete.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source_path = Path(tmp) / "calendar-delete-source.jpg"
+                source_path.write_bytes(b"calendar source image bytes")
+                source = register_local_source_photo(session, source_path, product_id=product.id, name="Calendar delete source")
+                review_asset(session, source.id, "approved", "Calendar delete source approved.")
+                product_id = product.id
+                source_id = source.id
+
+            response = client.post(
+                "/api/planned-content",
+                json={
+                    "calendar_date": "2026-07-03",
+                    "scheduled_time": "11:20",
+                    "destinations": ["Instagram"],
+                    "goals": ["Engagement"],
+                    "product_ids": [product_id],
+                    "selected_source_asset_ids": [source_id],
+                    "notes": "Delete from calendar test.",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+            item_id = response.get_json()["planned_item"]["id"]
+
+            delete_response = client.post(f"/calendar/planned/{item_id}/delete", follow_redirects=True)
+            self.assertEqual(delete_response.status_code, 200)
+            self.assertIn(b"Scheduled post deleted.", delete_response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                self.assertIsNone(session.get(PlannedContentRecord, item_id))
 
     def test_phase5_web_planning_remote_reference_images_download_on_queue(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1638,6 +2336,184 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertEqual(local_asset.source_asset_id, remote_asset_id)
                 self.assertEqual(local_asset.canonical_url, remote_path.as_uri())
                 self.assertTrue(Path(local_asset.source_path).exists())
+
+    def test_hidden_remote_assets_are_excluded_from_post_generation_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "hidden-remote-reference.sqlite"
+            remote_path = Path(tmp) / "remote" / "hidden-bingo-etsy.jpg"
+            remote_path.parent.mkdir(parents=True)
+            remote_path.write_bytes(b"remote etsy hidden planning image")
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                hidden_asset = AssetRecord(
+                    product_id=product.id,
+                    name="Hidden Bingo Etsy remote image",
+                    asset_type="Etsy product photo",
+                    source_path=remote_path.as_uri(),
+                    preview_path=remote_path.as_uri(),
+                    platform_suitability_json='["Etsy", "Facebook", "Instagram"]',
+                    readiness_state="remote Etsy reference",
+                    notes="Remote Etsy image reference.",
+                    external_source="etsy",
+                    external_id="hidden-remote-planning-bingo",
+                    canonical_url=remote_path.as_uri(),
+                    sync_status="imported",
+                    staleness_state="fresh",
+                    review_state="synced",
+                    file_exists=0,
+                    default_reference=1,
+                )
+                session.add(hidden_asset)
+                session.flush()
+                product_id = product.id
+                asset_id = hidden_asset.id
+
+                set_asset_generation_visibility(session, asset_id, True, "Bad crop for generated posts.")
+                self.assertEqual(hidden_asset.hidden_from_generation, 1)
+                self.assertEqual(hidden_asset.default_reference, 0)
+                self.assertEqual(hidden_asset.manual_override_state, "hidden")
+
+                default_ids = default_reference_asset_ids_for_products(session, [product])
+                self.assertNotIn(asset_id, default_ids)
+
+                with self.assertRaisesRegex(ValueError, "hidden from automation"):
+                    create_planned_content_item(
+                        session,
+                        calendar_date=date(2026, 6, 26),
+                        destinations=["Facebook"],
+                        goals=["Sales growth"],
+                        product_ids=[product_id],
+                        selected_source_asset_ids=[asset_id],
+                    )
+
+            planning_page = client.get("/planning")
+            self.assertEqual(planning_page.status_code, 200)
+            self.assertNotIn(b"Hidden Bingo Etsy remote image", planning_page.data)
+
+            assets_page = client.get("/assets")
+            self.assertEqual(assets_page.status_code, 200)
+            self.assertNotIn(b"Hidden Bingo Etsy remote image", assets_page.data)
+            self.assertIn(b"Show hidden images", assets_page.data)
+
+            assets_with_hidden = client.get("/assets?show_hidden=1")
+            self.assertEqual(assets_with_hidden.status_code, 200)
+            self.assertIn(b"Hidden Bingo Etsy remote image", assets_with_hidden.data)
+            self.assertIn(b"Restore image for automation", assets_with_hidden.data)
+            self.assertNotIn(b"Automation visibility", assets_with_hidden.data)
+
+            products_page = client.get("/products")
+            self.assertEqual(products_page.status_code, 200)
+            self.assertNotIn(b"Hidden Bingo Etsy remote image", products_page.data)
+
+            products_with_hidden = client.get("/products?show_hidden=1")
+            self.assertEqual(products_with_hidden.status_code, 200)
+            self.assertIn(b"Hidden Bingo Etsy remote image", products_with_hidden.data)
+            self.assertIn(b"Hidden", products_with_hidden.data)
+            self.assertIn(b"Restore image for automation", products_with_hidden.data)
+
+            hidden_response = client.post(
+                "/api/planned-content",
+                json={
+                    "calendar_date": "2026-06-26",
+                    "destinations": ["Facebook"],
+                    "goals": ["Sales growth"],
+                    "product_ids": [product_id],
+                    "selected_source_asset_ids": [asset_id],
+                },
+            )
+            self.assertEqual(hidden_response.status_code, 400)
+            self.assertIn("hidden from automation", hidden_response.get_json()["error"])
+
+            restore_response = client.post(
+                f"/assets/{asset_id}/visibility",
+                data={"hidden": "0", "return_to": "/products"},
+                follow_redirects=True,
+            )
+            self.assertEqual(restore_response.status_code, 200)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                restored = session.get(AssetRecord, asset_id)
+                self.assertEqual(restored.hidden_from_generation, 0)
+
+    def test_phase5_planned_item_auto_selects_two_automation_references_per_product(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "phase5-auto-reference-selection.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source_paths = []
+                for index in range(4):
+                    source_path = tmp_path / f"bingo-source-{index}.jpg"
+                    source_path.write_bytes(f"source {index}".encode("utf-8"))
+                    source_paths.append(source_path)
+                assets = [
+                    register_local_source_photo(session, source_path, product_id=product.id, name=f"Bingo source {index}")
+                    for index, source_path in enumerate(source_paths)
+                ]
+                for asset in assets:
+                    review_asset(session, asset.id, "approved", "Approved for generation.")
+                assets[0].default_reference = 1
+                set_asset_generation_visibility(session, assets[3].id, True, "Do not use this crop.")
+                default_asset_id = assets[0].id
+                fallback_asset_ids = {assets[1].id, assets[2].id}
+                hidden_asset_id = assets[3].id
+
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 26),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                )
+                selected_ids = json.loads(item.selected_source_asset_ids_json)
+
+            self.assertEqual(len(selected_ids), 2)
+            self.assertEqual(selected_ids[0], default_asset_id)
+            self.assertIn(selected_ids[1], fallback_asset_ids)
+            self.assertNotIn(hidden_asset_id, selected_ids)
+
+    def test_phase5_planned_item_random_selects_two_visible_references_without_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "phase5-auto-reference-random.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+                source_paths = []
+                for index in range(4):
+                    source_path = tmp_path / f"bingo-random-{index}.jpg"
+                    source_path.write_bytes(f"source {index}".encode("utf-8"))
+                    source_paths.append(source_path)
+                assets = [
+                    register_local_source_photo(session, source_path, product_id=product.id, name=f"Bingo random source {index}")
+                    for index, source_path in enumerate(source_paths)
+                ]
+                for asset in assets:
+                    review_asset(session, asset.id, "approved", "Approved for generation.")
+                set_asset_generation_visibility(session, assets[3].id, True, "Do not use this crop.")
+                visible_ids = {asset.id for asset in assets[:3]}
+                hidden_asset_id = assets[3].id
+
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 27),
+                    destinations=["Facebook"],
+                    goals=["Sales growth"],
+                    product_ids=[product.id],
+                )
+                selected_ids = json.loads(item.selected_source_asset_ids_json)
+
+            self.assertEqual(len(selected_ids), 2)
+            self.assertTrue(set(selected_ids).issubset(visible_ids))
+            self.assertNotIn(hidden_asset_id, selected_ids)
 
     def test_phase5_planning_can_defer_remote_reference_download(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1869,7 +2745,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(summary["processed"], 1)
             self.assertNotIn("copy_created", summary)
             self.assertEqual(len(summary["copy_request_files"]), 1)
-            self.assertEqual(len(summary["image_request_files"]), 1)
+            self.assertEqual(len(summary["image_request_files"]), 0)
             copy_request_path = Path(summary["copy_request_files"][0])
             self.assertTrue(copy_request_path.is_file())
             copy_payload = json.loads(copy_request_path.read_text(encoding="utf-8"))
@@ -1882,12 +2758,32 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(copy_payload["workflow"]["strategy_request"]["skill"], "social-media-strategist")
             self.assertEqual(copy_payload["workflow"]["writing_request"]["skill"], "social-media-copywriter")
             self.assertEqual(copy_payload["workflow"]["challenge_request"]["skill"], "social-media-copy-chief")
-            request_path = Path(summary["image_request_files"][0])
+
+            copy_manifest = {
+                "planned_item_id": item_id,
+                "provider": "codex_agent",
+                "copy_text": "Who needs Bingo Duck in their flock?\n\nThis duck looks like it has a lucky table, a favorite number, and a tiny victory dance ready to go.\n\nWho would you give this one to?",
+                "skill_request": copy_payload["workflow"]["writing_request"]["input"],
+                "skill_check": copy_payload["workflow"]["contract_check"],
+                "social_strategy": {"skill": "social-media-strategist", "social_angle": "community_prompt", "story_move": "tiny_scene"},
+                "social_challenge": {"skill": "social-media-copy-chief", "status": "ready_for_human_review"},
+            }
+            copy_manifest_path = copy_request_path.parent / "register-copy.json"
+            copy_manifest_path.write_text(json.dumps(copy_manifest, indent=2), encoding="utf-8")
+            copy_registered = run_register_generated_copy_job(db_path=db_path, manifest_path=copy_manifest_path)
+            self.assertEqual(copy_registered["planned_item_id"], item_id)
+
+            image_summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            self.assertEqual(len(image_summary["copy_request_files"]), 0)
+            self.assertEqual(len(image_summary["image_request_files"]), 1)
+            request_path = Path(image_summary["image_request_files"][0])
             self.assertTrue(request_path.is_file())
             request_payload = json.loads(request_path.read_text(encoding="utf-8"))
             self.assertEqual(request_payload["planned_item_id"], item_id)
             self.assertEqual(len(request_payload["options"]), 3)
             self.assertEqual([option["skill_request"]["option_number"] for option in request_payload["options"]], [1, 2, 3])
+            self.assertIn("Post story to match", request_payload["options"][0]["prompt"])
+            self.assertIn("lucky table", request_payload["options"][0]["prompt"])
 
             manifest = request_payload["registration_manifest_example"]
             for image in manifest["images"]:
@@ -1904,7 +2800,14 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
-                self.assertEqual(item.status, "waiting_content_generation")
+                self.assertEqual(item.status, "needs_review")
+                sync = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == "content_automation"))
+                self.assertIsNotNone(sync)
+                self.assertIn("image_request_files", sync.notes)
+                health = data_health(session)
+                automation_row = next(row for row in health if row.area == "Automation: Content Production")
+                self.assertEqual(automation_row.status, "OK")
+                self.assertIn("Last ran", automation_row.message)
                 candidates = list(
                     session.scalars(
                         select(GeneratedContentCandidateRecord)
@@ -1917,24 +2820,6 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 asset_ids = [json.loads(candidate.body)["asset_id"] for candidate in candidates]
                 assets = list(session.scalars(select(AssetRecord).where(AssetRecord.id.in_(asset_ids))))
                 self.assertEqual(len(assets), 3)
-
-            copy_manifest = {
-                "planned_item_id": item_id,
-                "provider": "codex_agent",
-                "copy_text": "Who needs Bingo Duck in their flock?\n\nThis tiny 3D printed duck is ready for a shelf, desk, or gift box.\n\nWho would you give this one to?",
-                "skill_request": copy_payload["workflow"]["writing_request"]["input"],
-                "skill_check": copy_payload["workflow"]["contract_check"],
-                "social_strategy": {"skill": "social-media-strategist", "social_angle": "community_prompt"},
-                "social_challenge": {"skill": "social-media-copy-chief", "status": "ready_for_human_review"},
-            }
-            copy_manifest_path = request_path.parent / "register-copy.json"
-            copy_manifest_path.write_text(json.dumps(copy_manifest, indent=2), encoding="utf-8")
-            copy_registered = run_register_generated_copy_job(db_path=db_path, manifest_path=copy_manifest_path)
-            self.assertEqual(copy_registered["planned_item_id"], item_id)
-
-            with session_scope(app.config["SESSION_FACTORY"]) as session:
-                item = session.get(PlannedContentRecord, item_id)
-                self.assertEqual(item.status, "needs_review")
                 copy_candidates = list(
                     session.scalars(
                         select(GeneratedContentCandidateRecord)
@@ -1977,6 +2862,71 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertEqual(rows[0].quantity, 3)
                 self.assertEqual(rows[0].revenue_cents, 1250)
                 self.assertEqual(rows[0].product.name, "Room Steward Duck")
+
+    def test_phase5_etsy_sold_order_items_csv_uses_item_total_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-etsy-sold-order-items.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            csv_path = Path(tmp) / "EtsySoldOrderItems2025.csv"
+            csv_path.write_text(
+                "\n".join(
+                    [
+                        "Sale Date,Item Name,Buyer,Quantity,Price,Coupon Code,Coupon Details,Discount Amount,Shipping Discount,Order Shipping,Order Sales Tax,Item Total,Currency,Transaction ID,Listing ID,Date Paid,Date Shipped,Ship Name,Ship Address1,Ship Address2,Ship City,Ship State,Ship Zipcode,Ship Country,Order ID,Variations,Order Type,Listings Type,Payment Type,InPerson Discount,InPerson Location,VAT Paid by Buyer,SKU",
+                        "12/31/25,Room Steward Duck: Cruise Ship Crew Gift,Example Buyer,2,8.99,,,0.00,0.00,5,0,17.98,USD,4899651532,4303896622,12/31/2025,01/01/2026,Example Buyer,123 Main St,,Orlando,FL,32808,United States,3936341005,\"Size:Medium - 2.5 inches\",online,listing,online_cc,,,0,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = run_import_etsy_sales_csv_job(db_path=db_path, csv_path=csv_path)
+
+            self.assertEqual(summary["rows_seen"], 1)
+            self.assertEqual(summary["imported"], 1)
+            self.assertEqual(summary["skipped"], 0)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                sale = session.scalar(select(ProductSalesRecord).where(ProductSalesRecord.external_id == "4899651532"))
+                self.assertIsNotNone(sale)
+                self.assertEqual(sale.listing_id, "4303896622")
+                self.assertEqual(sale.listing_title, "Room Steward Duck: Cruise Ship Crew Gift")
+                self.assertEqual(sale.quantity, 2)
+                self.assertEqual(sale.revenue_cents, 1798)
+                self.assertEqual(sale.currency_code, "USD")
+                self.assertEqual(sale.sold_at.date(), date(2025, 12, 31))
+                self.assertEqual(sale.product.name, "Room Steward Duck")
+                raw = json.loads(sale.raw_data_json)
+                self.assertEqual(raw["Order ID"], "3936341005")
+                self.assertEqual(raw["Variations"], "Size:Medium - 2.5 inches")
+
+    def test_phase5_settings_uploads_etsy_sales_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-sales-upload.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+            response = client.post(
+                "/imports/etsy-sales-csv",
+                data={
+                    "sales_csv": (
+                        io.BytesIO(
+                            b"Transaction ID,Listing ID,Item Name,Quantity,Price,Sale Date,Currency\n"
+                            b"tx-200,etsy-room-steward,Room Steward Duck,2,13.00,2026-06-19,USD\n"
+                        ),
+                        "sold-order-items.csv",
+                    )
+                },
+                content_type="multipart/form-data",
+                follow_redirects=True,
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Imported Etsy order items CSV", response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                sale = session.scalar(select(ProductSalesRecord).where(ProductSalesRecord.external_id == "tx-200"))
+                self.assertIsNotNone(sale)
+                self.assertEqual(sale.quantity, 2)
+                self.assertEqual(sale.product.name, "Room Steward Duck")
 
     def test_phase5_weekly_social_planner_creates_review_queue_from_sales_mix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2025,9 +2975,20 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 items = list(session.scalars(select(PlannedContentRecord).order_by(PlannedContentRecord.calendar_date)))
                 self.assertEqual(len(items), 7)
+                sync = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == "weekly_social_planner"))
+                self.assertIsNotNone(sync)
+                self.assertIn("week_start", sync.notes)
+                health = data_health(session)
+                automation_row = next(row for row in health if row.area == "Automation: Weekly Planner")
+                self.assertEqual(automation_row.status, "OK")
+                self.assertIn("Last ran", automation_row.message)
                 destinations = [json_list(item.destinations_json)[0] for item in items]
                 self.assertIn("Instagram", destinations)
                 self.assertIn("Pinterest", destinations)
+                scheduled_by_destination = {json_list(item.destinations_json)[0]: item.scheduled_time for item in items}
+                self.assertEqual(scheduled_by_destination["Facebook"], "18:30")
+                self.assertEqual(scheduled_by_destination["Instagram"], "12:30")
+                self.assertEqual(scheduled_by_destination["Pinterest"], "20:30")
                 first_item = items[0]
                 self.assertEqual([int(value) for value in json_list(first_item.selected_source_asset_ids_json)], [source_id])
                 self.assertTrue(all(item.status in {"waiting_image_generation", "waiting_content_generation"} for item in items))
@@ -2040,6 +3001,51 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(rerun["created"], 0)
             self.assertEqual(rerun["skipped"], 7)
+
+    def test_phase5_weekly_social_planner_avoids_recently_featured_products_when_possible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-weekly-social-freshness.sqlite"
+            app = create_app(db_path, bootstrap_data=True)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            output_dir = Path(tmp) / "weekly-plans"
+            csv_path = Path(tmp) / "etsy-sales.csv"
+            csv_path.write_text(
+                "\n".join(
+                    [
+                        "Transaction ID,Listing ID,Item Name,Quantity,Price,Sale Date,Currency",
+                        "tx-100,etsy-room-steward,Room Steward Duck,4,12.50,2026-06-18,USD",
+                        "tx-101,etsy-bingo,Bingo Duck,2,10.00,2026-06-18,USD",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            run_import_etsy_sales_csv_job(db_path=db_path, csv_path=csv_path)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                room_steward = session.scalar(select(ProductRecord).where(ProductRecord.name == "Room Steward Duck"))
+                recent = create_planned_content_item(
+                    session,
+                    calendar_date=date(2026, 6, 10),
+                    destinations=["Facebook"],
+                    goals=["Cruise community engagement"],
+                    product_ids=[room_steward.id],
+                )
+                recent.status = "posted"
+
+            summary = run_weekly_social_planner_job(
+                db_path=db_path,
+                week_start=date(2026, 6, 22),
+                output_dir=output_dir,
+                slots=1,
+            )
+
+            self.assertEqual(summary["created"], 1)
+            payload = json.loads(Path(summary["strategy_export_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(payload["freshness_lookback_days"], 45)
+            self.assertIn(room_steward.id, payload["recently_featured_product_ids"])
+            self.assertEqual(payload["assignments"][0]["product"]["product_name"], "Bingo Duck")
+            self.assertFalse(payload["assignments"][0]["recently_featured"])
 
     def test_phase5_learning_loop_links_generated_copy_to_outcomes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2280,8 +3286,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             page = client.get("/phase5-readiness")
             self.assertEqual(page.status_code, 200)
-            self.assertIn(b"Matt-approved Facebook copy", page.data)
-            self.assertIn(b"Matt-approved generated creative", page.data)
+            self.assertIn(b"Human-approved Facebook copy", page.data)
+            self.assertIn(b"Human-approved generated creative", page.data)
             self.assertIn(b"Edit post copy", page.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
@@ -2332,7 +3338,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
                 self.assertEqual(payload["readiness"]["remaining_count"], 2)
                 creative_item = next(item for item in payload["readiness"]["items"] if item["key"] == "creative_generation_review")
-                self.assertIn("waiting for Matt review", creative_item["message"])
+                self.assertIn("waiting for human review", creative_item["message"])
                 self.assertIn(f"Creative job #{creative.job.id}", creative_item["evidence"])
                 self.assertIn("Open Assets", creative_item["action"])
                 self.assertEqual(payload["copy_review"]["id"], facebook.id)
@@ -2345,8 +3351,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 self.assertEqual(payload["creative_review"]["candidate_asset"]["id"], creative.candidate.id)
                 self.assertEqual(payload["creative_review"]["candidate_asset"]["absolute_source_path"], output_path.resolve(strict=False).as_posix())
                 self.assertEqual(payload["creative_review"]["absolute_output_path"], output_path.resolve(strict=False).as_posix())
-                self.assertIn("Matt-approved Facebook copy", markdown)
-                self.assertIn("Matt-approved generated creative", markdown)
+                self.assertIn("Human-approved Facebook copy", markdown)
+                self.assertIn("Human-approved generated creative", markdown)
                 self.assertIn("Final Proof Runbook", markdown)
                 self.assertIn("/phase5-readiness#facebook-copy-review", markdown)
                 self.assertIn(f"/assets#asset-{creative.candidate.id}", markdown)
@@ -2384,7 +3390,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"Creative approval checklist", page.data)
             self.assertIn(b"No invented markings", page.data)
             self.assertIn(b"Rewrite Requested", page.data)
-            self.assertIn(b"Required when approving for Phase 5 proof", page.data)
+            self.assertIn(b"Required when approving generated copy", page.data)
+            self.assertIn(b"Required when approving generated creative", page.data)
             self.assertIn(f'src="/assets/{source.id}/preview"'.encode(), page.data)
             self.assertIn(f'src="/assets/{creative.candidate.id}/preview"'.encode(), page.data)
             self.assertIn(b'action="/phase5-readiness/copy-review"', page.data)
@@ -2714,6 +3721,76 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertGreater(len(product.sales_momentum_note), 500)
             assets = list(session.scalars(select(AssetRecord).where(AssetRecord.product_id == product.id).order_by(AssetRecord.id)))
             self.assertEqual([asset.external_id for asset in assets], ["etsy-500:img-rank-1", "etsy-500:img-rank-2"])
+
+    def test_phase5_etsy_sync_imports_reviews_for_social_proof(self) -> None:
+        class FakeEtsyAdapter:
+            def __init__(self):
+                self.calls: list[tuple[str, str]] = []
+
+            def list_active_shop_listings(self, shop_id: str) -> list[dict[str, object]]:
+                self.calls.append(("GET listings", shop_id))
+                return [
+                    {
+                        "listing_id": "etsy-review-1",
+                        "title": "Review Proof Duck",
+                        "url": "https://etsy.example/listing/etsy-review-1",
+                        "description": "A duck with useful review proof.",
+                    }
+                ]
+
+            def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
+                self.calls.append(("GET images", listing_id))
+                return []
+
+            def get_reviews_by_shop(self, shop_id: str) -> list[dict[str, object]]:
+                self.calls.append(("GET reviews", shop_id))
+                return [
+                    {
+                        "shop_id": shop_id,
+                        "listing_id": "etsy-review-1",
+                        "transaction_id": "txn-1",
+                        "buyer_user_id": "buyer-hidden-in-copy",
+                        "rating": 5,
+                        "review": "Perfect tiny gift for our cruise group.",
+                        "language": "en",
+                        "image_url_fullxfull": "https://images.example/review.jpg",
+                        "created_timestamp": 1782000000,
+                        "updated_timestamp": 1782000100,
+                    }
+                ]
+
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            adapter = FakeEtsyAdapter()
+            config = EtsyConfig(keystring="fixture-key", shared_secret="fixture-secret", shop_id="fixture-shop")
+            summary = sync_etsy_read_only(session, adapter=adapter, config=config)
+            second_summary = sync_etsy_read_only(session, adapter=adapter, config=config)
+
+            self.assertEqual(summary.products_imported, 1)
+            self.assertEqual(summary.reviews_imported, 1)
+            self.assertEqual(second_summary.reviews_imported, 1)
+            self.assertEqual(session.scalar(select(func.count()).select_from(EtsyReviewRecord)), 1)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.external_id == "etsy-review-1"))
+            self.assertIsNotNone(product)
+            review = session.scalar(select(EtsyReviewRecord))
+            self.assertIsNotNone(review)
+            self.assertEqual(review.product_id, product.id)
+            self.assertEqual(review.external_id, "transaction:txn-1")
+            self.assertEqual(review.rating, 5)
+            self.assertEqual(review.review, "Perfect tiny gift for our cruise group.")
+            self.assertEqual(review.image_url_fullxfull, "https://images.example/review.jpg")
+
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 30),
+                destinations=["Facebook"],
+                goals=["Engagement"],
+                product_ids=[product.id],
+            )
+            brief = build_content_brief(session, item)
+            self.assertEqual(brief["product_facts"][0]["etsy_reviews"][0]["review"], "Perfect tiny gift for our cruise group.")
 
     def test_phase5_etsy_sync_keeps_shared_images_linked_to_each_listing(self) -> None:
         class FakeEtsyAdapter:

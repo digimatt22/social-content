@@ -2,11 +2,32 @@
 {% block content %}
 <div class="topline">
   <div>
+    <div class="eyebrow">Business Signals</div>
     <h2>Insights</h2>
-    <div class="subtle">{{ summary.metrics_count }} metric record(s) · {{ summary.linked_metric_count }} linked to generated content</div>
+    <div class="subtle">I’m reading {{ summary.metrics_count }} metric record(s), with {{ summary.linked_metric_count }} tied back to generated content.</div>
   </div>
   <a class="button secondary" href="{{ url_for('metrics') }}">Metric history</a>
 </div>
+
+<section class="assistant-brief">
+  <div class="brief-layout">
+    <div class="brief-title">
+      <div class="eyebrow">Learning loop</div>
+      <h2>Use signal, not guesswork.</h2>
+      <p>Every recorded post outcome becomes guidance for the next campaign pass. This screen separates what is working, what needs tuning, and where the sample size is still too thin.</p>
+    </div>
+    <div class="brief-stats">
+      <div class="stat-tile">
+        <strong>{{ summary.what_worked|length }}</strong>
+        <span>positive patterns</span>
+      </div>
+      <div class="stat-tile">
+        <strong>{{ summary.what_to_improve|length }}</strong>
+        <span>improvement areas</span>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section class="grid">
   <div class="panel">

@@ -1,38 +1,258 @@
 {% extends "base.html" %}
 {% block content %}
+{% set channel_icons = {
+  "Facebook": "f",
+  "Instagram": "ig",
+  "Pinterest": "p",
+  "Blog post": "b",
+  "Etsy": "e",
+  "Website": "w",
+  "Email": "@"
+} %}
+{% set weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] %}
+
 <div class="topline">
   <div>
-    <h2>Calendar</h2>
-    <div class="subtle">Admin view of the full 30-day plan.</div>
+    <div class="eyebrow">Calendar</div>
+    <h2>Flock Schedule</h2>
+    <div class="subtle">Drag posts to reschedule, then open details to edit the date, time, channel, intent, or delete the post.</div>
   </div>
 </div>
 
-<section class="grid">
-  {% for model in tasks %}
-    {% set task = model.task %}
-    {% include "_task_card.html" %}
-  {% else %}
-    <div class="panel">No plan tasks found.</div>
-  {% endfor %}
-</section>
-
-<h3 style="margin-top: 22px;">Planned Intent</h3>
-<section class="grid">
-  {% for item in planned_items %}
-    <div class="panel">
-      <div class="meta">
-        <span class="pill">{{ item.calendar_date }}</span>
-        <span class="pill">{{ item.status.replace('_', ' ').title() }}</span>
-        <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
+<section class="assistant-brief">
+  <div class="brief-layout">
+    <div class="brief-title">
+      <div class="eyebrow">Scheduling cockpit</div>
+      <h2>Every post needs a day, time, and clear next move.</h2>
+      <p>This is the working calendar for queued campaign ideas and posting tasks. Time of day is tracked now so future automated publishing has a schedule to inherit.</p>
+    </div>
+    <div class="brief-stats">
+      <div class="stat-tile">
+        <strong>{{ planned_items|length }}</strong>
+        <span>planned posts</span>
       </div>
-      <h3>{{ item.destinations|join(', ') }} for {{ item.goals|join(', ') }}</h3>
-      <div class="subtle">{{ item.products|map(attribute='name')|join(', ') }}</div>
-      <div class="button-group" style="margin-top: 10px;">
-        <a class="button secondary" href="{{ url_for('planning') }}">Review in Planning</a>
+      <div class="stat-tile">
+        <strong>{{ tasks|length }}</strong>
+        <span>posting tasks</span>
       </div>
     </div>
-  {% else %}
-    <div class="panel">No high-level planned intent has been added yet.</div>
-  {% endfor %}
+  </div>
 </section>
+
+<section class="calendar-shell" aria-label="Marketing calendar">
+  <div class="calendar-toolbar">
+    <div>
+      <div class="eyebrow">Planned Intent</div>
+      <h3>Schedule board</h3>
+    </div>
+  </div>
+
+  <div class="calendar-grid">
+    {% for day in weekdays %}
+      <div class="calendar-weekday">{{ day }}</div>
+    {% endfor %}
+    {% for day in calendar_days %}
+      <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'weekend' if day.is_weekend else '' }}" data-calendar-day data-date="{{ day.iso }}">
+        <div class="day-head">
+          <span>{{ day.day_number }}</span>
+          <span class="drop-hint">Drop here</span>
+        </div>
+
+        {% for item in day.planned_items %}
+          {% set destination = item.destinations[0] if item.destinations else 'Post' %}
+          {% set destination_class = destination.lower().replace(' ', '-') %}
+          <button class="calendar-event planned" type="button" draggable="true" data-drag-type="planned" data-item-id="{{ item.id }}" data-scheduled-time="{{ item.scheduled_time }}" data-open-drawer="#planned-drawer-{{ item.id }}">
+            <span class="event-row">
+              <span class="event-title">{{ item.products|map(attribute='name')|join(', ') or 'Planned post' }}</span>
+              <span class="event-time">{{ item.scheduled_time }}</span>
+            </span>
+            <span class="event-row">
+              <span class="channel-icon {{ destination_class }}">{{ channel_icons.get(destination, destination[:1]) }}</span>
+              <span class="subtle">{{ destination }} · {{ item.status.replace('_', ' ').title() }}</span>
+            </span>
+          </button>
+        {% endfor %}
+
+        {% for model in day.tasks %}
+          {% set task = model.task %}
+          {% set destination_class = task.platform.lower().replace(' ', '-') %}
+          <button class="calendar-event task" type="button" draggable="true" data-drag-type="task" data-item-id="{{ task.id }}" data-scheduled-time="{{ task.scheduled_time or '09:00' }}" data-open-drawer="#task-drawer-{{ task.id }}">
+            <span class="event-row">
+              <span class="event-title">{{ task.product_name or task.title }}</span>
+              <span class="event-time">{{ task.scheduled_time or '09:00' }}</span>
+            </span>
+            <span class="event-row">
+              <span class="channel-icon {{ destination_class }}">{{ channel_icons.get(task.platform, task.platform[:1]) }}</span>
+              <span class="subtle">{{ task.platform }} · {{ model.status_label }}</span>
+            </span>
+          </button>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="drawer-backdrop" data-drawer-backdrop></div>
+
+{% for item in planned_items %}
+  {% set destination = item.destinations[0] if item.destinations else '' %}
+  {% set selected_goal = item.goals[0] if item.goals else '' %}
+  <aside class="drawer-panel" id="planned-drawer-{{ item.id }}" aria-label="Planned post details">
+    <div class="drawer-header">
+      <div>
+        <div class="eyebrow">Planned post</div>
+        <h3>{{ item.products|map(attribute='name')|join(', ') or 'Selected product' }}</h3>
+        <p class="subtle">{{ destination or 'No channel' }} · {{ item.status.replace('_', ' ').title() }}</p>
+      </div>
+      <button class="drawer-close icon-button" type="button" data-drawer-close aria-label="Close drawer" title="Close">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18"></path>
+          <path d="m6 6 12 12"></path>
+        </svg>
+        <span class="sr-only">Close drawer</span>
+      </button>
+    </div>
+
+    <form method="post" action="{{ url_for('calendar_update_planned_item', item_id=item.id) }}">
+      <div class="grid">
+        <label>Date
+          <input type="date" name="calendar_date" value="{{ item.calendar_date }}" required>
+        </label>
+        <label>Time
+          <input type="time" name="scheduled_time" value="{{ item.scheduled_time }}" required>
+        </label>
+      </div>
+      <label>Channel
+        <select name="destinations" required>
+          {% for option in destinations %}
+            <option value="{{ option }}" {{ 'selected' if option == destination else '' }}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Intent
+        <select name="goals" required>
+          {% if selected_goal and selected_goal not in goals %}<option value="{{ selected_goal }}" selected>{{ selected_goal }}</option>{% endif %}
+          {% for goal in goals %}
+            <option value="{{ goal }}" {{ 'selected' if goal == selected_goal else '' }}>{{ goal }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Audience
+        <select name="audience">
+          <option value="">No specific audience</option>
+          {% if item.audience and item.audience not in audiences %}<option value="{{ item.audience }}" selected>{{ item.audience }}</option>{% endif %}
+          {% for audience in audiences %}
+            <option value="{{ audience }}" {{ 'selected' if audience == item.audience else '' }}>{{ audience }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Moment
+        <select name="occasion">
+          <option value="">No special moment</option>
+          {% if item.occasion and item.occasion not in occasions %}<option value="{{ item.occasion }}" selected>{{ item.occasion }}</option>{% endif %}
+          {% for occasion in occasions %}
+            <option value="{{ occasion }}" {{ 'selected' if occasion == item.occasion else '' }}>{{ occasion }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Offer or timing note
+        <select name="promotion">
+          <option value="">No offer</option>
+          {% if item.promotion and item.promotion not in promotions %}<option value="{{ item.promotion }}" selected>{{ item.promotion }}</option>{% endif %}
+          {% for promotion in promotions %}
+            <option value="{{ promotion }}" {{ 'selected' if promotion == item.promotion else '' }}>{{ promotion }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Notes
+        <textarea name="notes">{{ item.notes }}</textarea>
+      </label>
+      <div class="button-group">
+        <button type="submit">Save schedule</button>
+        <a class="button secondary" href="{{ url_for('planning', _anchor='planned-item-' ~ item.id) }}">Review in Planning</a>
+      </div>
+    </form>
+
+    <form method="post" action="{{ url_for('calendar_delete_planned_item', item_id=item.id) }}" onsubmit="return confirm('Delete this scheduled post?');" style="margin-top: 12px;">
+      <button class="warn" type="submit">Delete scheduled post</button>
+    </form>
+  </aside>
+{% endfor %}
+
+{% for model in tasks %}
+  {% set task = model.task %}
+  <aside class="drawer-panel" id="task-drawer-{{ task.id }}" aria-label="Posting task details">
+    <div class="drawer-header">
+      <div>
+        <div class="eyebrow">Posting task</div>
+        <h3>{{ model.action_title }}</h3>
+        <p class="subtle">{{ task.due_date }} · {{ task.scheduled_time or '09:00' }} · {{ task.platform }}</p>
+      </div>
+      <button class="drawer-close icon-button" type="button" data-drawer-close aria-label="Close drawer" title="Close">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18"></path>
+          <path d="m6 6 12 12"></path>
+        </svg>
+        <span class="sr-only">Close drawer</span>
+      </button>
+    </div>
+    <div class="meta">
+      <span class="pill {{ model.status_tone }}">{{ model.status_label }}</span>
+      <span class="pill">{{ task.content_type }}</span>
+      {% if model.metric_due %}<span class="pill ready">Metrics due</span>{% endif %}
+    </div>
+    <p>{{ task.product_name or task.title }}</p>
+    <div class="copybox">{{ task.draft_caption }}</div>
+    <div class="button-group" style="margin-top: 12px;">
+      <a class="button" href="{{ url_for('task_detail', task_id=task.id) }}">Open task</a>
+      <a class="button secondary" href="{{ url_for('planning') }}">Studio</a>
+    </div>
+  </aside>
+{% endfor %}
+
+<script>
+  (() => {
+    let dragged = null;
+
+    document.querySelectorAll("[draggable='true'][data-drag-type]").forEach((eventCard) => {
+      eventCard.addEventListener("dragstart", (event) => {
+        dragged = {
+          type: eventCard.dataset.dragType,
+          id: eventCard.dataset.itemId,
+          scheduledTime: eventCard.dataset.scheduledTime || "09:00",
+        };
+        event.dataTransfer.effectAllowed = "move";
+      });
+    });
+
+    document.querySelectorAll("[data-calendar-day]").forEach((day) => {
+      day.addEventListener("dragover", (event) => {
+        if (!dragged) return;
+        event.preventDefault();
+        day.classList.add("drag-over");
+      });
+      day.addEventListener("dragleave", () => day.classList.remove("drag-over"));
+      day.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        day.classList.remove("drag-over");
+        if (!dragged) return;
+        const path = dragged.type === "task"
+          ? `/api/calendar/tasks/${dragged.id}/reschedule`
+          : `/api/calendar/planned/${dragged.id}/reschedule`;
+        const response = await fetch(path, {
+          method: "POST",
+          headers: { "Accept": "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ calendar_date: day.dataset.date, scheduled_time: dragged.scheduledTime }),
+        });
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          const payload = await response.json().catch(() => ({}));
+          alert(payload.error || "Could not reschedule this item.");
+        }
+        dragged = null;
+      });
+    });
+  })();
+</script>
 {% endblock %}

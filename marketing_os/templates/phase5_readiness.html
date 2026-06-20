@@ -2,10 +2,13 @@
 {% block content %}
 <div class="topline">
   <div>
-    <h2>Phase 5 Readiness</h2>
-    <div class="subtle">{{ readiness.remaining_count }} final proof item(s) remaining</div>
+    <div class="eyebrow">Review Gate</div>
+    <h2>Human Approval</h2>
+    <div class="subtle">
+      I’m holding generated copy and creative until {{ readiness.remaining_count }} approval item{{ '' if readiness.remaining_count == 1 else 's' }} are resolved with human evidence.
+    </div>
   </div>
-  <div class="actions">
+  <div class="button-group">
     <form method="post" action="{{ url_for('export_phase5_approval_packet') }}">
       <button type="submit">Export Approval Packet</button>
     </form>
@@ -14,17 +17,38 @@
   </div>
 </div>
 
-<section class="grid">
-  <article class="panel" id="facebook-copy-review">
+<section class="assistant-brief">
+  <div class="brief-layout">
+    <div class="brief-title">
+      <div class="eyebrow">Assistant checkpoint</div>
+      <h2>{{ 'Ready for final approval.' if readiness.remaining_count == 0 else 'A few approval gates still need a human.' }}</h2>
+      <p>Generated copy and creative stay behind review until the evidence is explicit. This keeps the tool fast without letting automation speak for the business unchecked.</p>
+    </div>
+    <div class="brief-stats" aria-label="Review gate stats">
+      <div class="stat-tile">
+        <strong>{{ readiness.items|length - readiness.remaining_count }}</strong>
+        <span>approval gates cleared</span>
+      </div>
+      <div class="stat-tile">
+        <strong>{{ readiness.remaining_count }}</strong>
+        <span>still needs approval</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="proof-desk">
+  <article class="panel review-card" id="facebook-copy-review">
     <div class="meta">
-      <span class="pill">Copy target</span>
+      <span class="pill gold">Copy decision</span>
       {% if packet.copy_review %}
         <span class="pill">{{ packet.copy_review.review_state.replace('_', ' ').title() }}</span>
       {% else %}
         <span class="pill blocked">Missing</span>
       {% endif %}
     </div>
-    <h3 style="margin-top: 10px;">Latest Facebook Copy</h3>
+    <h3>Facebook post under review</h3>
+    <div class="review-note">Decision needed: approve the voice, edit it into MattMadeMe shape, or request a rewrite with specific direction.</div>
     {% if packet.copy_review %}
       <p class="subtle">Candidate #{{ packet.copy_review.id }} · Planned item #{{ packet.copy_review.planned_item_id }}</p>
       <div class="copybox" id="phase5-copy-text">{{ packet.copy_review.copy_text or packet.copy_review.display_body }}</div>
@@ -47,34 +71,35 @@
             </select>
           </label>
           <label>Reviewed by
-            <span>Required when approving for Phase 5 proof.</span>
-            <input name="reviewed_by" value="{{ packet.copy_review.reviewed_by }}" placeholder="Matt">
+            <span>Required when approving generated copy.</span>
+            <input name="reviewed_by" value="{{ packet.copy_review.reviewed_by }}" placeholder="Reviewer">
           </label>
         </div>
         <label>Review notes
           <textarea name="revision_notes" placeholder="Voice/taste notes or final approval note.">{{ packet.copy_review.revision_notes }}</textarea>
         </label>
         <div class="button-group">
-          <button type="submit">Save copy review</button>
+          <button type="submit">Save copy decision</button>
           <a class="button secondary" href="{{ packet.copy_review.review_path }}">Open in Planning</a>
         </div>
       </form>
     {% else %}
-      <p class="subtle">Run content production for a planned Facebook item before copy can be reviewed.</p>
+      <p class="subtle">Run content production for a planned Facebook item before I can put copy in front of you.</p>
       <a class="button secondary" href="{{ url_for('planning') }}">Open Planning</a>
     {% endif %}
   </article>
 
-  <article class="panel" id="generated-creative-review">
+  <article class="panel review-card" id="generated-creative-review">
     <div class="meta">
-      <span class="pill">Creative target</span>
+      <span class="pill gold">Creative decision</span>
       {% if packet.creative_review %}
         <span class="pill">{{ packet.creative_review.review_state.replace('_', ' ').title() }}</span>
       {% else %}
         <span class="pill blocked">Missing</span>
       {% endif %}
     </div>
-    <h3 style="margin-top: 10px;">Latest Generated Creative</h3>
+    <h3>Generated creative under review</h3>
+    <div class="review-note">Decision needed: verify the product stayed accurate before any generated image becomes usable.</div>
     {% if packet.creative_review %}
       <p class="subtle">Job #{{ packet.creative_review.id }} · {{ packet.creative_review.provider }}{% if packet.creative_review.provider_job_id %} · {{ packet.creative_review.provider_job_id }}{% endif %}</p>
       <div class="grid">
@@ -115,20 +140,20 @@ Creative approval checklist:
             </select>
           </label>
           <label>Reviewed by
-            <span>Required when approving for Phase 5 proof.</span>
-            <input name="reviewed_by" value="{{ packet.creative_review.reviewed_by }}" placeholder="Matt">
+            <span>Required when approving generated creative.</span>
+            <input name="reviewed_by" value="{{ packet.creative_review.reviewed_by }}" placeholder="Reviewer">
           </label>
         </div>
         <label>Review notes
           <textarea name="review_notes" placeholder="Product accuracy, composition, and approval notes.">{{ packet.creative_review.review_notes }}</textarea>
         </label>
         <div class="button-group">
-          <button type="submit">Save creative review</button>
+          <button type="submit">Save creative decision</button>
           <a class="button secondary" href="{{ packet.creative_review.review_path }}">Open in Assets</a>
         </div>
       </form>
     {% else %}
-      <p class="subtle">Use Planning to generate and review post-specific image options.</p>
+      <p class="subtle">Use Planning to generate and review post-specific image options. I’ll keep the handoff details ready here.</p>
       {% if packet.creative_handoff %}
         {% if packet.creative_handoff.source_asset %}
           <p class="subtle">Recommended source asset #{{ packet.creative_handoff.source_asset.id }} · {{ packet.creative_handoff.source_asset.name }}</p>
@@ -164,6 +189,12 @@ Creative approval checklist:
   </article>
 </section>
 
+<div class="section-heading">
+  <div>
+    <div class="eyebrow">Approval Ledger</div>
+    <h3>What I’m checking before generated work is trusted</h3>
+  </div>
+</div>
 <section class="grid">
   {% for item in readiness.items %}
     <article class="panel">

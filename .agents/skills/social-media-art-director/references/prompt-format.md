@@ -16,10 +16,22 @@ Text: [NO TEXT / EXACT TEXT IF REQUIRED]
 Avoid: [BANNED CONTENT, WRONG STYLE, EXTRA OBJECTS, WATERMARKS]
 ```
 
+If social copy exists, add:
+
+```text
+Post story to match: [HOOK + BODY GIST]
+Story move: [TINY SCENE / SURPRISE DETAIL / COMMUNITY PROMPT / ETC.]
+Visual alignment rule: the scene, props, environment, and mood must support this story. Do not create a generic product image that could pair with any caption.
+```
+
 For product-preserving reference-image work, use this stricter Freepik/Magnific-style format:
 
 ```text
 Create a realistic photographic scene:
+
+Post story to match: [HOOK + BODY GIST]
+Story move: [STORY MOVE IF KNOWN]
+Visual alignment rule: [HOW THE ENVIRONMENT/PROPS/MOOD SUPPORT THE COPY]
 
 Scene: [SCENE DESCRIPTION]
 Environment: [ENVIRONMENT DETAILS]

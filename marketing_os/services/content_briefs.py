@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..context import load_business_context
 from ..db_models import (
     AssetRecord,
+    EtsyReviewRecord,
     GeneratedContentCandidateRecord,
     PlanRecord,
     PlannedContentRecord,
@@ -26,6 +28,15 @@ from .skill_adapters import copywriter_contract, social_media_art_director_contr
 
 
 DESTINATION_OPTIONS = ["Facebook", "Instagram", "Pinterest", "Blog post", "Etsy", "Website", "Email"]
+PLATFORM_DEFAULT_SCHEDULED_TIMES = {
+    "Facebook": "18:30",
+    "Instagram": "12:30",
+    "Pinterest": "20:30",
+    "Blog post": "10:00",
+    "Etsy": "10:00",
+    "Website": "10:00",
+    "Email": "09:30",
+}
 GOAL_OPTIONS = [
     "Cruise community engagement",
     "Duck personality spotlight",
@@ -92,6 +103,7 @@ PLANNED_STATUSES = [
 ]
 CANDIDATE_REVIEW_STATES = ["needs_review", "approved", "rejected", "rewrite_requested"]
 IMAGE_OPTION_COUNT = 3
+AUTOMATION_REFERENCE_MIN_PER_PRODUCT = 2
 QUEUE_STATUSES = {
     "planned",
     "waiting_content_generation",
@@ -122,6 +134,7 @@ def create_planned_content_item(
     destinations: list[str],
     goals: list[str],
     product_ids: list[int],
+    scheduled_time: str | None = None,
     selected_source_asset_ids: list[int] | None = None,
     assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
     defer_remote_assets: bool = False,
@@ -143,12 +156,20 @@ def create_planned_content_item(
         raise ValueError("Choose at least one valid destination.")
     if not valid_goals:
         raise ValueError("Choose at least one valid goal.")
+    default_scheduled_time = default_scheduled_time_for_destination(valid_destinations[0])
 
     valid_products = list(session.scalars(select(ProductRecord).where(ProductRecord.id.in_(product_ids)).order_by(ProductRecord.id)))
     if not valid_products:
         raise ValueError("Choose at least one valid product focus.")
-    default_source_asset_ids = default_reference_asset_ids_for_products(session, valid_products) if selected_source_asset_ids is None else []
-    requested_source_asset_ids = default_source_asset_ids or selected_source_asset_ids
+    automatic_source_asset_ids = (
+        automation_reference_asset_ids_for_products(session, valid_products)
+        if selected_source_asset_ids is None
+        else []
+    )
+    if selected_source_asset_ids is None:
+        requested_source_asset_ids = automatic_source_asset_ids or None
+    else:
+        requested_source_asset_ids = selected_source_asset_ids
     selected_source_ids = _valid_selected_source_asset_ids(
         session,
         valid_products,
@@ -160,6 +181,7 @@ def create_planned_content_item(
 
     record = PlannedContentRecord(
         calendar_date=calendar_date,
+        scheduled_time=normalize_scheduled_time(scheduled_time, fallback=default_scheduled_time),
         destinations_json=json.dumps(valid_destinations),
         goals_json=json.dumps(valid_goals),
         product_ids_json=json.dumps([product.id for product in valid_products]),
@@ -177,6 +199,61 @@ def create_planned_content_item(
     return record
 
 
+def update_planned_content_schedule(
+    session: Session,
+    item_id: int,
+    calendar_date: date,
+    scheduled_time: str = "09:00",
+) -> PlannedContentRecord:
+    item = session.get(PlannedContentRecord, item_id)
+    if item is None:
+        raise ValueError("Planned content item not found.")
+    item.calendar_date = calendar_date
+    item.scheduled_time = normalize_scheduled_time(scheduled_time)
+    for task in _tasks_for_planned_item(session, item_id):
+        task.due_date = calendar_date
+        task.scheduled_time = item.scheduled_time
+    session.flush()
+    return item
+
+
+def update_planned_content_details(
+    session: Session,
+    item_id: int,
+    calendar_date: date,
+    scheduled_time: str,
+    destinations: list[str],
+    goals: list[str],
+    audience: str = "",
+    occasion: str = "",
+    promotion: str = "",
+    notes: str = "",
+) -> PlannedContentRecord:
+    item = session.get(PlannedContentRecord, item_id)
+    if item is None:
+        raise ValueError("Planned content item not found.")
+    valid_destinations = _valid_choices(destinations, DESTINATION_OPTIONS)[:1]
+    valid_goals = _valid_or_custom_choices(goals, GOAL_OPTIONS)[:1]
+    if not valid_destinations:
+        raise ValueError("Choose at least one valid destination.")
+    if not valid_goals:
+        raise ValueError("Choose at least one valid goal.")
+    item.calendar_date = calendar_date
+    item.scheduled_time = normalize_scheduled_time(scheduled_time)
+    item.destinations_json = json.dumps(valid_destinations)
+    item.goals_json = json.dumps(valid_goals)
+    item.audience = audience.strip()
+    item.occasion = occasion.strip()
+    item.promotion = promotion.strip()
+    item.notes = notes.strip()
+    for task in _tasks_for_planned_item(session, item_id):
+        task.due_date = item.calendar_date
+        task.scheduled_time = item.scheduled_time
+        task.platform = valid_destinations[0]
+    session.flush()
+    return item
+
+
 def localize_planned_content_reference_assets(
     session: Session,
     item_id: int,
@@ -192,6 +269,8 @@ def localize_planned_content_reference_assets(
     for asset_id in selected_ids:
         asset = session.get(AssetRecord, asset_id)
         if asset is None:
+            continue
+        if asset.hidden_from_generation:
             continue
         if _asset_is_approved_source(asset):
             localized_ids.append(asset.id)
@@ -255,7 +334,7 @@ def build_content_brief(session: Session, item: PlannedContentRecord, business_d
         "destinations": destinations_for(item),
         "goals": goals_for(item),
         "products": [product.name for product in products],
-        "product_facts": [_product_facts(product) for product in products],
+        "product_facts": [_product_facts(session, product) for product in products],
         "source_assets": [_source_asset_facts(asset) for asset in source_assets],
         "approved_source_asset_ids": [asset.id for asset in approved_source_assets],
         "selected_source_asset_ids": [asset.id for asset in selected_source_assets],
@@ -264,6 +343,7 @@ def build_content_brief(session: Session, item: PlannedContentRecord, business_d
         "reference_selection_note": _reference_selection_note(selected_source_assets, reference_assets),
         "missing_inputs": _missing_inputs(source_assets, approved_source_assets, selected_source_assets),
         "rewrite_requests": [_rewrite_request_facts(candidate) for candidate in item.candidates if candidate.review_state == "rewrite_requested"],
+        "reviewable_copy": _reviewable_copy_facts(item),
         "audience": item.audience,
         "occasion": item.occasion,
         "promotion": item.promotion,
@@ -638,6 +718,7 @@ def source_assets_for_products(session: Session, products: list[ProductRecord]) 
             select(AssetRecord)
             .where(AssetRecord.product_id.in_(product_ids))
             .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .where(AssetRecord.hidden_from_generation == 0)
             .order_by((AssetRecord.review_state == "approved").desc(), AssetRecord.file_exists.desc(), AssetRecord.product_id, AssetRecord.id)
         )
     )
@@ -654,9 +735,59 @@ def default_reference_asset_ids_for_products(session: Session, products: list[Pr
             .where(AssetRecord.product_id.in_(product_ids))
             .where(AssetRecord.default_reference == 1)
             .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .where(AssetRecord.hidden_from_generation == 0)
             .order_by(AssetRecord.product_id, AssetRecord.id)
         )
     ]
+
+
+def automation_reference_asset_ids_for_products(
+    session: Session,
+    products: list[ProductRecord],
+    min_per_product: int = AUTOMATION_REFERENCE_MIN_PER_PRODUCT,
+) -> list[int]:
+    selected_ids: list[int] = []
+    seen: set[int] = set()
+    for product in products:
+        if product.id is None:
+            continue
+        product_ids: list[int] = []
+        default_assets = list(
+            session.scalars(
+                select(AssetRecord)
+                .where(AssetRecord.product_id == product.id)
+                .where(AssetRecord.default_reference == 1)
+                .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+                .where(AssetRecord.hidden_from_generation == 0)
+                .order_by(AssetRecord.id)
+            )
+        )
+        for asset in default_assets:
+            if _asset_can_be_automation_reference(asset) and asset.id not in seen:
+                product_ids.append(asset.id)
+                selected_ids.append(asset.id)
+                seen.add(asset.id)
+
+        needed = max(0, min_per_product - len(product_ids))
+        if needed == 0:
+            continue
+        fallback_assets = [
+            asset
+            for asset in session.scalars(
+                select(AssetRecord)
+                .where(AssetRecord.product_id == product.id)
+                .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+                .where(AssetRecord.hidden_from_generation == 0)
+                .order_by(AssetRecord.id)
+            )
+            if asset.id not in seen and _asset_can_be_automation_reference(asset)
+        ]
+        random.shuffle(fallback_assets)
+        for asset in fallback_assets[:needed]:
+            product_ids.append(asset.id)
+            selected_ids.append(asset.id)
+            seen.add(asset.id)
+    return selected_ids
 
 
 def update_product_default_reference_assets(session: Session, product_id: int, asset_ids: list[int]) -> list[int]:
@@ -668,6 +799,7 @@ def update_product_default_reference_assets(session: Session, product_id: int, a
             select(AssetRecord)
             .where(AssetRecord.product_id == product_id)
             .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .where(AssetRecord.hidden_from_generation == 0)
             .order_by(AssetRecord.id)
         )
     )
@@ -682,12 +814,18 @@ def update_product_default_reference_assets(session: Session, product_id: int, a
 
 def serialize_planned_content_item(session: Session, item: PlannedContentRecord) -> dict[str, object]:
     serialized_candidates = [serialize_candidate(candidate) for candidate in item.candidates]
+    visible_image_candidates = [
+        candidate
+        for candidate in serialized_candidates
+        if candidate["candidate_type"] == "image_asset_option" and _candidate_has_visible_image_asset(session, candidate)
+    ]
     products = products_for_item(session, item)
     source_assets = source_assets_for_products(session, products)
     selected_source_ids = selected_source_asset_ids_for(item)
     return {
         "id": item.id,
         "calendar_date": item.calendar_date.isoformat(),
+        "scheduled_time": item.scheduled_time or "09:00",
         "destinations": destinations_for(item),
         "goals": goals_for(item),
         "products": [{"id": product.id, "name": product.name} for product in products],
@@ -704,7 +842,7 @@ def serialize_planned_content_item(session: Session, item: PlannedContentRecord)
         "production_error": item.production_error,
         "candidates": serialized_candidates,
         "copy_candidates": [candidate for candidate in serialized_candidates if candidate["candidate_type"] == "facebook_post"],
-        "image_candidates": [candidate for candidate in serialized_candidates if candidate["candidate_type"] == "image_asset_option"],
+        "image_candidates": visible_image_candidates,
         "waiting_for_generation": item.status in QUEUE_STATUSES,
         "waiting_for_asset_download": item.status == "waiting_asset_download",
         "waiting_for_copy": item.status in {"waiting_content_generation", "waiting_copy_regeneration"},
@@ -715,8 +853,8 @@ def serialize_planned_content_item(session: Session, item: PlannedContentRecord)
             for candidate in serialized_candidates
         ),
         "has_selected_image": any(
-            candidate["candidate_type"] == "image_asset_option" and candidate["review_state"] == "approved"
-            for candidate in serialized_candidates
+            candidate["review_state"] == "approved"
+            for candidate in visible_image_candidates
         ),
     }
 
@@ -743,6 +881,30 @@ def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str,
         "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
         "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
     }
+
+
+def _candidate_has_visible_image_asset(session: Session, candidate: dict[str, object]) -> bool:
+    image_asset = candidate.get("image_asset")
+    if not isinstance(image_asset, dict):
+        return False
+    try:
+        asset_id = int(image_asset.get("asset_id") or 0)
+    except (TypeError, ValueError):
+        return False
+    if not asset_id:
+        return False
+    asset = session.get(AssetRecord, asset_id)
+    if asset is None:
+        return False
+    if asset.sync_status == "deleted" or asset.manual_override_state == "deleted":
+        return False
+    if asset.file_exists:
+        return True
+    path = Path(asset.source_path or asset.preview_path)
+    if path.is_file():
+        asset.file_exists = 1
+        return True
+    return False
 
 
 def record_candidate_review(
@@ -874,6 +1036,7 @@ def create_task_from_planned_content(
         plan_id=plan.id,
         planned_content_item_id=item.id,
         due_date=item.calendar_date,
+        scheduled_time=item.scheduled_time or "09:00",
         title=_task_title(item, selected_destination, product_name),
         owner_role=owner_for(selected_destination, content_type),
         platform=selected_destination,
@@ -906,6 +1069,41 @@ def _valid_choices(values: list[str], allowed: list[str]) -> list[str]:
         if canonical and canonical not in result:
             result.append(canonical)
     return result
+
+
+def default_scheduled_time_for_destination(destination: str | None) -> str:
+    normalized = str(destination or "").strip().lower()
+    for option, scheduled_time in PLATFORM_DEFAULT_SCHEDULED_TIMES.items():
+        if option.lower() == normalized:
+            return scheduled_time
+    return "10:00"
+
+
+def normalize_scheduled_time(value: str | None, fallback: str = "09:00") -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return fallback
+    parts = raw.split(":")
+    if len(parts) != 2:
+        raise ValueError("Use a valid scheduled time.")
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError as exc:
+        raise ValueError("Use a valid scheduled time.") from exc
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        raise ValueError("Use a valid scheduled time.")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _tasks_for_planned_item(session: Session, item_id: int) -> list[TaskRecord]:
+    return list(
+        session.scalars(
+            select(TaskRecord)
+            .where(TaskRecord.planned_content_item_id == item_id)
+            .order_by(TaskRecord.due_date, TaskRecord.id)
+        )
+    )
 
 
 def _valid_or_custom_choices(values: list[str], allowed: list[str]) -> list[str]:
@@ -1063,6 +1261,26 @@ def _candidate_cta(value: str) -> str:
     return str(data.get("cta") or "").strip() if data else ""
 
 
+def _reviewable_copy_facts(item: PlannedContentRecord) -> dict[str, object]:
+    for candidate in reversed(item.candidates):
+        if candidate.candidate_type != "facebook_post" or candidate.review_state not in {"needs_review", "approved"}:
+            continue
+        data = _json_dict(candidate.body)
+        if not data:
+            continue
+        return {
+            "candidate_id": candidate.id,
+            "review_state": candidate.review_state,
+            "hook": str(data.get("hook") or "").strip(),
+            "body": str(data.get("body") or "").strip(),
+            "cta": str(data.get("cta") or "").strip(),
+            "copy_text": _candidate_copy_body(candidate.body),
+            "social_strategy": data.get("social_strategy") if isinstance(data.get("social_strategy"), dict) else {},
+            "social_challenge": data.get("social_challenge") if isinstance(data.get("social_challenge"), dict) else {},
+        }
+    return {}
+
+
 def _cta_for_goals(goals: list[str]) -> str:
     normalized = " ".join(goal.lower() for goal in goals)
     if any(token in normalized for token in ["etsy", "shop", "sales", "gift", "flock", "repeat"]):
@@ -1103,7 +1321,7 @@ def _task_notes(item: PlannedContentRecord) -> str:
     return "\n".join(parts)
 
 
-def _product_facts(product: ProductRecord) -> dict[str, object]:
+def _product_facts(session: Session, product: ProductRecord) -> dict[str, object]:
     return {
         "id": product.id,
         "name": product.name,
@@ -1112,7 +1330,28 @@ def _product_facts(product: ProductRecord) -> dict[str, object]:
         "seasonality": json_list(product.seasonality_json),
         "sales_momentum_note": product.sales_momentum_note,
         "canonical_url": product.canonical_url,
+        "etsy_reviews": _product_review_facts(session, product),
     }
+
+
+def _product_review_facts(session: Session, product: ProductRecord, limit: int = 5) -> list[dict[str, object]]:
+    reviews = session.scalars(
+        select(EtsyReviewRecord)
+        .where(EtsyReviewRecord.product_id == product.id)
+        .order_by(EtsyReviewRecord.created_timestamp.desc().nullslast(), EtsyReviewRecord.id.desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "rating": review.rating,
+            "review": review.review,
+            "language": review.language,
+            "created_timestamp": review.created_timestamp,
+            "has_photo": bool(review.image_url_fullxfull),
+        }
+        for review in reviews
+        if review.review.strip()
+    ]
 
 
 def _source_asset_facts(asset: AssetRecord) -> dict[str, object]:
@@ -1138,6 +1377,7 @@ def _source_asset_facts(asset: AssetRecord) -> dict[str, object]:
         "rights": asset.rights,
         "brand_safe": asset.brand_safe,
         "default_reference": bool(asset.default_reference),
+        "hidden_from_generation": bool(asset.hidden_from_generation),
     }
 
 
@@ -1179,6 +1419,10 @@ def _asset_is_remote_product_image(asset: AssetRecord) -> bool:
     )
 
 
+def _asset_can_be_automation_reference(asset: AssetRecord) -> bool:
+    return _asset_is_approved_source(asset) or _asset_is_remote_product_image(asset)
+
+
 def _selected_source_assets(source_assets: list[AssetRecord], selected_ids: list[int]) -> list[AssetRecord]:
     if not selected_ids:
         return []
@@ -1212,6 +1456,8 @@ def _valid_selected_source_asset_ids(
         asset = valid_by_id.get(asset_id)
         if asset is None:
             continue
+        if asset.hidden_from_generation:
+            raise ValueError("One or more selected reference images are hidden from automation.")
         if _asset_is_approved_source(asset):
             selected_local_ids.append(asset.id)
         elif _asset_is_remote_product_image(asset):
