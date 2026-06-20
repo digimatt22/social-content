@@ -66,6 +66,27 @@ class ProductExternalReference(Base):
     __table_args__ = (UniqueConstraint("source_name", "external_id", name="uq_product_external_source_id"),)
 
 
+class ProductSalesRecord(Base):
+    __tablename__ = "product_sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    source_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(220), nullable=False)
+    listing_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    listing_title: Mapped[str] = mapped_column(String(260), default="", nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    revenue_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(12), default="", nullable=False)
+    sold_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_data_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord | None] = relationship()
+
+    __table_args__ = (UniqueConstraint("source_name", "external_id", name="uq_product_sales_source_id"),)
+
+
 class TemplateRecord(Base):
     __tablename__ = "templates"
 
@@ -120,6 +141,7 @@ class AssetRecord(Base):
     approval_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     generated_prompt: Mapped[str] = mapped_column(Text, default="", nullable=False)
     source_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    default_reference: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     product: Mapped[ProductRecord | None] = relationship(back_populates="assets")
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Social Media Copywriter"
+  short_description: "Angle-first social posts with hooks and CTAs"
+  default_prompt: "Use $social-media-copywriter to write platform-native social posts with strong hooks, clear CTAs, and source-grounded MattMadeMe voice."

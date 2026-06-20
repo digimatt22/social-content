@@ -19,14 +19,22 @@ from ..db_models import (
     utc_now,
 )
 from ..phase3 import json_list, link_generated_content_to_task, owner_for, playbook_for
-from .copywriter import generate_facebook_post, score_copy_against_voice
+from ..phase4 import MANAGED_PRODUCT_ASSETS_ROOT, ensure_local_asset_for_remote_image
 from .insights import brief_performance_context
 from .product_admin import ETSY_SHOP_URL
-from .skill_adapters import copywriter_contract, image_creator_contracts
+from .skill_adapters import copywriter_contract, social_media_art_director_contracts
 
 
 DESTINATION_OPTIONS = ["Facebook", "Instagram", "Pinterest", "Blog post", "Etsy", "Website", "Email"]
 GOAL_OPTIONS = [
+    "Cruise community engagement",
+    "Duck personality spotlight",
+    "Flock building",
+    "Etsy shop visits",
+    "Gift consideration",
+    "Follower growth",
+    "Maker process trust",
+    "Seasonal or occasion push",
     "Sales growth",
     "Repeat customers",
     "Followers",
@@ -36,8 +44,41 @@ GOAL_OPTIONS = [
     "Seasonal launch",
     "Engagement",
 ]
+PLANNER_GOAL_OPTIONS = GOAL_OPTIONS[:8]
+AUDIENCE_OPTIONS = [
+    "Cruise Duckers",
+    "Gift Buyers",
+    "Collectors / Flock Builders",
+    "Desk Decor Buyers",
+    "Handmade Shoppers",
+    "Duck Duck Jeep Community",
+    "Hobby, Profession, Or Identity Buyers",
+    "Event And Convention Buyers",
+]
+OCCASION_OPTIONS = [
+    "Cruise duck hiding",
+    "Room steward gift",
+    "Found duck story",
+    "Gift idea",
+    "New flock member",
+    "Collection spotlight",
+    "Duck Duck Jeep",
+    "Desk mascot moment",
+    "Maker process",
+    "Seasonal launch",
+]
+PROMOTION_OPTIONS = [
+    "Find your favorite duck in our Etsy shop",
+    "Add a new duck to your flock",
+    "See the full flock on Etsy",
+    "Start your flock today",
+    "Available in the Etsy shop",
+    "New design spotlight",
+    "Good gift idea",
+]
 PLANNED_STATUSES = [
     "planned",
+    "waiting_asset_download",
     "waiting_content_generation",
     "waiting_copy_regeneration",
     "waiting_image_generation",
@@ -58,6 +99,7 @@ QUEUE_STATUSES = {
     "waiting_image_generation",
     "waiting_image_regeneration",
 }
+SOCIAL_DESTINATIONS = {"Facebook", "Instagram", "Pinterest", "Threads", "TikTok", "LinkedIn"}
 
 
 @dataclass(frozen=True)
@@ -81,6 +123,8 @@ def create_planned_content_item(
     goals: list[str],
     product_ids: list[int],
     selected_source_asset_ids: list[int] | None = None,
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
+    defer_remote_assets: bool = False,
     audience: str = "",
     occasion: str = "",
     promotion: str = "",
@@ -103,7 +147,16 @@ def create_planned_content_item(
     valid_products = list(session.scalars(select(ProductRecord).where(ProductRecord.id.in_(product_ids)).order_by(ProductRecord.id)))
     if not valid_products:
         raise ValueError("Choose at least one valid product focus.")
-    selected_source_ids = _valid_selected_source_asset_ids(session, valid_products, selected_source_asset_ids or [])
+    default_source_asset_ids = default_reference_asset_ids_for_products(session, valid_products) if selected_source_asset_ids is None else []
+    requested_source_asset_ids = default_source_asset_ids or selected_source_asset_ids
+    selected_source_ids = _valid_selected_source_asset_ids(
+        session,
+        valid_products,
+        requested_source_asset_ids,
+        assets_root=assets_root,
+        defer_remote_assets=defer_remote_assets,
+    )
+    has_deferred_remote_assets = defer_remote_assets and _has_remote_selected_source_asset(session, selected_source_ids)
 
     record = PlannedContentRecord(
         calendar_date=calendar_date,
@@ -115,12 +168,43 @@ def create_planned_content_item(
         occasion=occasion.strip(),
         promotion=promotion.strip(),
         notes=notes.strip(),
-        status="waiting_content_generation",
+        status="waiting_asset_download" if has_deferred_remote_assets else "waiting_content_generation",
         brief_status="pending",
+        production_error="Preparing selected remote image references." if has_deferred_remote_assets else "",
     )
     session.add(record)
     session.flush()
     return record
+
+
+def localize_planned_content_reference_assets(
+    session: Session,
+    item_id: int,
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
+) -> PlannedContentRecord:
+    item = session.get(PlannedContentRecord, item_id)
+    if item is None:
+        raise ValueError(f"Planned content item not found: {item_id}")
+    selected_ids = selected_source_asset_ids_for(item)
+    if not selected_ids:
+        raise ValueError("Planned content item has no selected reference images.")
+    localized_ids: list[int] = []
+    for asset_id in selected_ids:
+        asset = session.get(AssetRecord, asset_id)
+        if asset is None:
+            continue
+        if _asset_is_approved_source(asset):
+            localized_ids.append(asset.id)
+        elif _asset_is_remote_product_image(asset):
+            localized_ids.append(ensure_local_asset_for_remote_image(session, asset, assets_root).id)
+    if not localized_ids:
+        raise ValueError("No selected reference images could be prepared.")
+    item.selected_source_asset_ids_json = json.dumps(localized_ids)
+    if item.status == "waiting_asset_download":
+        item.status = "waiting_content_generation"
+    item.production_error = ""
+    session.flush()
+    return item
 
 
 def planned_content_items(session: Session) -> list[PlannedContentRecord]:
@@ -202,53 +286,77 @@ def produce_content_for_item(
     created = 0
     skipped = 0
     candidates: list[GeneratedContentCandidateRecord] = []
-    generate_copy = _should_generate_copy(item, force)
+    queue_copy = _should_generate_copy(item, force) and _has_social_destination(item)
     queue_images = _should_queue_images(item)
-
-    if generate_copy and "Facebook" in destinations_for(item):
-        skill_contract = copywriter_contract(brief, "Facebook")
-        draft = generate_facebook_post(brief)
-        copy_text = "\n\n".join([draft.hook, draft.body])
-        quality_score = score_copy_against_voice(copy_text, brief)
-        body = json.dumps(
-            {
-                "skill": skill_contract.skill_name,
-                "skill_request": skill_contract.request,
-                "skill_check": skill_contract.check,
-                "hook": draft.hook,
-                "body": draft.body,
-                "cta": draft.cta,
-                "quality_checklist": draft.quality_checklist,
-                "quality_score": {
-                    "passed": quality_score.passed,
-                    "warnings": quality_score.warnings,
-                },
-            },
-            indent=2,
-        )
-        candidate, was_created = upsert_candidate(
-            session,
-            item,
-            candidate_type="facebook_post",
-            provider="codex",
-            body=body,
-            source_facts=brief,
-            source_asset_ids=_approved_source_asset_ids(brief),
-            force=force,
-        )
-        candidates.append(candidate)
-        created += 1 if was_created else 0
-        skipped += 0 if was_created else 1
 
     if queue_images:
         _mark_image_generation_queued(item, brief)
+    if queue_copy:
+        item.production_error = _append_production_note(
+            item.production_error,
+            "Copy generation is queued. Use the exported social copy workflow and register the agent-written copy before review.",
+        )
 
     item.brief_status = "ready"
     item.status = _next_status_after_production(item)
     item.last_production_run_at = utc_now()
-    if not queue_images:
+    if not queue_images and not queue_copy:
         item.production_error = ""
     return ContentProductionResult(item, candidates, created, skipped)
+
+
+def register_generated_copy_candidate(
+    session: Session,
+    item_id: int,
+    copy_text: str,
+    skill_request: dict[str, object] | None = None,
+    skill_check: dict[str, object] | None = None,
+    social_strategy: dict[str, object] | None = None,
+    social_challenge: dict[str, object] | None = None,
+    provider: str = "codex_agent",
+    notes: str = "",
+) -> GeneratedContentCandidateRecord:
+    item = session.get(PlannedContentRecord, item_id)
+    if item is None:
+        raise ValueError(f"Planned content item not found: {item_id}")
+    parsed = _parse_copy_text(copy_text)
+    if not parsed["copy_text"]:
+        raise ValueError("Generated copy cannot be blank.")
+    source_facts = build_content_brief(session, item)
+    body = json.dumps(
+        {
+            "skill": "social-media-copywriter",
+            "skill_request": skill_request or copywriter_contract(source_facts, "Facebook").request,
+            "skill_check": skill_check or {},
+            "social_strategy": social_strategy or {},
+            "hook": parsed["hook"],
+            "body": parsed["body"],
+            "cta": parsed["cta"],
+            "social_challenge": social_challenge or {},
+            "quality_score": {
+                "passed": [],
+                "warnings": [],
+                "source": "agent_challenge",
+            },
+        },
+        indent=2,
+    )
+    _supersede_rewrite_requested_copy(item)
+    candidate, _ = upsert_candidate(
+        session,
+        item,
+        candidate_type="facebook_post",
+        provider=provider,
+        body=body,
+        source_facts=source_facts,
+        source_asset_ids=_approved_source_asset_ids(source_facts),
+        force=True,
+    )
+    candidate.revision_notes = notes.strip() or "Agent-written copy registered for human review."
+    item.brief_status = "ready"
+    item.status = "needs_review" if _has_reviewable_image(item) else "waiting_image_generation"
+    item.production_error = ""
+    return candidate
 
 
 def request_content_regeneration(session: Session, item_id: int, target: str, feedback: str = "") -> PlannedContentRecord:
@@ -535,6 +643,43 @@ def source_assets_for_products(session: Session, products: list[ProductRecord]) 
     )
 
 
+def default_reference_asset_ids_for_products(session: Session, products: list[ProductRecord]) -> list[int]:
+    product_ids = [product.id for product in products if product.id is not None]
+    if not product_ids:
+        return []
+    return [
+        asset.id
+        for asset in session.scalars(
+            select(AssetRecord)
+            .where(AssetRecord.product_id.in_(product_ids))
+            .where(AssetRecord.default_reference == 1)
+            .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .order_by(AssetRecord.product_id, AssetRecord.id)
+        )
+    ]
+
+
+def update_product_default_reference_assets(session: Session, product_id: int, asset_ids: list[int]) -> list[int]:
+    product = session.get(ProductRecord, product_id)
+    if product is None:
+        raise ValueError("Product not found.")
+    assets = list(
+        session.scalars(
+            select(AssetRecord)
+            .where(AssetRecord.product_id == product_id)
+            .where(AssetRecord.asset_type.in_(["source photo", "Etsy product photo", "edited photo", "external listing image"]))
+            .order_by(AssetRecord.id)
+        )
+    )
+    valid_ids = {asset.id for asset in assets}
+    selected_ids = [asset_id for asset_id in asset_ids if asset_id in valid_ids]
+    selected_lookup = set(selected_ids)
+    for asset in assets:
+        asset.default_reference = 1 if asset.id in selected_lookup else 0
+    session.flush()
+    return selected_ids
+
+
 def serialize_planned_content_item(session: Session, item: PlannedContentRecord) -> dict[str, object]:
     serialized_candidates = [serialize_candidate(candidate) for candidate in item.candidates]
     products = products_for_item(session, item)
@@ -561,6 +706,7 @@ def serialize_planned_content_item(session: Session, item: PlannedContentRecord)
         "copy_candidates": [candidate for candidate in serialized_candidates if candidate["candidate_type"] == "facebook_post"],
         "image_candidates": [candidate for candidate in serialized_candidates if candidate["candidate_type"] == "image_asset_option"],
         "waiting_for_generation": item.status in QUEUE_STATUSES,
+        "waiting_for_asset_download": item.status == "waiting_asset_download",
         "waiting_for_copy": item.status in {"waiting_content_generation", "waiting_copy_regeneration"},
         "waiting_for_images": item.status
         in {"waiting_content_generation", "waiting_image_generation", "waiting_image_regeneration"},
@@ -661,24 +807,20 @@ def _sync_image_asset_review(
 def update_facebook_candidate_copy(candidate: GeneratedContentCandidateRecord, copy_text: str) -> None:
     if candidate.candidate_type != "facebook_post":
         raise ValueError("Only Facebook post candidates can be edited as post copy.")
-    paragraphs = [part.strip() for part in copy_text.replace("\r\n", "\n").split("\n\n") if part.strip()]
-    if not paragraphs:
+    parsed = _parse_copy_text(copy_text)
+    if not parsed["copy_text"]:
         raise ValueError("Edited Facebook copy cannot be blank.")
 
     existing = _json_dict(candidate.body)
-    source_facts = _json_dict(candidate.source_facts_json)
-    hook = paragraphs[0]
-    body = "\n\n".join(paragraphs[1:]) if len(paragraphs) > 1 else hook
-    cta = paragraphs[-1]
-    quality_score = score_copy_against_voice("\n\n".join([hook, body]), source_facts)
     existing.update(
         {
-            "hook": hook,
-            "body": body,
-            "cta": cta,
+            "hook": parsed["hook"],
+            "body": parsed["body"],
+            "cta": parsed["cta"],
             "quality_score": {
-                "passed": quality_score.passed,
-                "warnings": quality_score.warnings,
+                "passed": [],
+                "warnings": [],
+                "source": "human_edit",
             },
         }
     )
@@ -839,6 +981,13 @@ def _supersede_rewrite_requested_image_options(item: PlannedContentRecord) -> No
             candidate.revision_notes = "Superseded by a generated image regeneration run."
 
 
+def _supersede_rewrite_requested_copy(item: PlannedContentRecord) -> None:
+    for candidate in item.candidates:
+        if candidate.candidate_type == "facebook_post" and candidate.review_state == "rewrite_requested":
+            candidate.review_state = "rejected"
+            candidate.revision_notes = "Superseded by an agent-written copy regeneration run."
+
+
 def _selected_image_asset(session: Session, item: PlannedContentRecord) -> AssetRecord | None:
     for candidate in item.candidates:
         if candidate.candidate_type != "image_asset_option" or candidate.review_state != "approved":
@@ -865,11 +1014,19 @@ def _next_status_after_production(item: PlannedContentRecord) -> str:
 
 
 def _mark_image_generation_queued(item: PlannedContentRecord, brief: dict[str, object]) -> None:
-    contracts = image_creator_contracts(brief, count=IMAGE_OPTION_COUNT)
-    item.production_error = (
+    contracts = social_media_art_director_contracts(brief, count=IMAGE_OPTION_COUNT)
+    item.production_error = _append_production_note(
+        item.production_error,
         "Image generation is queued. Enable Codex image generation automation to turn "
-        f"{len(contracts)} image-creator requests into reviewable image files."
+        f"{len(contracts)} social-media-art-director requests into reviewable image files.",
     )
+
+
+def _append_production_note(existing: str, note: str) -> str:
+    notes = [part.strip() for part in existing.split("\n") if part.strip()] if existing else []
+    if note.strip() and note.strip() not in notes:
+        notes.append(note.strip())
+    return "\n".join(notes)
 
 
 def _best_task_asset(session: Session, product: ProductRecord | None) -> AssetRecord | None:
@@ -891,19 +1048,36 @@ def _candidate_copy_body(value: str) -> str:
     return "\n\n".join(piece for piece in pieces if piece)
 
 
+def _parse_copy_text(copy_text: str) -> dict[str, str]:
+    paragraphs = [part.strip() for part in copy_text.replace("\r\n", "\n").split("\n\n") if part.strip()]
+    if not paragraphs:
+        return {"hook": "", "body": "", "cta": "", "copy_text": ""}
+    hook = paragraphs[0]
+    body = "\n\n".join(paragraphs[1:]) if len(paragraphs) > 1 else hook
+    cta = paragraphs[-1]
+    return {"hook": hook, "body": body, "cta": cta, "copy_text": "\n\n".join(paragraphs)}
+
+
 def _candidate_cta(value: str) -> str:
     data = _json_dict(value)
     return str(data.get("cta") or "").strip() if data else ""
 
 
 def _cta_for_goals(goals: list[str]) -> str:
-    if any(goal.lower() == "sales growth" for goal in goals):
-        return f"Shop the flock on Etsy: {ETSY_SHOP_URL}"
-    if any(goal.lower() == "followers" for goal in goals):
-        return "Follow along for the next tiny build."
-    if any(goal.lower() == "email signup" for goal in goals):
+    normalized = " ".join(goal.lower() for goal in goals)
+    if any(token in normalized for token in ["etsy", "shop", "sales", "gift", "flock", "repeat"]):
+        return f"Find your favorite duck in our Etsy shop: {ETSY_SHOP_URL}"
+    if any(token in normalized for token in ["followers", "follower growth", "personality"]):
+        return "Follow along for more small ducks with big personality."
+    if "email" in normalized:
         return "Join the email list for new releases and behind-the-scenes notes."
-    return "Reply with what you want to see next."
+    if any(token in normalized for token in ["cruise", "community", "engagement"]):
+        return "Tell us which duck belongs on your next cruise."
+    return "Reply with which duck belongs in the flock next."
+
+
+def _has_social_destination(item: PlannedContentRecord) -> bool:
+    return bool(SOCIAL_DESTINATIONS.intersection(destinations_for(item)))
 
 
 def _metric_instruction(destination: str, goals: list[str], playbook: dict[str, object]) -> str:
@@ -963,6 +1137,7 @@ def _source_asset_facts(asset: AssetRecord) -> dict[str, object]:
         "canonical_url": asset.canonical_url,
         "rights": asset.rights,
         "brand_safe": asset.brand_safe,
+        "default_reference": bool(asset.default_reference),
     }
 
 
@@ -995,6 +1170,15 @@ def _asset_is_approved_source(asset: AssetRecord) -> bool:
     return bool(asset.file_exists and asset.review_state == "approved")
 
 
+def _asset_is_remote_product_image(asset: AssetRecord) -> bool:
+    image_url = asset.source_path or asset.preview_path or asset.canonical_url
+    return bool(
+        not asset.file_exists
+        and image_url.startswith(("http://", "https://", "file://"))
+        and asset.asset_type in {"Etsy product photo", "external listing image"}
+    )
+
+
 def _selected_source_assets(source_assets: list[AssetRecord], selected_ids: list[int]) -> list[AssetRecord]:
     if not selected_ids:
         return []
@@ -1002,9 +1186,17 @@ def _selected_source_assets(source_assets: list[AssetRecord], selected_ids: list
     return [by_id[asset_id] for asset_id in selected_ids if asset_id in by_id and _asset_is_approved_source(by_id[asset_id])]
 
 
-def _valid_selected_source_asset_ids(session: Session, products: list[ProductRecord], selected_ids: list[int]) -> list[int]:
-    if not selected_ids:
+def _valid_selected_source_asset_ids(
+    session: Session,
+    products: list[ProductRecord],
+    selected_ids: list[int] | None,
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
+    defer_remote_assets: bool = False,
+) -> list[int]:
+    if selected_ids is None:
         return []
+    if not selected_ids:
+        raise ValueError("Select at least one product reference image.")
     product_ids = {product.id for product in products}
     valid_assets = list(
         session.scalars(
@@ -1014,8 +1206,30 @@ def _valid_selected_source_asset_ids(session: Session, products: list[ProductRec
             .order_by(AssetRecord.id)
         )
     )
-    valid_by_id = {asset.id: asset for asset in valid_assets if _asset_is_approved_source(asset)}
-    return [asset_id for asset_id in selected_ids if asset_id in valid_by_id]
+    valid_by_id = {asset.id: asset for asset in valid_assets}
+    selected_local_ids: list[int] = []
+    for asset_id in selected_ids:
+        asset = valid_by_id.get(asset_id)
+        if asset is None:
+            continue
+        if _asset_is_approved_source(asset):
+            selected_local_ids.append(asset.id)
+        elif _asset_is_remote_product_image(asset):
+            if defer_remote_assets:
+                selected_local_ids.append(asset.id)
+            else:
+                selected_local_ids.append(ensure_local_asset_for_remote_image(session, asset, assets_root).id)
+    if not selected_local_ids:
+        raise ValueError("Select at least one approved local or remote product reference image.")
+    return selected_local_ids
+
+
+def _has_remote_selected_source_asset(session: Session, selected_ids: list[int]) -> bool:
+    for asset_id in selected_ids:
+        asset = session.get(AssetRecord, asset_id)
+        if asset is not None and _asset_is_remote_product_image(asset):
+            return True
+    return False
 
 
 def _missing_inputs(

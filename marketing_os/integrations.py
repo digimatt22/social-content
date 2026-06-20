@@ -114,14 +114,14 @@ class EtsyReadOnlyAdapter(Protocol):
     def list_active_shop_listings(self, shop_id: str) -> list[dict[str, object]]:
         ...
 
+    def get_listing(self, listing_id: str) -> dict[str, object]:
+        ...
+
     def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
         ...
 
 
 class MattMadeMeWebsiteAdapter(Protocol):
-    def list_products(self) -> list[dict[str, object]]:
-        ...
-
     def list_published_blog_posts(self) -> list[dict[str, object]]:
         ...
 
@@ -153,6 +153,9 @@ class EtsyOpenApiAdapter:
             if shop.get("shop_id"):
                 return str(shop["shop_id"])
         return None
+
+    def get_listing(self, listing_id: str) -> dict[str, object]:
+        return self._get(f"/listings/{listing_id}?{urllib.parse.urlencode({'includes': 'Images'})}")
 
     def get_listing_images(self, listing_id: str) -> list[dict[str, object]]:
         payload = self._get(f"/listings/{listing_id}/images")
@@ -195,10 +198,6 @@ class MattMadeMeAgentApiAdapter:
         if not config.configured:
             raise ValueError("MattMadeMe website API token is not configured.")
         self.config = config
-
-    def list_products(self) -> list[dict[str, object]]:
-        payload = self._request("GET", "/api/agent/products")
-        return _extract_results(payload, list_keys=("products", "items", "results"))
 
     def list_published_blog_posts(self) -> list[dict[str, object]]:
         payload = self._request("GET", "/api/agent/blog")

@@ -45,6 +45,13 @@
       .pill.ready { background: #dbeafe; color: var(--ready); border-color: #bfdbfe; }
       .pill.blocked { background: #fee2e2; color: var(--blocked); border-color: #fecaca; }
       .pill.complete { background: var(--accent-soft); color: #0f5f58; border-color: #a7e7dc; }
+      .tag-pill-form { gap: 4px; }
+      .tag-combobox { position: relative; }
+      .tag-pill-form input { width: 100px; min-height: 26px; border-radius: 999px; padding: 3px 8px; background: white; font-size: 13px; }
+      .tag-save-state { min-width: 52px; font-size: 12px; }
+      .tag-suggestions { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: min(220px, 70vw); max-height: 190px; overflow-y: auto; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 10px 22px rgba(32, 33, 36, .13); }
+      .tag-suggestion { width: 100%; display: block; border: 0; background: transparent; color: var(--ink); text-align: left; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+      .tag-suggestion:hover, .tag-suggestion.active { background: var(--accent-soft); color: #0f5f58; }
       .button, button { border: 1px solid #0b5f59; background: var(--accent); color: white; border-radius: 6px; padding: 8px 11px; font: inherit; cursor: pointer; }
       .button.secondary, button.secondary { background: white; color: var(--ink); border-color: var(--line); }
       .button.warn, button.warn { background: #fff7ed; color: var(--warn); border-color: #fed7aa; }
@@ -80,13 +87,15 @@
       .destination-card input { position: absolute; opacity: 0; pointer-events: none; }
       .destination-card:has(input:checked) { border-color: #0b5f59; background: var(--accent-soft); }
       .destination-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: #24312f; color: white; font-weight: 900; font-size: 18px; }
-      .reference-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
-      .reference-card { display: grid; grid-template-columns: 20px 70px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 92px; padding: 9px; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }
-      .reference-card.disabled { opacity: .58; background: #f8faf7; }
+      .reference-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+      .reference-card { position: relative; display: block; min-height: 0; padding: 4px; margin: 0; border: 2px solid var(--line); border-radius: 8px; background: white; cursor: pointer; }
+      .reference-card input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      .reference-card:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .reference-card:focus-within { outline: 2px solid #0b5f59; outline-offset: 2px; }
+      .reference-card.disabled { opacity: .58; background: #f8faf7; cursor: not-allowed; }
+      .reference-card.disabled input { cursor: not-allowed; }
       .reference-card.hidden { display: none; }
-      .reference-thumb { width: 70px; aspect-ratio: 1 / 1; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
-      .reference-copy { display: grid; gap: 2px; min-width: 0; }
-      .reference-copy strong { overflow-wrap: anywhere; }
+      .reference-thumb { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; background: var(--field); display: block; }
       .reference-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
       .reference-strip figure { margin: 0; width: 110px; display: grid; gap: 4px; }
       .reference-strip .reference-thumb { width: 110px; }
@@ -99,6 +108,10 @@
       .compact-tool summary { cursor: pointer; }
       .compact-tool summary .subtle { margin-left: 6px; }
       .planned-header { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+      .post-option-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+      .post-option-summary div { display: inline-flex; gap: 4px; min-width: 0; }
+      .post-option-summary dt { font-weight: 650; margin: 0; color: var(--muted); }
+      .post-option-summary dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
       .review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 14px; }
       .review-column { display: grid; align-content: start; gap: 12px; }
       .review-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -114,6 +127,11 @@
       .product-image-card .asset-missing { font-size: 12px; }
       .product-image-card .image-card-meta { gap: 3px; }
       .product-image-card .pill { min-height: 18px; padding: 1px 5px; font-size: 10px; border-radius: 4px; }
+      .checkbox-row { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; line-height: 1.25; }
+      .description-toggle { display: inline; border: 0; background: transparent; color: var(--accent); padding: 0; margin: 0; font-weight: 700; line-height: inherit; }
+      .description-toggle:hover { text-decoration: underline; }
+      .product-source-footer { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; color: var(--muted); font-size: 12px; }
+      .product-source-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
       .image-placeholder-card { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; background: #f8faf7; display: grid; gap: 8px; color: var(--muted); }
       .placeholder-image { width: 100%; max-width: 210px; aspect-ratio: 1 / 1; border-radius: 6px; background: repeating-linear-gradient(135deg, #eef1ed, #eef1ed 12px, #dfe5df 12px, #dfe5df 24px); border: 1px solid var(--line); }
       .image-rewrite { display: grid; margin-top: 12px; }
@@ -160,7 +178,6 @@
           ("calendar", "Calendar", "calendar"),
           ("plans", "Plans", "plans"),
           ("assets", "Assets", "assets"),
-          ("creative_assets", "Creative Assets", "creative_assets"),
           ("templates", "Templates", "templates"),
           ("metrics", "Metric History", "metrics"),
           ("insights", "Insights", "insights"),
@@ -207,9 +224,6 @@
           const selectable = !card.classList.contains("disabled");
           input.disabled = !belongs || !selectable;
           if (!belongs) input.checked = false;
-          if (belongs && selectable && !picker.querySelector("[data-product-id='" + selectedProductId + "'] input[type='checkbox']:checked")) {
-            input.checked = true;
-          }
         });
       }
       document.addEventListener("change", (event) => {

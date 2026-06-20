@@ -1,4 +1,4 @@
 interface:
   display_name: "Copywriter"
-  short_description: "Brand-voice copy for posts, emails, and articles"
-  default_prompt: "Use $copywriter to create brand-consistent copy for a destination, audience, goal, and set of details."
+  short_description: "Top-level copy lead for routing and grounded copy"
+  default_prompt: "Use $copywriter to route or create brand-consistent marketing copy; use $social-media-copywriter for social posts, hooks, and captions."

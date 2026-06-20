@@ -87,6 +87,7 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "approval_notes": "TEXT NOT NULL DEFAULT ''",
             "generated_prompt": "TEXT NOT NULL DEFAULT ''",
             "source_asset_id": "INTEGER",
+            "default_reference": "INTEGER NOT NULL DEFAULT 0",
         },
         "tasks": {
             "planned_content_item_id": "INTEGER",
@@ -142,6 +143,19 @@ def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
             "review_notes": "TEXT NOT NULL DEFAULT ''",
             "reviewed_by": "VARCHAR(120) NOT NULL DEFAULT ''",
             "reviewed_at": "DATETIME",
+        },
+        "product_sales": {
+            "product_id": "INTEGER",
+            "source_name": "VARCHAR(80) NOT NULL DEFAULT ''",
+            "external_id": "VARCHAR(220) NOT NULL DEFAULT ''",
+            "listing_id": "VARCHAR(160) NOT NULL DEFAULT ''",
+            "listing_title": "VARCHAR(260) NOT NULL DEFAULT ''",
+            "quantity": "INTEGER NOT NULL DEFAULT 0",
+            "revenue_cents": "INTEGER NOT NULL DEFAULT 0",
+            "currency_code": "VARCHAR(12) NOT NULL DEFAULT ''",
+            "sold_at": "DATETIME",
+            "raw_data_json": "TEXT NOT NULL DEFAULT '{}'",
+            "imported_at": "DATETIME",
         },
     }
 

@@ -53,11 +53,12 @@ def sync_etsy_read_only(
             shop_id = resolved_shop_id
             listings = adapter.list_active_shop_listings(shop_id)
         for listing in listings:
-            product = upsert_etsy_listing_product(session, listing)
-            products_imported += 1
             listing_id = _text(listing, "listing_id", "id")
+            listing_payload = _full_listing_payload(adapter, listing, listing_id)
+            product = upsert_etsy_listing_product(session, listing_payload)
+            products_imported += 1
             if listing_id:
-                for image in adapter.get_listing_images(listing_id):
+                for image in _listing_images(adapter, listing_id, listing_payload):
                     upsert_etsy_listing_image(session, product, listing_id, image)
                     assets_imported += 1
         _record_sync(session, "etsy_api", shop_id, f"Imported {products_imported} listing(s) and {assets_imported} image(s).")
@@ -79,6 +80,39 @@ def _resolve_shop_id_after_not_found(adapter: EtsyReadOnlyAdapter, config: EtsyC
     if not callable(resolver):
         return None
     return resolver(config.shop_name)
+
+
+def _full_listing_payload(adapter: EtsyReadOnlyAdapter, listing: dict[str, object], listing_id: str) -> dict[str, object]:
+    description = _text(listing, "description")
+    if not listing_id or len(description) != 500:
+        return listing
+    detail_reader = getattr(adapter, "get_listing", None)
+    if not callable(detail_reader):
+        return listing
+    detail = detail_reader(listing_id)
+    if not isinstance(detail, dict):
+        return listing
+    merged = dict(listing)
+    merged.update(detail)
+    return merged
+
+
+def _listing_images(adapter: EtsyReadOnlyAdapter, listing_id: str, listing: dict[str, object]) -> list[dict[str, object]]:
+    included_images = listing.get("images")
+    if isinstance(included_images, list):
+        images = [image for image in included_images if isinstance(image, dict)]
+        if images:
+            return sorted(images, key=_image_sort_key)
+    return sorted(adapter.get_listing_images(listing_id), key=_image_sort_key)
+
+
+def _image_sort_key(image: dict[str, object]) -> tuple[int, str]:
+    try:
+        rank = int(image.get("rank") or 999)
+    except (TypeError, ValueError):
+        rank = 999
+    image_id = _text(image, "listing_image_id", "image_id", "id")
+    return (rank, image_id)
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
@@ -125,7 +159,7 @@ def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) ->
             name=title,
             secondary_audiences_json="[]",
             best_channels_json='["Etsy", "Facebook", "Instagram"]',
-            use_cases_json=json.dumps(_list_text(listing, "tags")),
+            use_cases_json="[]",
             seasonality_json="[]",
             sales_momentum_note=description,
         )
@@ -147,10 +181,11 @@ def upsert_etsy_listing_product(session: Session, listing: dict[str, object]) ->
 
 
 def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_id: str, image: dict[str, object]) -> AssetRecord:
-    image_id = _text(image, "listing_image_id", "image_id", "id") or f"{listing_id}-{_text(image, 'rank')}"
+    image_id = _text(image, "listing_image_id", "image_id", "id") or _text(image, "rank")
+    external_id = _listing_image_external_id(listing_id, image_id)
     full_url = _text(image, "url_fullxfull", "url_full", "url", "src")
     preview_url = _text(image, "url_570xN", "url_170x135", "url_75x75") or full_url
-    existing = session.scalar(select(AssetRecord).where(AssetRecord.external_source == "etsy", AssetRecord.external_id == image_id))
+    existing = session.scalar(select(AssetRecord).where(AssetRecord.external_source == "etsy", AssetRecord.external_id == external_id))
     if existing is None:
         existing = AssetRecord(
             product_id=product.id,
@@ -169,7 +204,7 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
     existing.source_path = full_url or existing.source_path
     existing.preview_path = preview_url or existing.preview_path
     existing.external_source = "etsy"
-    existing.external_id = image_id
+    existing.external_id = external_id
     existing.canonical_url = full_url or preview_url
     existing.last_synced_at = utc_now()
     existing.sync_status = "imported"
@@ -180,6 +215,10 @@ def upsert_etsy_listing_image(session: Session, product: ProductRecord, listing_
         existing.review_state = "synced"
         existing.notes = existing.notes or "Synced from Etsy as a remote listing image reference."
     return existing
+
+
+def _listing_image_external_id(listing_id: str, image_id: str) -> str:
+    return f"{listing_id}:{image_id or 'unranked'}"
 
 
 def _record_sync(session: Session, source_name: str, source_path: str, notes: str) -> None:

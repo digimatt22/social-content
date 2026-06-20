@@ -1,25 +1,26 @@
 ---
-name: image-creator
-description: Create, generate, plan, or review marketing images and image prompts, including Facebook/Instagram/social post visuals, product scenes, ad creatives, newsletter images, blog images, reference-image edits, and campaign assets. Use when the user asks for image options, generated visuals, product-preserving prompts, built-in image generation, Magnific/Freepik MCP handoffs, reference-image instructions, aspect ratios, or image quality review.
+name: social-media-art-director
+description: Social media visual art director for product-preserving creative. Use when the user asks for Facebook/Instagram/Pinterest/social post images, product scene concepts, generated image options, visual directions, image prompts, Magnific/Freepik handoffs, reference-image preservation, aspect ratios, crop guidance, creative review, or MattMadeMe product social visuals. Specializes in reviewable social creative, product-in-environment scenes, giftable moments, collector details, and source-image-safe prompts.
 ---
 
-# Image Creator
+# Social Media Art Director
 
 ## Core Workflow
 
-1. Normalize the request into: `destination`, `format`, `audience`, `goal`, `subject`, `brand_style`, `details`, `reference_images`, `aspect_ratio`, `provider_path`, `must_include`, and `avoid`.
+1. Normalize the request into: `platform`, `format`, `audience`, `goal`, `subject`, `social_angle`, `brand_style`, `details`, `reference_images`, `aspect_ratio`, `provider_path`, `must_include`, and `avoid`.
 2. Select the destination playbook from `references/destination-image-playbooks.md`.
 3. Choose the provider path:
    - Use **Magnific/Freepik MCP** as the primary path for MattMadeMe product images, reference-image product preservation, Freepik/Magnific requests, or external handoff packages.
    - Use **built-in image generation/image editing** only as a fallback when Magnific MCP is unavailable, blocked, or explicitly declined by the user. For product work, fallback must still pass actual reference images through an image-editing path, not just describe them in text.
-4. Build a prompt from `references/prompt-format.md`.
-5. Run the quality checklist in `references/image-quality-rubric.md`.
-6. If generating, keep generated output reviewable. Do not claim product accuracy without human or visual verification.
+4. Choose a social creative role before prompting: product-in-use, giftable moment, collector detail, maker/process, seasonal/occasion, or community prompt.
+5. Build a prompt from `references/prompt-format.md`.
+6. Run the quality checklist in `references/image-quality-rubric.md`.
+7. If generating, keep generated output reviewable. Do not claim product accuracy without human or visual verification.
 
 Normalize a loose image request:
 
 ```bash
-python .agents/skills/image-creator/scripts/normalize_image_request.py \
+python .agents/skills/social-media-art-director/scripts/normalize_image_request.py \
   --destination instagram \
   --format "square post" \
   --subject "miniature desk duck in a cozy workspace" \
@@ -30,7 +31,7 @@ python .agents/skills/image-creator/scripts/normalize_image_request.py \
 Package a handoff manifest:
 
 ```bash
-python .agents/skills/image-creator/scripts/build_generation_manifest.py \
+python .agents/skills/social-media-art-director/scripts/build_generation_manifest.py \
   --product-slug mailman-duck \
   --destination instagram \
   --target-format square-product-card \

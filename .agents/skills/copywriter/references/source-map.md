@@ -8,7 +8,8 @@ Use these sources before drafting or reviewing copy:
 - `docs/business/marketing-channels.md` for channel fit.
 - `docs/business/products.md` and `docs/business/product-catalog.json` for product facts.
 - `data/exports/content-briefs/` for structured planned-item briefs.
-- `marketing_os/services/copywriter.py` for the current service boundary.
+- `marketing_os/services/skill_adapters.py` for copy skill contracts and social copy workflow handoffs.
+- `marketing_os/jobs/register_generated_copy.py` for registering agent-written copy into review.
 - `marketing_os/services/content_briefs.py` for planned-intent context assembly.
 - `docs/reviews/phase5-current-state-2026-06-17.md` for the current implementation and proof state.
 

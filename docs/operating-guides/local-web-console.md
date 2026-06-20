@@ -83,10 +83,10 @@ The wrapper writes structured briefs to `data/exports/content-briefs`, appends j
 
 Use Assets to review local product photos and generated graphics.
 
-- Put local product photos under `assets/products`.
-- Use `Scan local assets` to import image files.
-- Use `Upload source photo` to copy a product photo into the local inventory without managing folders by hand.
-- If a product photo is somewhere else on this computer, use `Register Source Photo` and paste the local file path.
+- Managed product image files live under `assets/products/` by default. Generated and planning image outputs live under `outputs/`.
+- Use `Upload source photo` to copy a product photo into the managed image library.
+- Use `Scan local assets` to rescan managed image files.
+- Remote listing images selected in Planning are downloaded into the managed image library before generation.
 - Each asset shows which tasks currently use it.
 - Missing files and unreviewed assets appear in the asset list and Data Health.
 - Readiness states should describe what the operator needs to know before using an asset.
@@ -94,13 +94,13 @@ Use Assets to review local product photos and generated graphics.
 
 Generated graphics should stay in `needs review` until a human approves them.
 
-Set `MARKETING_OS_ASSETS_ROOT` before startup if the local product photo inventory should live somewhere other than `assets/products`.
+Override `MARKETING_OS_ASSETS_ROOT`, `MARKETING_OS_GENERATED_OUTPUT_ROOT`, or `MARKETING_OS_PLANNING_UPLOAD_ROOT` only if the managed image folders should live somewhere other than the repo-local ignored folders.
 
-Phase 5 added the external-drive asset-library path. The original implementation plan is archived at `docs/archive/2026-06-17-phase5-implementation/architecture/local-asset-library-agent-access-plan.md`; use the Local Asset Library workflow below as the active operator guidance.
+Phase 5 added the local asset-library index. The original implementation plan is archived at `docs/archive/2026-06-17-phase5-implementation/architecture/local-asset-library-agent-access-plan.md`; use the Local Asset Library workflow below as the active operator guidance.
 
 ## Local Asset Library
 
-Set `MARKETING_OS_ASSET_ROOT` to the stable external-drive or local asset-library root, such as `/Volumes/MarketingAssets`.
+Set `MARKETING_OS_ASSET_ROOT` to the local asset-library root, usually `assets`.
 
 Use Settings -> `Scan asset library` to index files under that root. The scanner:
 
@@ -112,31 +112,21 @@ Use Settings -> `Scan asset library` to index files under that root. The scanner
 
 If the configured root is missing, Data Health shows `Local Asset Library` as needing attention.
 
-## Creative Assets
+## Assets And Planning Images
 
-Use Creative Assets after a real product source photo exists and has been approved.
+Use Assets to manage local image records. Use Planning to choose which product images should support a specific post or image-generation job.
 
 The current workflow is:
 
-1. Add a product photo under `assets/products`.
-2. Use Assets to scan local files.
+1. Upload a product source photo in Assets.
+2. Use Assets to scan managed local files when needed.
 3. Approve the source photo after checking product accuracy.
-4. Open Creative Assets.
-5. Review the planned outputs for:
-   - Square Product Card
-   - Reel Cover
-   - Carousel Slide
-6. Use `Prepare generation run` to create `needs review` asset records and a JSON manifest under `outputs/graphics/manifests`.
-7. Use the manifest in a higher-quality image-generation pass, or manually place image files at the planned output paths.
-8. Return to Assets and approve only outputs that exist on disk and preserve product shape, color, printed details, and proportions.
+4. Open Planning when creating a post.
+5. Select at least one source image for the planned post.
+6. If the selected image is a remote Etsy or website reference, Planning downloads it into the managed image library before queueing generation.
+7. Keep generated options attached to the planned post until Matt reviews the final choice.
 
-Generated assets should not be used in normal tasks until approved. The first Phase 4 generated images did not meet the product-quality bar; use the Freepik/Magnific plan before treating this workflow as production-ready.
-
-After approval, open the relevant task, use `Change asset` in the `Prepare` section, and assign the approved file-backed asset.
-
-Use `Import Magnific / MCP Output` after generating or upscaling an image outside the app. The source asset must already be approved. You can either upload the downloaded generated file or enter an existing local output path; uploaded files are saved under `MARKETING_OS_GENERATED_OUTPUT_ROOT` or `outputs/magnific` by default. The imported generated candidate starts in `needs review`. Review and approve it from Assets before assigning it to a task.
-
-When reviewing generated creative, compare the source and generated previews side by side. Approve only if product shape, colors, printed details, and proportions match the source, no new markings/logos/text/packaging were invented, the composition fits the target format, and the local output file is usable.
+Generated assets should not be used in normal tasks until approved. When reviewing generated creative, compare the source and generated previews side by side. Approve only if product shape, colors, printed details, and proportions match the source, no new markings/logos/text/packaging were invented, the composition fits the target format, and the local output file is usable.
 
 ## Metrics Due
 
@@ -151,7 +141,7 @@ Metrics Due separates `Post URL needed` from `Metrics needed`. Add the published
 Use Data Health to see upkeep work that can make the planner less trustworthy:
 
 - stale imported products
-- Etsy and website sync status
+- Etsy sync status
 - local asset-library mount/index status
 - missing asset files
 - unreviewed source or generated assets
@@ -173,9 +163,7 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/metrics-due`
 - `GET /api/assets`
 - `GET /api/data-health`
-- `GET /api/creative-assets`
 - `GET /api/planned-content`
-- `POST /api/creative-assets/manual-import`
 - `POST /api/tasks/<task_id>/finish`
 - `POST /api/tasks/<task_id>/metrics`
 - `POST /api/tasks/<task_id>/asset`
@@ -205,7 +193,7 @@ Settings includes read-only sync actions for Etsy and MattMadeMe.com.
 
 Etsy API sync imports active listings and listing images as external records. It requires local `.env` values for `ETSY_KEYSTRING`, `ETSY_SHARED_SECRET`, and `ETSY_SHOP_ID`.
 
-MattMadeMe Website Sync imports website products, product images, and published blog metadata. It requires `MARKETING_AGENT_API_KEY`.
+MattMadeMe website product import is intentionally disabled. Etsy is the product source of truth. The website adapter is reserved for reviewed blog draft publishing and published blog metadata.
 
 Both syncs are safe to run without credentials. Missing credentials are recorded in Data Health rather than blocking normal daily work.
 

@@ -10,50 +10,11 @@
       <input type="hidden" name="return_to" value="{{ url_for('products_admin') }}">
       <button type="submit">Sync Etsy</button>
     </form>
-    <form method="post" action="{{ url_for('sync_website') }}">
-      <input type="hidden" name="return_to" value="{{ url_for('products_admin') }}">
-      <button class="secondary" type="submit">Sync website</button>
-    </form>
   </div>
 </div>
 
-<section class="panel compact-tool" style="margin-bottom: 14px;">
-  <details>
-    <summary><strong>Match duplicate products</strong> <span class="subtle">Merge imported duplicates into the product to keep.</span></summary>
-    <form method="post" action="{{ url_for('match_products') }}" style="margin-top: 12px;">
-      <div class="grid">
-        <label>Duplicate to merge
-          <select name="source_product_id" required>
-            <option value="">Choose duplicate</option>
-            {% for product in all_products %}
-              <option value="{{ product.id }}">{{ product.name }}{% if product.external_source %} · {{ product.external_source }}{% endif %}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Canonical product to keep
-          <select name="target_product_id" required>
-            <option value="">Choose canonical</option>
-            {% for product in all_products %}
-              <option value="{{ product.id }}">{{ product.name }}{% if product.external_source %} · {{ product.external_source }}{% endif %}</option>
-            {% endfor %}
-          </select>
-        </label>
-      </div>
-      <button type="submit" {{ 'disabled' if all_products|length < 2 else '' }}>Match products</button>
-    </form>
-  </details>
-</section>
-
 <section class="panel" style="margin-bottom: 14px;">
   <form method="get" action="{{ url_for('products_admin') }}" class="grid">
-    <label>Product tag
-      <select name="tag">
-        <option value="">All tags</option>
-        {% for tag in all_tags %}
-          <option value="{{ tag }}" {{ 'selected' if selected_tag == tag|lower else '' }}>{{ tag }}</option>
-        {% endfor %}
-      </select>
-    </label>
     <label>Sort
       <select name="sort">
         <option value="name" {{ 'selected' if selected_sort == 'name' else '' }}>Name</option>
@@ -77,9 +38,19 @@
       <div class="planned-header">
         <div>
           <h3>{{ product.name }}</h3>
-          <div class="meta">
-            <span class="pill">{{ product.sync_status }}</span>
-            {% if product.external_source %}<span class="pill">{{ product.external_source }}</span>{% endif %}
+          <div class="meta" aria-label="Product badges and tags">
+            <span class="pill" title="Sync status badge">{{ product.sync_status }}</span>
+            {% if product.external_source %}<span class="pill" title="Source badge">{{ product.external_source }}</span>{% endif %}
+            {% for tag in product_tags %}
+              <span class="pill" title="Product tag" data-product-tag>{{ tag }}</span>
+            {% endfor %}
+            <form method="post" action="{{ url_for('add_product_tag', product_id=product.id) }}" class="inline tag-pill-form" data-tag-combobox data-api-url="{{ url_for('api_add_product_tag', product_id=product.id) }}">
+              <div class="tag-combobox">
+                <input name="tag" placeholder="+ tag" aria-label="Add product tag" autocomplete="off" role="combobox" aria-expanded="false" data-tag-input>
+                <div class="tag-suggestions" role="listbox" hidden data-tag-suggestions></div>
+              </div>
+              <span class="tag-save-state subtle" aria-live="polite" data-tag-status></span>
+            </form>
           </div>
         </div>
         <div class="button-group">
@@ -89,80 +60,233 @@
         </div>
       </div>
 
-      <div class="grid" style="margin-top: 12px;">
-        <div>
-          <h4 style="margin: 0 0 8px;">Product tags</h4>
-          {% if product_tags %}
-            <div class="image-card-meta" style="margin-bottom: 10px;">
-              {% for tag in product_tags %}
-                <span class="pill">{{ tag }}</span>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="subtle">No product tags yet.</p>
-          {% endif %}
-          <details class="compact-tool">
-            <summary><strong>Edit tags</strong></summary>
-            <form method="post" action="{{ url_for('update_product_tags', product_id=product.id) }}" style="margin-top: 10px;">
-              <label>Tags
-                <textarea name="tags">{{ product_tags|join(', ') }}</textarea>
-              </label>
-              <button class="secondary" type="submit">Save tags</button>
-            </form>
-          </details>
-          {% if product.sync_error %}<p class="subtle">{{ product.sync_error }}</p>{% endif %}
-        </div>
-        <div>
-          <h4 style="margin: 0 0 8px;">Source identities</h4>
-          {% if references %}
-            {% for reference in references %}
-              <p class="subtle">
-                <strong>{{ reference.source_name }}</strong>
-                {% if reference.external_id %} · {{ reference.external_id }}{% endif %}
-                {% if reference.canonical_url %} · <a href="{{ reference.canonical_url }}" target="_blank" rel="noreferrer">source</a>{% endif %}
-              </p>
-            {% endfor %}
-          {% elif product.external_source %}
-            <p class="subtle"><strong>{{ product.external_source }}</strong> · {{ product.external_id }}</p>
-          {% else %}
-            <p class="subtle">No external source identity yet.</p>
-          {% endif %}
-        </div>
-      </div>
-
-      {% if product.sales_momentum_note %}
-        <details class="compact-tool" style="margin-top: 12px;">
-          <summary><strong>Description</strong></summary>
-          <div class="copybox" style="margin-top: 8px;">{{ product.sales_momentum_note }}</div>
-        </details>
-      {% endif %}
-
       <h4 style="margin: 14px 0 8px;">Images</h4>
       {% if assets %}
-        <p class="subtle">Showing {{ assets|length if assets|length < 8 else 8 }} of {{ assets|length }} linked image record(s).</p>
-        <div class="product-image-grid">
-          {% for asset in assets[:8] %}
-            <div class="product-image-card" title="{{ asset.name }}">
-              {% if asset.file_exists %}
-                <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
-              {% elif asset.preview_path.startswith('http') or asset.source_path.startswith('http') %}
-                <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}">
-              {% else %}
-                <div class="asset-missing">No local file</div>
-              {% endif %}
-              <div class="image-card-meta">
-                <span class="pill">{{ asset.external_source.replace('_', ' ').title() if asset.external_source else asset.asset_type }}</span>
-                <span class="pill {{ 'complete' if asset.file_exists else 'blocked' }}">{{ 'local' if asset.file_exists else 'remote' }}</span>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
+        <form method="post" action="{{ url_for('product_default_reference_assets', product_id=product.id) }}">
+          <p class="subtle">Select the default reference images automation should use for this product.</p>
+          <div class="product-image-grid">
+            {% for asset in assets %}
+              <label class="product-image-card" title="{{ asset.name }}">
+                {% if asset.file_exists %}
+                  <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+                {% elif asset.preview_path.startswith('http') or asset.source_path.startswith('http') %}
+                  <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}">
+                {% else %}
+                  <div class="asset-missing">No local file</div>
+                {% endif %}
+                <div class="image-card-meta">
+                  <span class="pill">{{ asset.external_source.replace('_', ' ').title() if asset.external_source else asset.asset_type }}</span>
+                  <span class="pill {{ 'complete' if asset.file_exists else 'blocked' }}">{{ 'local' if asset.file_exists else 'remote' }}</span>
+                  {% if asset.default_reference %}<span class="pill ready">default reference</span>{% endif %}
+                </div>
+                <span class="checkbox-row">
+                  <input type="checkbox" name="asset_ids" value="{{ asset.id }}" {{ 'checked' if asset.default_reference else '' }}>
+                  Use for automation
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="button-group" style="margin-top: 10px;">
+            <button class="secondary" type="submit">Save default references</button>
+          </div>
+        </form>
       {% else %}
         <div class="empty-state">No images are linked to this product yet.</div>
       {% endif %}
+
+      {% if product.sales_momentum_note %}
+        {% set description = product.sales_momentum_note %}
+        {% set preview = description[:500] %}
+        <div style="margin-top: 12px;">
+          <h4 style="margin: 0 0 8px;">Description</h4>
+          {% if description|length > 500 %}
+            <div class="copybox description-preview"><span>{{ preview }}</span><button type="button" class="description-toggle" data-description-toggle><span data-description-ellipsis>...</span>See more</button><span hidden data-description-rest>{{ description[500:] }}</span></div>
+          {% else %}
+            <div class="copybox">{{ description }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="product-source-footer">
+        {% if references %}
+          {% for reference in references %}
+            <span>
+              {{ reference.source_name }}
+              {% if reference.external_id %} · {{ reference.external_id }}{% endif %}
+              {% if reference.canonical_url %} · <a href="{{ reference.canonical_url }}" target="_blank" rel="noreferrer">source</a>{% endif %}
+            </span>
+          {% endfor %}
+        {% elif product.external_source %}
+          <span>{{ product.external_source }} · {{ product.external_id }}</span>
+        {% else %}
+          <span>No external source identity yet.</span>
+        {% endif %}
+        {% if product.sync_error %}<span>{{ product.sync_error }}</span>{% endif %}
+      </div>
     </article>
   {% else %}
-    <div class="panel">{{ 'No products match this filter.' if all_products else 'No products yet. Run Etsy sync or website sync to import product records.' }}</div>
+    <div class="panel">{{ 'No products match this filter.' if all_products else 'No products yet. Run Etsy sync to import product records.' }}</div>
   {% endfor %}
 </section>
+<script>
+  (() => {
+    const tagSearchUrl = "{{ url_for('api_product_tags') }}";
+    const cache = new Map();
+
+    function tagValues(form) {
+      return Array.from(form.closest(".meta").querySelectorAll("[data-product-tag]")).map((pill) => pill.textContent.trim().toLowerCase());
+    }
+
+    function setStatus(form, message) {
+      const status = form.querySelector("[data-tag-status]");
+      if (!status) return;
+      status.textContent = message;
+      if (message) window.setTimeout(() => { status.textContent = ""; }, 1400);
+    }
+
+    function closeSuggestions(form) {
+      const input = form.querySelector("[data-tag-input]");
+      const suggestions = form.querySelector("[data-tag-suggestions]");
+      suggestions.hidden = true;
+      suggestions.innerHTML = "";
+      input.setAttribute("aria-expanded", "false");
+    }
+
+    async function searchTags(query) {
+      const key = query.toLowerCase();
+      if (cache.has(key)) return cache.get(key);
+      const response = await fetch(`${tagSearchUrl}?q=${encodeURIComponent(query)}`, { headers: { "Accept": "application/json" } });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      const tags = payload.tags || [];
+      cache.set(key, tags);
+      return tags;
+    }
+
+    async function renderSuggestions(form) {
+      const input = form.querySelector("[data-tag-input]");
+      const suggestions = form.querySelector("[data-tag-suggestions]");
+      const query = input.value.trim();
+      const currentTags = new Set(tagValues(form));
+      const tags = (await searchTags(query)).filter((tag) => !currentTags.has(tag.toLowerCase())).slice(0, 8);
+      suggestions.innerHTML = "";
+      if (!tags.length) {
+        closeSuggestions(form);
+        return;
+      }
+      tags.forEach((tag, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "tag-suggestion";
+        option.role = "option";
+        option.dataset.tagValue = tag;
+        option.dataset.suggestionIndex = String(index);
+        option.textContent = tag;
+        suggestions.appendChild(option);
+      });
+      suggestions.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+    }
+
+    function activeSuggestion(form) {
+      return form.querySelector(".tag-suggestion.active");
+    }
+
+    function moveActive(form, direction) {
+      const options = Array.from(form.querySelectorAll(".tag-suggestion"));
+      if (!options.length) return;
+      const current = options.findIndex((option) => option.classList.contains("active"));
+      if (current === -1) {
+        options[direction > 0 ? 0 : options.length - 1].classList.add("active");
+        return;
+      }
+      options[current]?.classList.remove("active");
+      const next = (current + direction + options.length) % options.length;
+      options[next].classList.add("active");
+    }
+
+    function exactSuggestion(form, value) {
+      const normalized = value.trim().toLowerCase();
+      return Array.from(form.querySelectorAll(".tag-suggestion")).find((option) => option.dataset.tagValue.toLowerCase() === normalized);
+    }
+
+    async function addTag(form, value) {
+      const tag = value.trim();
+      const input = form.querySelector("[data-tag-input]");
+      if (!tag) return;
+      if (tagValues(form).includes(tag.toLowerCase())) {
+        input.value = "";
+        closeSuggestions(form);
+        setStatus(form, "Already added");
+        return;
+      }
+      setStatus(form, "Saving");
+      const response = await fetch(form.dataset.apiUrl, {
+        method: "POST",
+        headers: { "Accept": "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ tag }),
+      });
+      if (!response.ok) {
+        setStatus(form, "Could not save");
+        return;
+      }
+      const payload = await response.json();
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.title = "Product tag";
+      pill.dataset.productTag = "";
+      pill.textContent = payload.tag;
+      form.before(pill);
+      input.value = "";
+      closeSuggestions(form);
+      cache.clear();
+      setStatus(form, payload.created ? "Added" : "Already added");
+    }
+
+    document.querySelectorAll("[data-tag-combobox]").forEach((form) => {
+      const input = form.querySelector("[data-tag-input]");
+      const suggestions = form.querySelector("[data-tag-suggestions]");
+
+      input.addEventListener("input", () => renderSuggestions(form));
+      input.addEventListener("focus", () => renderSuggestions(form));
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveActive(form, 1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveActive(form, -1);
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          addTag(form, activeSuggestion(form)?.dataset.tagValue || exactSuggestion(form, input.value)?.dataset.tagValue || input.value);
+        } else if (event.key === "Escape") {
+          closeSuggestions(form);
+        }
+      });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        addTag(form, activeSuggestion(form)?.dataset.tagValue || exactSuggestion(form, input.value)?.dataset.tagValue || input.value);
+      });
+      suggestions.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-tag-value]");
+        if (option) addTag(form, option.dataset.tagValue);
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      const toggle = event.target.closest("[data-description-toggle]");
+      if (toggle) {
+        const rest = toggle.nextElementSibling;
+        if (rest) {
+          rest.hidden = false;
+          toggle.remove();
+        }
+        return;
+      }
+      document.querySelectorAll("[data-tag-combobox]").forEach((form) => {
+        if (!form.contains(event.target)) closeSuggestions(form);
+      });
+    });
+  })();
+</script>
 {% endblock %}

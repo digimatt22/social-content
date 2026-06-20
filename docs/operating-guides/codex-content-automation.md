@@ -7,15 +7,37 @@ Use this guide to create the scheduled Codex app automation that processes Marke
 The scheduled run should:
 
 - pull pending Planning items due in the next 14 days
-- generate or refresh copy through the copywriter adapter
-- export image-creator requests for each item still waiting on images
-- use the `image-creator` skill and Magnific MCP as the primary image path to create 2-3 real image files
+- export `copy-workflow.json` for each social item so Codex can see the required social skills and review sequence
+- write or refresh copy only through the agent-run social media strategy -> writing -> challenge flow
+- register agent-written copy as a Planning review candidate
+- export social-media-art-director requests for each item still waiting on images
+- use the `social-media-art-director` skill and Magnific MCP as the primary image path to create 2-3 real image files
 - register generated image files as Planning image options
 - leave all copy and images in human review
 
 It must not approve copy, approve images, create posting tasks, or publish anywhere.
 
 ## Repo Commands
+
+Import a weekly Etsy sales CSV export before the planner runs:
+
+```bash
+./scripts/import-etsy-sales-csv.sh /path/to/etsy-sales.csv
+```
+
+The import is idempotent. Rows are deduped by transaction/order/receipt ID when present, or by a generated row key when the export does not include an ID. Overlapping weekly exports are safe to import.
+
+Create the next weekly social plan:
+
+```bash
+./scripts/run-weekly-social-planner.sh
+```
+
+The weekly planner creates normal Planning items for review and writes a strategy export under:
+
+```text
+data/exports/weekly-social-plans/<week-start>/weekly-social-strategy.json
+```
 
 Prepare pending content and export image requests:
 
@@ -35,11 +57,39 @@ Image requests are written under:
 data/exports/content-automation/planned-item-<id>/image-requests.json
 ```
 
+Copy workflow requests are written under:
+
+```text
+data/exports/content-automation/planned-item-<id>/copy-workflow.json
+```
+
 After Codex generates image files, register them with a manifest:
 
 ```bash
 python -m marketing_os.jobs.register_generated_images \
   --manifest data/exports/content-automation/planned-item-<id>/register-images.json
+```
+
+After Codex writes and challenges social copy, register it with a manifest:
+
+```bash
+python -m marketing_os.jobs.register_generated_copy \
+  --manifest data/exports/content-automation/planned-item-<id>/register-copy.json
+```
+
+The copy registration manifest shape is:
+
+```json
+{
+  "planned_item_id": 1,
+  "provider": "codex_agent",
+  "copy_text": "Hook line\n\nBody copy\n\nCTA line",
+  "skill_request": {},
+  "skill_check": {},
+  "social_strategy": {},
+  "social_challenge": {},
+  "notes": "Agent-written copy; review before posting."
+}
 ```
 
 The registration manifest shape is:
@@ -51,7 +101,7 @@ The registration manifest shape is:
   "images": [
     {
       "option_number": 1,
-      "image_path": "outputs/graphics/planning/planned-item-1/option-1.png",
+      "image_path": "outputs/graphics/planning/uploads/planned-item-1/option-1.png",
       "title": "Product-In-Use Scene",
       "best_for": "A clear product-forward social post.",
       "skill_request": {},
@@ -69,7 +119,7 @@ The registration manifest shape is:
 
 ## Codex App Automation
 
-Create a standalone Codex app automation for:
+Create a standalone weekly Codex app automation for:
 
 ```text
 /Users/matt/Documents/marketing-os
@@ -78,23 +128,28 @@ Create a standalone Codex app automation for:
 Recommended schedule:
 
 ```cron
-0 8-20 * * *
+0 20 * * 0
 ```
 
-Run it in the local project checkout, not a worktree. Use workspace-write permissions so Codex can update SQLite runtime data, logs, exports, and `outputs/graphics/`.
+This is Sunday at 8:00 PM local machine time. If the runner uses UTC, convert this schedule before saving it.
+
+Run it in the local project checkout, not a worktree. Use workspace-write permissions so Codex can update SQLite runtime data, logs, exports, and the repo-local ignored asset/output folders.
 
 Use this automation prompt:
 
 ```text
-Run scheduled Marketing OS content production for /Users/matt/Documents/marketing-os.
+Run the weekly Marketing OS social planner and content production for /Users/matt/Documents/marketing-os.
 
 Use the repo skills:
 - $copywriter
-- $image-creator
+- $social-media-strategist
+- $social-media-copywriter
+- $social-media-copy-chief
+- $social-media-art-director
 
 Rules:
 - Do not edit source code, docs, tests, or configuration.
-- Only write runtime outputs under data/, outputs/graphics/, and the local SQLite database.
+- Only write runtime outputs under data/, `assets/products/`, `outputs/`, and the local SQLite database.
 - Never approve generated copy or images.
 - Never create posting tasks.
 - Never post to external platforms.
@@ -102,26 +157,60 @@ Rules:
 
 Each run:
 1. Read AGENTS.md and SKILLS.md.
-2. Run:
+2. Run the weekly planner:
+   ./scripts/run-weekly-social-planner.sh
+3. Inspect data/exports/weekly-social-plans/**/weekly-social-strategy.json.
+4. Run:
    ./scripts/run-codex-content-automation.sh
-3. Inspect data/exports/content-automation/**/image-requests.json.
-4. For each pending image option, use $image-creator and Magnific MCP with Google Nano Banana 2 to generate a real PNG file under:
-   outputs/graphics/planning/planned-item-<id>/option-<n>.png
+5. Inspect data/exports/content-automation/**/copy-workflow.json and data/exports/content-automation/**/image-requests.json.
+6. For each copy workflow, follow the required social flow:
+   - Use $social-media-strategist to confirm platform, audience, content pillar, social angle, CTA type, and variant plan.
+   - Use $social-media-copywriter to draft from that strategy, not directly from Etsy titles or product descriptions.
+   - Use $social-media-copy-chief to challenge the draft. If it fails, revise before reporting it as ready for human review.
+   - Build register-copy.json beside copy-workflow.json with the final challenged copy, strategy, challenge result, skill_request, and skill_check.
+   - Register generated copy:
+     python -m marketing_os.jobs.register_generated_copy --manifest data/exports/content-automation/planned-item-<id>/register-copy.json
+   - Do not approve, publish, or mark copy final.
+7. For each pending image option, use $social-media-art-director and Magnific MCP with Google Nano Banana 2 to generate a real PNG file under:
+   outputs/graphics/planning/uploads/planned-item-<id>/option-<n>.png
    Pass every listed reference image to Magnific. Assign @img1 as the primary visible product and @img2+ as identity locks. Use built-in image editing only if Magnific MCP is unavailable, and still pass the reference images.
-5. Download each completed image to the path above. Build register-images.json beside image-requests.json using the registration_manifest_example shape from the request file, with image_path values updated to the downloaded files.
-6. Register generated files:
+8. Download each completed image to the path above. Build register-images.json beside image-requests.json using the registration_manifest_example shape from the request file, with image_path values updated to the downloaded files.
+9. Register generated files:
    python -m marketing_os.jobs.register_generated_images --manifest data/exports/content-automation/planned-item-<id>/register-images.json
-7. Verify:
+10. Verify:
    python -m marketing_os.jobs.content_automation --dry-run --limit 10 --days-ahead 14
-8. Report:
+11. Report:
+   - weekly strategy file inspected
    - planned item IDs processed
-   - copy candidates created or refreshed
+   - copy workflow files inspected, copy candidates registered, and challenge statuses
    - image files generated and registered
    - failures that need user attention
    - whether queued items remain
 
 If no pending requests exist, report that nothing needed generation.
 ```
+
+## Etsy Sales CSV
+
+Sales-aware weekly planning uses imported CSV rows only. The regular Etsy API sync remains limited to listings and listing images. The planner does not call Etsy's private sales/transactions API.
+
+Recommended weekly order:
+
+1. Export recent Etsy sales/orders as CSV.
+2. Import the file:
+
+```bash
+./scripts/import-etsy-sales-csv.sh /path/to/etsy-sales.csv
+```
+
+3. Let the Sunday 8 PM automation run, or run it manually:
+
+```bash
+./scripts/run-weekly-social-planner.sh
+./scripts/run-codex-content-automation.sh
+```
+
+The planner targets a mix of popular products from recent CSV quantities and slow products with low or no imported sales.
 
 ## Review Workflow
 

@@ -3,20 +3,19 @@
 <div class="topline">
   <div>
     <h2>Assets</h2>
-    <div class="subtle">Product photos and generated graphics with readiness and file checks.</div>
+    <div class="subtle">Manage source photos, generated image candidates, review status, and file checks in one place.</div>
   </div>
   <div class="button-group">
     <form method="post" action="{{ url_for('scan_assets') }}">
       <button type="submit">Scan local assets</button>
     </form>
-    <a class="button secondary" href="{{ url_for('creative_assets') }}">Creative Assets</a>
   </div>
 </div>
 
 <section class="panel" style="margin-bottom: 14px;">
-  <h3>Register Source Photo</h3>
-  <p class="subtle">Upload a source photo into the local product inventory, or register an existing file path on this computer.</p>
-  <form method="post" action="{{ url_for('upload_source_asset') }}" enctype="multipart/form-data" style="margin-bottom: 16px;">
+  <h3>Upload Source Photo</h3>
+  <p class="subtle">Uploaded files are copied into the local managed image library before they become asset records.</p>
+  <form method="post" action="{{ url_for('upload_source_asset') }}" enctype="multipart/form-data">
     <div class="grid">
       <label>Upload photo
         <input type="file" name="photo" accept="image/*">
@@ -38,34 +37,12 @@
     </label>
     <button type="submit">Upload source photo</button>
   </form>
-  <form method="post" action="{{ url_for('register_source_asset') }}">
-    <div class="grid">
-      <label>Photo path
-        <input name="file_path" placeholder="/Users/matt/Pictures/bingo-duck.jpg">
-      </label>
-      <label>Product
-        <select name="product_id">
-          <option value="">No product link yet</option>
-          {% for product in products %}
-            <option value="{{ product.id }}">{{ product.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Asset name
-        <input name="name" placeholder="Optional">
-      </label>
-    </div>
-    <label>Notes
-      <textarea name="notes" placeholder="Optional review or source notes"></textarea>
-    </label>
-    <button type="submit">Register source photo</button>
-  </form>
 </section>
 
 <section class="asset-list">
   {% for model in assets %}
     {% set asset = model.asset %}
-    <article class="panel">
+    <article class="panel" id="asset-{{ asset.id }}">
       {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
       {% if asset.file_exists %}
         <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
@@ -119,7 +96,7 @@
       {% endif %}
     </article>
   {% else %}
-    <div class="panel">No assets yet. Add files under assets/products and scan local assets.</div>
+    <div class="panel">No assets yet. Upload a source photo or sync Etsy product images from Products.</div>
   {% endfor %}
 </section>
 {% endblock %}

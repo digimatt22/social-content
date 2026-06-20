@@ -18,6 +18,14 @@
 } %}
 
 {% set goal_labels = {
+  "Cruise community engagement": "Cruise duck community engagement",
+  "Duck personality spotlight": "Duck personality spotlight",
+  "Flock building": "Flock building and collectors",
+  "Etsy shop visits": "Sending people to Etsy",
+  "Gift consideration": "Helping someone choose a gift",
+  "Follower growth": "Gaining followers with personality",
+  "Maker process trust": "Showing the maker process",
+  "Seasonal or occasion push": "Supporting a seasonal moment",
   "Sales growth": "Increasing sales",
   "Repeat customers": "Bringing customers back",
   "Followers": "Gaining followers on social",
@@ -30,13 +38,13 @@
 
 <section class="panel planner-shell">
   <div class="wizard-progress" aria-label="Planner progress">
-    <span class="active" data-progress-step="1">1</span>
-    <span data-progress-step="2">2</span>
-    <span data-progress-step="3">3</span>
+    <span class="{{ 'active' if active_planning_step == '1' else '' }}" data-progress-step="1">1</span>
+    <span class="{{ 'active' if active_planning_step == '2' else '' }}" data-progress-step="2">2</span>
+    <span class="{{ 'active' if active_planning_step == '3' else '' }}" data-progress-step="3">3</span>
   </div>
 
   <form method="post" action="{{ url_for('create_planning_item') }}" data-planner-wizard>
-    <div class="wizard-step active" data-step="1">
+    <div class="wizard-step {{ 'active' if active_planning_step == '1' else '' }}" data-step="1">
       <div class="step-kicker">Step 1</div>
       <h3>Where should this post go?</h3>
       <p class="subtle">Pick the date, destination, and main job for this post.</p>
@@ -75,7 +83,7 @@
       </div>
     </div>
 
-    <div class="wizard-step" data-step="2">
+    <div class="wizard-step {{ 'active' if active_planning_step == '2' else '' }}" data-step="2">
       <div class="step-kicker">Step 2</div>
       <h3>What should it be about?</h3>
       <p class="subtle">Choose the product and audience. Product stays tied to the catalog; the rest can be custom.</p>
@@ -89,21 +97,19 @@
         </select>
       </label>
 
-      <div class="field-label">Reference images sent to Magnific</div>
-      <p class="subtle">Select the approved product photos that should be uploaded as identity references. The first selected image is used as @img1; the rest are identity locks.</p>
+      <div class="field-label">Reference images for image creation</div>
+      <p class="subtle">Select at least one product image. Remote listing images are downloaded into local assets when this post is queued.</p>
       <div class="reference-picker" data-reference-picker>
         {% for asset in product_reference_assets %}
-          <label class="reference-card {{ '' if asset.selectable else 'disabled' }}" data-product-id="{{ asset.product_id }}">
-            <input type="checkbox" name="selected_source_asset_ids" value="{{ asset.id }}" {{ 'checked' if asset.selectable else '' }} {{ '' if asset.selectable else 'disabled' }}>
+          <label class="reference-card {{ '' if asset.selectable else 'disabled' }}" data-product-id="{{ asset.product_id }}" title="{{ asset.name }}">
+            <input type="checkbox" name="selected_source_asset_ids" value="{{ asset.id }}" aria-label="{{ asset.name }}" {{ '' if asset.selectable else 'disabled' }}>
             {% if asset.file_exists %}
               <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+            {% elif asset.preview_url %}
+              <img class="reference-thumb" src="{{ asset.preview_url }}" alt="{{ asset.name }}">
             {% else %}
-              <span class="asset-missing">No local file</span>
+              <span class="asset-missing">No preview</span>
             {% endif %}
-            <span class="reference-copy">
-              <strong>{{ asset.name }}</strong>
-              <span>{{ asset.asset_type }} · {{ asset.review_state.replace('_', ' ') }}{% if not asset.file_exists %} · not file-backed{% endif %}</span>
-            </span>
           </label>
         {% else %}
           <div class="empty-state">No product reference images are registered yet.</div>
@@ -113,10 +119,9 @@
       <label>
         Who are we talking to?
         <select name="audience" data-other-select="audience-other">
-          <option value="gift buyers">Gift buyers</option>
-          <option value="collectors">Collectors</option>
-          <option value="repeat customers">Repeat customers</option>
-          <option value="cruise duck fans">Cruise duck fans</option>
+          {% for audience in audiences %}
+            <option value="{{ audience }}">{{ audience }}</option>
+          {% endfor %}
           <option value="__other__">Someone else</option>
         </select>
       </label>
@@ -129,16 +134,15 @@
         Is there a moment behind it?
         <select name="occasion" data-other-select="occasion-other">
           <option value="">No special moment</option>
-          <option value="new batch">New batch</option>
-          <option value="gift idea">Gift idea</option>
-          <option value="seasonal launch">Seasonal launch</option>
-          <option value="behind the scenes">Behind the scenes</option>
+          {% for occasion in occasions %}
+            <option value="{{ occasion }}">{{ occasion }}</option>
+          {% endfor %}
           <option value="__other__">Something else</option>
         </select>
       </label>
       <label class="other-field" id="occasion-other">
         Describe the moment
-        <input name="occasion_other" placeholder="Example: local craft fair weekend">
+        <input name="occasion_other" placeholder="Example: cruise friend gift before a sailing">
       </label>
 
       <div class="button-group wizard-actions">
@@ -147,19 +151,18 @@
       </div>
     </div>
 
-    <div class="wizard-step" data-step="3">
+    <div class="wizard-step {{ 'active' if active_planning_step == '3' else '' }}" data-step="3">
       <div class="step-kicker">Step 3</div>
       <h3>Any creative direction?</h3>
-      <p class="subtle">Add only what would help the copywriter and image creator make better first options.</p>
+      <p class="subtle">Add only what would help the copywriter and social media art director make better first options.</p>
 
       <label>
         Is there an offer or timing note?
         <select name="promotion" data-other-select="promotion-other">
           <option value="">No offer</option>
-          <option value="available in the shop">Available in the shop</option>
-          <option value="limited small batch">Limited small batch</option>
-          <option value="good gift idea">Good gift idea</option>
-          <option value="new design spotlight">New design spotlight</option>
+          {% for promotion in promotions %}
+            <option value="{{ promotion }}">{{ promotion }}</option>
+          {% endfor %}
           <option value="__other__">Something else</option>
         </select>
       </label>
@@ -189,24 +192,40 @@
         <div>
           <div class="meta">
             <span class="pill">{{ item.calendar_date }}</span>
-            <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else 'blocked' if item.waiting_for_generation else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
+            <span class="pill {{ 'ready' if item.status in ['needs_review', 'approved'] else 'blocked' if item.waiting_for_generation or item.waiting_for_asset_download else '' }}">{{ item.status.replace('_', ' ').title() }}</span>
             <span class="pill">{{ item.brief_status.replace('_', ' ').title() }}</span>
           </div>
           <h3>{{ item.destinations|join(', ') or 'No destination' }} post for {{ item.products|map(attribute='name')|join(', ') or 'selected product' }}</h3>
-          <div class="subtle">{{ item.goals|join(', ') or 'No goal selected' }}</div>
         </div>
         <form method="post" action="{{ url_for('delete_planning_item', item_id=item.id) }}" onsubmit="return confirm('Delete this queued post?');">
           <button class="warn" type="submit">Delete</button>
         </form>
       </div>
 
-      {% if item.audience or item.occasion or item.promotion %}
-        <div class="meta" style="margin-top: 8px;">
-          {% if item.audience %}<span class="pill">{{ item.audience }}</span>{% endif %}
-          {% if item.occasion %}<span class="pill">{{ item.occasion }}</span>{% endif %}
-          {% if item.promotion %}<span class="pill">{{ item.promotion }}</span>{% endif %}
+      <dl class="post-option-summary">
+        <div>
+          <dt>Intent</dt>
+          <dd>{{ item.goals|join(', ') or 'No goal selected' }}</dd>
         </div>
-      {% endif %}
+        {% if item.audience %}
+          <div>
+            <dt>Audience</dt>
+            <dd>{{ item.audience }}</dd>
+          </div>
+        {% endif %}
+        {% if item.occasion %}
+          <div>
+            <dt>Occasion</dt>
+            <dd>{{ item.occasion }}</dd>
+          </div>
+        {% endif %}
+        {% if item.promotion %}
+          <div>
+            <dt>Offer</dt>
+            <dd>{{ item.promotion }}</dd>
+          </div>
+        {% endif %}
+      </dl>
       {% if item.notes %}<p class="subtle">{{ item.notes }}</p>{% endif %}
       {% if item.source_assets %}
         <details style="margin-top: 10px;" open>
@@ -216,22 +235,28 @@
               {% for asset in item.selected_source_assets %}
                 <figure>
                   <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
-                  <figcaption>@img{{ loop.index }} · {{ asset.name }}</figcaption>
+                  <figcaption>@img{{ loop.index }}</figcaption>
                 </figure>
               {% endfor %}
             </div>
+          {% elif item.waiting_for_asset_download %}
+            <p class="subtle">Selected remote reference images are being copied into the local asset library.</p>
           {% else %}
             <p class="subtle">No references were selected for this post; approved file-backed product assets will be used as the fallback identity lock during generation.</p>
           {% endif %}
         </details>
       {% endif %}
 
-      {% if item.waiting_for_generation %}
+      {% if item.waiting_for_asset_download %}
         <div class="queue-state">
-          <strong>Waiting for content generation</strong>
-          <span>Codex automation will prepare copy and image assets. This post stays here until reviewable output exists.</span>
+          <strong>Preparing reference images</strong>
+          <span>Selected remote images are being copied into the local asset library. The post is queued and will move to content generation after the files are ready.</span>
           {% if item.production_error %}<span>{{ item.production_error }}</span>{% endif %}
         </div>
+      {% endif %}
+
+      {% if item.waiting_for_generation %}
+        {% if item.production_error %}<p class="subtle">{{ item.production_error }}</p>{% endif %}
       {% endif %}
 
       <div class="review-grid">

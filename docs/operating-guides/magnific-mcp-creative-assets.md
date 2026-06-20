@@ -74,7 +74,7 @@ For MattMadeMe, the highest-value flow is:
 3. Generate scene candidates with `images_generate`.
 4. Use `creations_wait` or `creation_status` until the result completes.
 5. Use `creations_show` for review.
-6. Save approved outputs under `assets/products/<product-slug>/generated` or `outputs/graphics`.
+6. Save generated outputs under `outputs/generated`.
 7. Mark generated assets as `needs review` until product accuracy is manually approved.
 
 ## Model Notes
@@ -155,7 +155,7 @@ Generate one square 1:1 image at 2K using this prompt:
 
 [paste the improved prompt]
 
-After generation, wait for completion, download the generated file under `outputs/graphics/planning/` or `outputs/magnific/`, and show the result for manual product-accuracy review before saving it as an approved Marketing OS asset.
+After generation, wait for completion, download the generated file under `outputs/generated`, and show the result for manual product-accuracy review before saving it as an approved Marketing OS asset.
 ```
 
 ## REST API Fallback
@@ -222,15 +222,14 @@ Suggested metadata for generated assets:
 
 ## Review Evidence In Marketing OS
 
-After importing a Magnific/MCP output through Creative Assets:
+Generated image work should now start from a planned post. After a Magnific/MCP output is produced for that post:
 
-1. Open `Creative Assets`.
-2. Find the generation job.
-3. Set review state to `approved` or `rejected`.
-4. Enter `Reviewed by` as Matt when Matt is the visual reviewer.
-5. Record product-accuracy and composition notes.
+1. Open Planning.
+2. Find the planned post and generated image option.
+3. Keep the selected option in review until Matt approves or rejects it.
+4. Record product-accuracy and composition notes.
 
-Approving a creative generation job records `reviewed_by` and `reviewed_at`, and approves the file-backed candidate asset only after Marketing OS confirms the output file exists.
+Approved generated options should retain reviewer evidence and only become usable after Marketing OS confirms the output file exists.
 
 ## Open Questions
 
@@ -238,4 +237,4 @@ Approving a creative generation job records `reviewed_by` and `reviewed_at`, and
 - Confirm which Magnific image model appears in `images_models_list` for the account.
 - Test whether MCP upload tools preserve local filenames and whether uploaded product photos can be reused across sessions.
 - Test if the model follows the instruction that `@img2` through `@img4` are identity locks rather than extra objects.
-- Decide whether generated outputs should be stored under each product folder or centralized in `outputs/graphics`.
+- Confirm any future folder refinements under `outputs/generated`.

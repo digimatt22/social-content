@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -201,7 +202,6 @@ def render_phase5_approval_packet_markdown(packet: Phase5ApprovalPacket) -> str:
                     f"- Recommended source asset ID: {source_asset['id'] if source_asset else 'not available'}",
                     f"- Source file: {source_asset['source_path'] if source_asset else 'not available'}",
                     f"- Absolute source file: {source_asset['absolute_source_path'] if source_asset else 'not available'}",
-                    f"- Import generated output at: {creative_handoff['manual_import_path']}",
                     f"- Suggested absolute output file: {creative_handoff['import_defaults']['absolute_output_path']}",
                     "",
                     "### Prompt",
@@ -227,24 +227,22 @@ def _final_proof_runbook_lines(payload: dict[str, object]) -> list[str]:
         "and save the review with `Reviewed by` set to Matt.",
     ]
     if isinstance(creative_review, dict):
-        review_path = creative_review.get("review_path") or "/creative-assets"
+        review_path = creative_review.get("review_path") or "/assets"
         lines.append(
             f"2. Open `{review_path}`, compare source and generated candidate previews, "
             "then approve or reject the generated creative with `Reviewed by` set to Matt."
         )
     elif isinstance(creative_handoff, dict):
-        import_query = creative_handoff.get("manual_import_query") or "/creative-assets"
         lines.extend(
             [
                 "2. Run `python -m marketing_os.jobs.phase5_readiness --export-creative-handoff` "
                 "to export the selected image-option handoff.",
-                f"3. Generate the image externally, then open `{import_query}` "
-                "to add the generated output for review.",
+                "3. Use Planning for post-specific image generation and review the selected image option there.",
             ]
         )
     else:
         lines.append(
-            "2. Open `/creative-assets` and add one generated or uploaded image from an approved source asset."
+            "2. Open `/assets` and add one generated or uploaded image from an approved source asset."
         )
 
     final_step_number = 4 if isinstance(creative_handoff, dict) and not isinstance(creative_review, dict) else 3
@@ -323,13 +321,10 @@ def render_phase5_creative_handoff_markdown(packet: Phase5ApprovalPacket) -> str
             "",
             str(handoff["prompt"] or "").strip() or "No generation prompt recorded.",
             "",
-            "## Import Back Into Marketing OS",
+            "## Planning Review",
             "",
-            f"- Open: {handoff['manual_import_path']}",
-            f"- Prefilled form: {handoff['manual_import_query']}",
             "- Use the source asset ID above.",
-            "- Set provider to `image_generation`, `user_upload`, or the actual provider/tool used.",
-            "- Paste the prompt above into the Prompt field.",
+            "- Keep the generated image attached to the planned post.",
             f"- Suggested output path: {import_defaults['output_path'] or 'choose a local path that Marketing OS can read'}",
             f"- Suggested absolute output path: {import_defaults['absolute_output_path'] or 'choose a local path that Marketing OS can read'}",
             "- Import the output as `Facebook post image` and leave it in `needs_review` until Matt approves it.",
@@ -418,7 +413,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
             complete=True,
             message="A generated creative job has reviewer evidence and a candidate asset.",
             evidence=f"Creative job #{approved.id} approved by {approved.reviewed_by}.",
-            action="Use the approved generated asset from Creative Assets when appropriate.",
+            action="Use the approved generated asset from Assets when appropriate.",
         )
     latest = _latest_creative_job(session)
     if latest and latest.review_state == "needs_review":
@@ -428,7 +423,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
             complete=False,
             message="Latest generated creative is imported and waiting for Matt review.",
             evidence=_creative_job_evidence(latest),
-            action="Open Creative Assets, compare the source and generated candidate, set Reviewed by to Matt, then approve or reject.",
+            action="Open Assets, compare the source and generated candidate, set Reviewed by to Matt, then approve or reject.",
         )
     if latest and latest.review_state == "approved":
         return ReadinessItem(
@@ -437,7 +432,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
             complete=False,
             message="Latest generated creative is approved but missing final proof evidence.",
             evidence=_creative_job_evidence(latest),
-            action="Open Creative Assets, confirm the candidate asset exists, set Reviewed by to Matt, and save creative review.",
+            action="Open Assets, confirm the candidate asset exists, set Reviewed by to Matt, and save creative review.",
         )
     if latest and latest.review_state == "rejected":
         return ReadinessItem(
@@ -454,7 +449,7 @@ def _creative_review_item(session: Session) -> ReadinessItem:
         complete=False,
         message="No approved generated creative job has reviewer evidence yet.",
         evidence="Missing approved creative generation job with reviewed_by, reviewed_at, and candidate asset.",
-        action="Add a generated or uploaded image, visually review it, set Reviewed by to Matt, and save creative review.",
+        action="Use Planning to generate and review a post-specific image option.",
     )
 
 
@@ -576,17 +571,16 @@ def _serialize_creative_handoff(
         "prompt_review_state": prompt_candidate.review_state if prompt_candidate else "",
         "prompt_review_path": f"/planning#candidate-{prompt_candidate.id}" if prompt_candidate else "",
         "source_asset": _serialize_source_asset(source_asset),
-        "manual_import_path": "/creative-assets",
-        "manual_import_query": "/creative-assets?phase5_handoff=1#import-generated-image",
         "import_defaults": _creative_import_defaults(prompt_candidate, source_asset),
-        "next_step": "Generate an image from the selected option or upload your own image, then keep it in review until approved.",
+        "next_step": "Use Planning for post-specific image generation, then keep selected image options in review until approved.",
     }
 
 
 def _creative_import_defaults(prompt_candidate: GeneratedContentCandidateRecord | None, source_asset: AssetRecord | None) -> dict[str, object]:
     source_id = source_asset.id if source_asset else ""
     source_slug = _slug(source_asset.name) if source_asset else "phase5"
-    output_path = f"outputs/magnific/{source_slug}-facebook-post-image.png" if source_asset else ""
+    generated_root = Path(os.environ.get("MARKETING_OS_GENERATED_OUTPUT_ROOT", "outputs/generated"))
+    output_path = (generated_root / f"{source_slug}-facebook-post-image.png").as_posix() if source_asset else ""
     return {
         "source_asset_id": source_id,
         "output_path": output_path,
@@ -645,6 +639,7 @@ def _serialize_source_asset(asset: AssetRecord | None) -> dict[str, object] | No
 def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str, object] | None:
     if job is None:
         return None
+    review_asset_id = job.candidate_asset_id or job.source_asset_id
     return {
         "id": job.id,
         "source_asset_id": job.source_asset_id,
@@ -668,7 +663,7 @@ def _serialize_creative_job(job: CreativeGenerationJobRecord | None) -> dict[str
         "reviewed_at": job.reviewed_at.isoformat() if job.reviewed_at else None,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-        "review_path": f"/creative-assets#creative-job-{job.id}",
+        "review_path": f"/assets#asset-{review_asset_id}",
     }
 
 

@@ -1,4 +1,4 @@
-# Image Creator Examples
+# Social Media Art Director Examples
 
 ## Built-In Image Generation
 

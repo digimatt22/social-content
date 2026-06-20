@@ -72,7 +72,7 @@ class ImageCreatorSkillScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             brief_path = Path(tmp) / "image-brief.json"
             run_script(
-                ".agents/skills/image-creator/scripts/normalize_image_request.py",
+                ".agents/skills/social-media-art-director/scripts/normalize_image_request.py",
                 "--destination",
                 "instagram",
                 "--format",
@@ -94,11 +94,11 @@ class ImageCreatorSkillScriptTests(unittest.TestCase):
             self.assertEqual(brief["aspect_ratio"], "1:1")
             self.assertEqual(brief["provider_path"], "built-in")
 
-            check = run_script(".agents/skills/image-creator/scripts/check_image_brief.py", "--brief", str(brief_path))
+            check = run_script(".agents/skills/social-media-art-director/scripts/check_image_brief.py", "--brief", str(brief_path))
             self.assertEqual(json.loads(check.stdout)["status"], "ready")
 
             magnific = run_script(
-                ".agents/skills/image-creator/scripts/build_generation_manifest.py",
+                ".agents/skills/social-media-art-director/scripts/build_generation_manifest.py",
                 "--product-slug",
                 "mailman-duck",
                 "--destination",
@@ -117,7 +117,7 @@ class ImageCreatorSkillScriptTests(unittest.TestCase):
             self.assertIn("Confirm Magnific/Freepik MCP tools", magnific_manifest["handoff_steps"][0])
 
             builtin = run_script(
-                ".agents/skills/image-creator/scripts/build_generation_manifest.py",
+                ".agents/skills/social-media-art-director/scripts/build_generation_manifest.py",
                 "--product-slug",
                 "general",
                 "--destination",

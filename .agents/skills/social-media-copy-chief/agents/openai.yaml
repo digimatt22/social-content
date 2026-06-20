@@ -1,0 +1,4 @@
+interface:
+  display_name: "Social Media Copy Chief"
+  short_description: "Challenges social copy before human review"
+  default_prompt: "Use $social-media-copy-chief to challenge social post drafts against hook, angle, CTA, source discipline, and MattMadeMe voice."

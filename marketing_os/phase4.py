@@ -38,6 +38,9 @@ OPEN_STATUSES = {"needs asset", "needs copy review", "ready to post", "scheduled
 FINISHED_STATUSES = {"complete", "skipped"}
 METRIC_RELEVANT_STATUS = {"posted", "metrics needed"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MANAGED_IMAGE_ROOT = Path("outputs")
+MANAGED_PRODUCT_ASSETS_ROOT = Path("assets/products")
+MANAGED_GENERATED_ROOT = Path("outputs/generated")
 
 
 @dataclass(frozen=True)
@@ -384,7 +387,7 @@ def posting_guides(session: Session) -> list[PlatformGuide]:
     return guides
 
 
-def creative_asset_plans(session: Session, output_root: str | Path = "outputs/graphics") -> list[CreativeAssetPlan]:
+def creative_asset_plans(session: Session, output_root: str | Path = MANAGED_GENERATED_ROOT) -> list[CreativeAssetPlan]:
     refresh_asset_file_state(session)
     templates = list(
         session.scalars(
@@ -419,7 +422,7 @@ def register_creative_outputs_for_source(
     session: Session,
     source_asset_id: int,
     selected_templates: list[str] | None = None,
-    output_root: str | Path = "outputs/graphics",
+    output_root: str | Path = MANAGED_GENERATED_ROOT,
 ) -> list[AssetRecord]:
     refresh_asset_file_state(session)
     source = session.get(AssetRecord, source_asset_id)
@@ -459,8 +462,8 @@ def prepare_creative_generation_run(
     session: Session,
     source_asset_id: int,
     selected_templates: list[str] | None = None,
-    output_root: str | Path = "outputs/graphics",
-    manifest_dir: str | Path = "outputs/graphics/manifests",
+    output_root: str | Path = MANAGED_GENERATED_ROOT,
+    manifest_dir: str | Path = MANAGED_GENERATED_ROOT / "manifests",
 ) -> CreativeGenerationRun:
     """Register candidates and write a manifest for the image-generation pass."""
     candidates = register_creative_outputs_for_source(session, source_asset_id, selected_templates, output_root)
@@ -510,8 +513,8 @@ def import_external_product_image(
     product_id: int | None = None,
     name: str = "",
     notes: str = "",
-    assets_root: str | Path = "assets/products",
-    external_source: str = "mattmademe_website",
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
+    external_source: str = "external_image",
 ) -> AssetRecord:
     product = session.get(ProductRecord, product_id) if product_id else None
     parsed = urllib.parse.urlparse(image_url)
@@ -547,8 +550,8 @@ def generate_creative_output_files_for_source(
     session: Session,
     source_asset_id: int,
     selected_templates: list[str] | None = None,
-    output_root: str | Path = "outputs/graphics",
-    manifest_dir: str | Path = "outputs/graphics/manifests",
+    output_root: str | Path = MANAGED_GENERATED_ROOT,
+    manifest_dir: str | Path = MANAGED_GENERATED_ROOT / "manifests",
 ) -> CreativeGenerationRun:
     run = prepare_creative_generation_run(session, source_asset_id, selected_templates, output_root, manifest_dir)
     source = session.get(AssetRecord, source_asset_id)
@@ -600,7 +603,7 @@ def task_asset_options(session: Session, task: TaskRecord) -> list[AssetOption]:
     return options
 
 
-def assign_asset_to_task(session: Session, task_id: int, asset_id: int, assets_root: str | Path = "assets/products") -> TaskRecord:
+def assign_asset_to_task(session: Session, task_id: int, asset_id: int, assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT) -> TaskRecord:
     task = session.get(TaskRecord, task_id)
     if task is None:
         raise ValueError(f"Task not found: {task_id}")
@@ -623,7 +626,7 @@ def assign_asset_to_task(session: Session, task_id: int, asset_id: int, assets_r
 def ensure_local_asset_for_remote_image(
     session: Session,
     remote_asset: AssetRecord,
-    assets_root: str | Path = "assets/products",
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
 ) -> AssetRecord:
     image_url = remote_asset.source_path or remote_asset.preview_path or remote_asset.canonical_url
     if not image_url:
@@ -799,7 +802,7 @@ def refresh_asset_file_state(session: Session, base_dir: str | Path = ".") -> li
     return assets
 
 
-def scan_local_asset_folder(session: Session, assets_root: str | Path = "assets/products") -> list[AssetRecord]:
+def scan_local_asset_folder(session: Session, assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT) -> list[AssetRecord]:
     root = Path(assets_root)
     if not root.exists():
         return refresh_asset_file_state(session)
@@ -898,7 +901,7 @@ def import_source_photo_to_inventory(
     product_id: int | None = None,
     name: str = "",
     notes: str = "",
-    assets_root: str | Path = "assets/products",
+    assets_root: str | Path = MANAGED_PRODUCT_ASSETS_ROOT,
 ) -> AssetRecord:
     source = Path(file_path).expanduser()
     if not source.is_file():
@@ -962,7 +965,6 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
     candidates_needing_review = [candidate for candidate in generated_candidates if candidate.review_state == "needs_review"]
     creative_jobs_attention = [job for job in creative_jobs if job.provider_error or job.review_state == "needs_review" or job.provider_status == "error"]
     etsy_sync = next((record for record in sync_metadata if record.source_name == "etsy_api"), None)
-    website_sync = next((record for record in sync_metadata if record.source_name == "mattmademe_website"), None)
     local_asset_sync = next((record for record in sync_metadata if record.source_name == "local_asset_library"), None)
     asset_library_missing = bool(asset_library_root and not Path(asset_library_root).expanduser().exists())
     template_types = {template.template_type for template in templates}
@@ -1044,13 +1046,6 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             "Configure Etsy credentials in .env or run sync from Products.",
         ),
         DataHealthItem(
-            "Website Sync",
-            _sync_status_label(website_sync),
-            0 if website_sync and "error:" not in website_sync.notes and "missing_credentials" not in website_sync.notes else 1,
-            _sync_message(website_sync, "MattMadeMe website API has not been synced yet."),
-            "Configure website API credentials in .env or run sync from Products.",
-        ),
-        DataHealthItem(
             "Local Asset Library",
             "Needs attention" if asset_library_missing or _sync_status_label(local_asset_sync) != "OK" else "OK",
             1 if asset_library_missing or _sync_status_label(local_asset_sync) != "OK" else 0,
@@ -1066,7 +1061,7 @@ def data_health(session: Session, asset_library_root: str | Path | None = None) 
             "Generated creative jobs need review or have provider errors."
             if creative_jobs_attention
             else "No imported creative generation jobs are waiting for review.",
-            "Open Creative Assets.",
+            "Open Assets.",
         ),
     ]
 

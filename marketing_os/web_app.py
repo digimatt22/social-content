@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import tempfile
+import threading
 from datetime import date, datetime
 from pathlib import Path
 from shutil import copyfileobj
@@ -54,7 +56,6 @@ from .phase4 import (
     asset_path,
     complete_task_status,
     completed_tasks,
-    creative_asset_plans,
     data_health as build_data_health,
     export_operating_data,
     import_etsy_listing_csv,
@@ -62,13 +63,10 @@ from .phase4 import (
     metrics_due_tasks,
     platform_metric_fields,
     posting_guides,
-    prepare_creative_generation_run,
     refresh_asset_file_state,
-    register_local_source_photo,
     review_asset,
     scan_local_asset_folder,
     serialize_asset_view,
-    serialize_creative_asset_plan,
     serialize_data_health_item,
     serialize_task_detail,
     serialize_task_view,
@@ -80,12 +78,16 @@ from .phase4 import (
     week_agenda,
 )
 from .services.content_briefs import (
+    AUDIENCE_OPTIONS,
     CANDIDATE_REVIEW_STATES,
     DESTINATION_OPTIONS,
-    GOAL_OPTIONS,
+    OCCASION_OPTIONS,
+    PLANNER_GOAL_OPTIONS,
+    PROMOTION_OPTIONS,
     create_planned_content_item,
     create_task_from_planned_content,
     delete_planned_content_item,
+    localize_planned_content_reference_assets,
     planned_content_items,
     produce_content_for_item,
     record_candidate_review,
@@ -93,18 +95,17 @@ from .services.content_briefs import (
     request_content_regeneration,
     serialize_candidate,
     serialize_planned_content_item,
+    update_product_default_reference_assets,
     update_planned_copy_candidate,
 )
-from .services.creative_generation import (
-    creative_generation_jobs,
-    import_manual_generated_output,
-    review_creative_generation_job,
-    serialize_creative_generation_job,
-)
+from .services.creative_generation import review_creative_generation_job
 from .services.etsy_import import sync_etsy_read_only
 from .services.local_assets import scan_asset_root
-from .services.mattmademe_website_import import sync_mattmademe_website
-from .services.product_matching import match_product_records
+
+
+LOCAL_ASSET_LIBRARY_ROOT = Path("assets")
+LOCAL_GENERATED_OUTPUT_ROOT = Path("outputs/generated")
+LOCAL_PLANNING_UPLOAD_ROOT = Path("outputs/graphics/planning/uploads")
 
 
 def create_app(db_path: str | Path | None = None, business_dir: str = "docs/business", bootstrap_data: bool | None = None) -> Flask:
@@ -129,10 +130,10 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     app.config["BUSINESS_DIR"] = business_dir
     app.config["DB_PATH"] = Path(os.environ.get("MARKETING_OS_DB_PATH", db_path or DEFAULT_DB_PATH))
     app.config["ASSETS_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSETS_ROOT", "assets/products"))
-    app.config["ASSET_LIBRARY_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSET_ROOT", "/Volumes/MarketingAssets"))
+    app.config["ASSET_LIBRARY_ROOT"] = Path(os.environ.get("MARKETING_OS_ASSET_ROOT", LOCAL_ASSET_LIBRARY_ROOT))
     app.config["EXPORT_DIR"] = Path(os.environ.get("MARKETING_OS_EXPORT_DIR", "data/exports"))
-    app.config["GENERATED_OUTPUT_ROOT"] = Path(os.environ.get("MARKETING_OS_GENERATED_OUTPUT_ROOT", "outputs/magnific"))
-    app.config["PLANNING_UPLOAD_ROOT"] = Path(os.environ.get("MARKETING_OS_PLANNING_UPLOAD_ROOT", "outputs/graphics/planning/uploads"))
+    app.config["GENERATED_OUTPUT_ROOT"] = Path(os.environ.get("MARKETING_OS_GENERATED_OUTPUT_ROOT", LOCAL_GENERATED_OUTPUT_ROOT))
+    app.config["PLANNING_UPLOAD_ROOT"] = Path(os.environ.get("MARKETING_OS_PLANNING_UPLOAD_ROOT", LOCAL_PLANNING_UPLOAD_ROOT))
 
     @app.context_processor
     def inject_helpers() -> dict[str, object]:
@@ -300,61 +301,41 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             summary = sync_etsy_read_only(session)
             return jsonify(summary.__dict__), 200 if not summary.errors else 400
 
-    @app.post("/api/integrations/website/sync")
-    def api_sync_website():
+    @app.get("/api/product-tags")
+    def api_product_tags():
+        query = request.args.get("q", "").strip().lower()
         with session_scope(factory) as session:
-            summary = sync_mattmademe_website(session)
-            return jsonify(summary.__dict__), 200 if not summary.errors else 400
+            tags = _all_product_tags(session)
+            if query:
+                tags = [tag for tag in tags if query in tag.lower()]
+            return jsonify({"tags": tags[:20]})
 
-    @app.get("/api/creative-assets")
-    def api_creative_assets():
+    @app.post("/api/products/<int:product_id>/tags")
+    def api_add_product_tag(product_id: int):
+        payload = request.get_json(silent=True) or {}
+        tag = str(payload.get("tag") or "").strip()
         with session_scope(factory) as session:
-            refresh_asset_file_state(session)
-            return jsonify(
-                {
-                    "plans": [serialize_creative_asset_plan(plan) for plan in creative_asset_plans(session)],
-                    "jobs": [serialize_creative_generation_job(job) for job in creative_generation_jobs(session)],
-                }
-            )
+            product = session.get(ProductRecord, product_id)
+            if product is None:
+                return jsonify({"error": "Product not found."}), 404
+            if not tag:
+                return jsonify({"error": "Enter a product tag to add."}), 400
+            saved_tag, tags, created = _add_product_tag(product, tag)
+            return jsonify({"tag": saved_tag, "tags": tags, "created": created})
 
-    @app.post("/api/creative-assets/manual-import")
-    def api_creative_assets_manual_import():
+    @app.post("/api/products/<int:product_id>/default-reference-assets")
+    def api_product_default_reference_assets(product_id: int):
         payload = request.get_json(silent=True) or {}
         try:
-            source_asset_id = int(payload.get("source_asset_id"))
-            with session_scope(factory) as session:
-                result = import_manual_generated_output(
-                    session=session,
-                    source_asset_id=source_asset_id,
-                    output_path=str(payload.get("output_path") or ""),
-                    target_format=str(payload.get("target_format") or "Generated output"),
-                    prompt=str(payload.get("prompt") or ""),
-                    provider=str(payload.get("provider") or "magnific_manual"),
-                    model_name=str(payload.get("model_name") or ""),
-                    provider_job_id=str(payload.get("provider_job_id") or ""),
-                    output_url=str(payload.get("output_url") or ""),
-                    requested_dimensions=str(payload.get("requested_dimensions") or ""),
-                    notes=str(payload.get("notes") or ""),
-                )
-                return jsonify({"job": serialize_creative_generation_job(result.job), "candidate_id": result.candidate.id}), 201
-        except (TypeError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
-
-    @app.post("/api/creative-assets/jobs/<int:job_id>/review")
-    def api_creative_assets_job_review(job_id: int):
-        payload = request.get_json(silent=True) or {}
+            asset_ids = [int(value) for value in payload.get("asset_ids", [])]
+        except (TypeError, ValueError):
+            return jsonify({"error": "Use valid asset IDs."}), 400
         with session_scope(factory) as session:
             try:
-                job = review_creative_generation_job(
-                    session,
-                    job_id,
-                    review_state=str(payload.get("review_state") or "needs_review"),
-                    review_notes=str(payload.get("review_notes") or ""),
-                    reviewed_by=str(payload.get("reviewed_by") or ""),
-                )
+                selected_ids = update_product_default_reference_assets(session, product_id, asset_ids)
             except ValueError as exc:
-                return jsonify({"error": str(exc)}), 400
-            return jsonify({"job": serialize_creative_generation_job(job)})
+                return jsonify({"error": str(exc)}), 404
+            return jsonify({"product_id": product_id, "asset_ids": selected_ids})
 
     @app.get("/api/planned-content")
     def api_planned_content():
@@ -379,6 +360,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     goals=[str(value) for value in payload.get("goals", [])],
                     product_ids=product_ids,
                     selected_source_asset_ids=selected_source_asset_ids,
+                    assets_root=app.config["ASSETS_ROOT"],
                     audience=str(payload.get("audience") or ""),
                     occasion=str(payload.get("occasion") or ""),
                     promotion=str(payload.get("promotion") or ""),
@@ -494,35 +476,24 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             guides_model = posting_guides(session)
             return render_template("guides.html", active="guides", guides=guides_model)
 
+    def _asset_management_context(session) -> dict[str, object]:
+        refresh_asset_file_state(session)
+        return {
+            "active": "assets",
+            "assets": asset_inventory(session),
+            "products": list(session.scalars(select(ProductRecord).order_by(ProductRecord.name))),
+        }
+
     @app.get("/creative-assets")
     def creative_assets() -> str:
         with session_scope(factory) as session:
-            refresh_asset_file_state(session)
-            plans = creative_asset_plans(session)
-            source_assets = [plan.source_asset for plan in plans if plan.source_ready]
-            jobs = [serialize_creative_generation_job(job) for job in creative_generation_jobs(session)]
-            manual_import_defaults: dict[str, object] = {}
-            if request.args.get("phase5_handoff") == "1":
-                packet = serialize_phase5_approval_packet(build_phase5_approval_packet(session))
-                handoff = packet.get("creative_handoff")
-                if isinstance(handoff, dict):
-                    defaults = handoff.get("import_defaults")
-                    if isinstance(defaults, dict):
-                        manual_import_defaults = defaults
-                    source_asset = handoff.get("source_asset")
-                    if isinstance(source_asset, dict):
-                        manual_import_defaults["source_asset"] = source_asset
-            return render_template(
-                "creative_assets.html",
-                active="creative_assets",
-                plans=plans,
-                source_assets=source_assets,
-                jobs=jobs,
-                manual_import_defaults=manual_import_defaults,
-            )
+            return render_template("assets.html", **_asset_management_context(session))
 
     @app.get("/planning")
     def planning() -> str:
+        active_planning_step = request.args.get("step", "1")
+        if active_planning_step not in {"1", "2", "3"}:
+            active_planning_step = "1"
         with session_scope(factory) as session:
             products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
             tasks = list(session.scalars(select(TaskRecord).order_by(TaskRecord.due_date, TaskRecord.id)))
@@ -535,8 +506,12 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 tasks=tasks,
                 planned_items=[serialize_planned_content_item(session, item) for item in items],
                 destinations=DESTINATION_OPTIONS,
-                goals=GOAL_OPTIONS,
+                goals=PLANNER_GOAL_OPTIONS,
+                audiences=AUDIENCE_OPTIONS,
+                occasions=OCCASION_OPTIONS,
+                promotions=PROMOTION_OPTIONS,
                 candidate_review_states=CANDIDATE_REVIEW_STATES,
+                active_planning_step=active_planning_step,
             )
 
     @app.post("/planning")
@@ -545,22 +520,36 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             calendar_date = date.fromisoformat(request.form.get("calendar_date", date.today().isoformat()))
             product_ids = [int(value) for value in request.form.getlist("product_ids")]
             selected_source_asset_ids = [int(value) for value in request.form.getlist("selected_source_asset_ids")]
+            item_id: int | None = None
+            needs_asset_download = False
             with session_scope(factory) as session:
-                create_planned_content_item(
+                item = create_planned_content_item(
                     session,
                     calendar_date=calendar_date,
                     destinations=request.form.getlist("destinations"),
                     goals=[_form_other_value(request.form.get("goals", ""), request.form.get("goals_other", ""))],
                     product_ids=product_ids,
                     selected_source_asset_ids=selected_source_asset_ids,
+                    assets_root=app.config["ASSETS_ROOT"],
+                    defer_remote_assets=True,
                     audience=_form_other_value(request.form.get("audience", ""), request.form.get("audience_other", "")),
                     occasion=_form_other_value(request.form.get("occasion", ""), request.form.get("occasion_other", "")),
                     promotion=_form_other_value(request.form.get("promotion", ""), request.form.get("promotion_other", "")),
                     notes=request.form.get("notes", ""),
                 )
-                flash("Post queued for content generation.")
+                item_id = item.id
+                needs_asset_download = item.status == "waiting_asset_download"
+                flash(
+                    "Post queued. Preparing selected remote image references in the background."
+                    if needs_asset_download
+                    else "Post queued for content generation."
+                )
+            if item_id is not None and needs_asset_download:
+                _start_reference_asset_download(factory, item_id, app.config["ASSETS_ROOT"])
         except ValueError as exc:
             flash(str(exc))
+            if "reference image" in str(exc):
+                return redirect(url_for("planning", step=2))
         return redirect(url_for("planning"))
 
     @app.post("/planning/<int:item_id>/produce")
@@ -676,64 +665,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(str(exc))
         return redirect(url_for("task_detail", task_id=task_id))
 
-    @app.post("/creative-assets/register")
-    def creative_assets_register() -> str:
-        source_asset_id = int(request.form.get("source_asset_id", "0"))
-        selected_templates = request.form.getlist("template_name")
-        with session_scope(factory) as session:
-            try:
-                run = prepare_creative_generation_run(session, source_asset_id, selected_templates)
-                flash(
-                    f"Prepared {len(run.candidates)} generated output candidate(s). "
-                    f"Generation manifest: {run.manifest_path}."
-                )
-            except ValueError as exc:
-                flash(str(exc))
-        return redirect(url_for("creative_assets"))
-
-    @app.post("/creative-assets/manual-import")
-    def creative_assets_manual_import() -> str:
-        try:
-            source_asset_id = int(request.form.get("source_asset_id", "0"))
-            output_path = request.form.get("output_path", "").strip()
-            upload = request.files.get("output_file")
-            if upload is not None and upload.filename:
-                output_path = _save_image_upload(upload, app.config["GENERATED_OUTPUT_ROOT"], label="generated output").as_posix()
-            with session_scope(factory) as session:
-                result = import_manual_generated_output(
-                    session,
-                    source_asset_id=source_asset_id,
-                    output_path=output_path,
-                    target_format=request.form.get("target_format", "Generated output").strip(),
-                    prompt=request.form.get("prompt", "").strip(),
-                    provider=request.form.get("provider", "magnific_manual").strip(),
-                    model_name=request.form.get("model_name", "").strip(),
-                    provider_job_id=request.form.get("provider_job_id", "").strip(),
-                    output_url=request.form.get("output_url", "").strip(),
-                    requested_dimensions=request.form.get("requested_dimensions", "").strip(),
-                    notes=request.form.get("notes", "").strip(),
-                )
-                flash(f"Imported generated candidate #{result.candidate.id}. Review it in Assets before use.")
-        except ValueError as exc:
-            flash(str(exc))
-        return redirect(url_for("creative_assets"))
-
-    @app.post("/creative-assets/jobs/<int:job_id>/review")
-    def creative_assets_job_review(job_id: int) -> str:
-        with session_scope(factory) as session:
-            try:
-                review_creative_generation_job(
-                    session,
-                    job_id,
-                    review_state=request.form.get("review_state", "needs_review"),
-                    review_notes=request.form.get("review_notes", ""),
-                    reviewed_by=request.form.get("reviewed_by", ""),
-                )
-                flash("Creative review saved.")
-            except ValueError as exc:
-                flash(str(exc))
-        return redirect(url_for("creative_assets", _anchor=f"creative-job-{job_id}"))
-
     @app.get("/calendar")
     def calendar() -> str:
         with session_scope(factory) as session:
@@ -848,22 +779,15 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     @app.get("/assets")
     def assets() -> str:
         with session_scope(factory) as session:
-            records = asset_inventory(session)
-            products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
-            return render_template("assets.html", active="assets", assets=records, products=products)
+            return render_template("assets.html", **_asset_management_context(session))
 
     @app.get("/products")
     def products_admin() -> str:
-        selected_tag = request.args.get("tag", "").strip().lower()
         selected_sort = request.args.get("sort", "name").strip().lower()
         with session_scope(factory) as session:
             all_products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
-            all_tags = sorted({tag for product in all_products for tag in json_list(product.use_cases_json)})
-            products = [
-                product
-                for product in all_products
-                if not selected_tag or selected_tag in {tag.lower() for tag in json_list(product.use_cases_json)}
-            ]
+            all_tags = _all_product_tags(session)
+            products = list(all_products)
             if selected_sort == "source":
                 products.sort(key=lambda product: (product.external_source or "local", product.name.lower()))
             elif selected_sort == "synced":
@@ -894,7 +818,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 products=products,
                 all_products=all_products,
                 all_tags=all_tags,
-                selected_tag=selected_tag,
                 selected_sort=selected_sort,
                 assets_by_product=assets_by_product,
                 references_by_product=references_by_product,
@@ -911,29 +834,34 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             flash("Product tags saved.")
         return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
 
+    @app.post("/products/<int:product_id>/tags/add")
+    def add_product_tag(product_id: int) -> str:
+        tag = _tag_values(request.form.get("tag", ""))
+        with session_scope(factory) as session:
+            product = session.get(ProductRecord, product_id)
+            if product is None:
+                abort(404)
+            for value in tag:
+                _add_product_tag(product, value)
+            flash("Product tag added." if tag else "Enter a product tag to add.")
+        return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
+
+    @app.post("/products/<int:product_id>/default-reference-assets")
+    def product_default_reference_assets(product_id: int) -> str:
+        try:
+            asset_ids = [int(value) for value in request.form.getlist("asset_ids")]
+            with session_scope(factory) as session:
+                update_product_default_reference_assets(session, product_id, asset_ids)
+                flash("Default reference images saved.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("products_admin", _anchor=f"product-{product_id}"))
+
     @app.post("/assets/scan")
     def scan_assets() -> str:
         with session_scope(factory) as session:
             imported = scan_local_asset_folder(session, app.config["ASSETS_ROOT"])
             flash(f"Scanned local assets. Found {len(imported)} image file(s).")
-        return redirect(url_for("assets"))
-
-    @app.post("/assets/register-source")
-    def register_source_asset() -> str:
-        file_path = request.form.get("file_path", "").strip()
-        product_id_text = request.form.get("product_id", "").strip()
-        product_id = int(product_id_text) if product_id_text else None
-        name = request.form.get("name", "").strip()
-        notes = request.form.get("notes", "").strip()
-        if not file_path:
-            flash("Enter a local source photo path.")
-            return redirect(url_for("assets"))
-        with session_scope(factory) as session:
-            try:
-                asset = register_local_source_photo(session, file_path, product_id=product_id, name=name, notes=notes)
-                flash(f"Registered source photo: {asset.name}.")
-            except (FileNotFoundError, ValueError) as exc:
-                flash(str(exc))
         return redirect(url_for("assets"))
 
     @app.post("/assets/upload-source")
@@ -953,6 +881,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with tempfile.TemporaryDirectory() as tmp:
             temp_path = Path(tmp) / filename
             upload.save(temp_path)
+            try:
+                _validate_image_file(temp_path, "source photo")
+            except ValueError as exc:
+                flash(str(exc))
+                return redirect(url_for("assets"))
             with session_scope(factory) as session:
                 try:
                     asset = import_source_photo_to_inventory(
@@ -1104,19 +1037,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 flash(f"Synced Etsy: {summary.products_imported} listing(s), {summary.assets_imported} image(s).")
         return redirect(_safe_return_url(request.form.get("return_to"), "data_health"))
 
-    @app.post("/integrations/website/sync")
-    def sync_website() -> str:
-        with session_scope(factory) as session:
-            summary = sync_mattmademe_website(session)
-            if summary.errors:
-                flash(summary.errors[0])
-            else:
-                flash(
-                    f"Synced website: {summary.products_imported} product(s), "
-                    f"{summary.assets_imported} image(s), {summary.blog_posts_imported} blog post(s)."
-                )
-        return redirect(_safe_return_url(request.form.get("return_to"), "data_health"))
-
     @app.post("/assets/library/scan")
     def scan_asset_library() -> str:
         with session_scope(factory) as session:
@@ -1141,24 +1061,6 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             export_dir=app.config["EXPORT_DIR"],
             products=products,
         )
-
-    @app.post("/products/match")
-    def match_products() -> str:
-        source_product_id = _int_or_none(request.form.get("source_product_id"))
-        target_product_id = _int_or_none(request.form.get("target_product_id"))
-        if source_product_id is None or target_product_id is None:
-            flash("Choose a duplicate product and the canonical product to keep.")
-            return redirect(url_for("products_admin"))
-        with session_scope(factory) as session:
-            try:
-                summary = match_product_records(session, source_product_id, target_product_id)
-                flash(
-                    f"Matched {summary.source_name} into {summary.target_name}. "
-                    f"Moved {summary.assets_moved} asset(s) and updated {summary.planned_items_updated} planned item(s)."
-                )
-            except ValueError as exc:
-                flash(str(exc))
-        return redirect(url_for("products_admin"))
 
     @app.post("/settings/export")
     def export_data():
@@ -1216,6 +1118,18 @@ def _save_image_upload(upload, output_root: Path, label: str = "image") -> Path:
     return target
 
 
+def _validate_image_file(path: Path, label: str) -> None:
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(path) as image:
+            image.verify()
+    except UnidentifiedImageError as exc:
+        raise ValueError(f"{label.title()} must be a valid image file.") from exc
+    except OSError as exc:
+        raise ValueError(f"{label.title()} could not be read as an image.") from exc
+
+
 def _planner_reference_assets(session, products: list[ProductRecord]) -> list[dict[str, object]]:
     product_ids = [product.id for product in products if product.id is not None]
     if not product_ids:
@@ -1237,10 +1151,47 @@ def _planner_reference_assets(session, products: list[ProductRecord]) -> list[di
             "source_path": asset.source_path,
             "review_state": asset.review_state,
             "file_exists": bool(asset.file_exists),
-            "selectable": bool(asset.file_exists and asset.review_state == "approved"),
+            "preview_url": _remote_asset_preview_url(asset),
+            "selectable": bool(asset.file_exists and asset.review_state == "approved") or _is_remote_product_image(asset),
+            "downloads_when_selected": _is_remote_product_image(asset),
         }
         for asset in assets
     ]
+
+
+def _is_remote_product_image(asset: AssetRecord) -> bool:
+    image_url = asset.source_path or asset.preview_path or asset.canonical_url
+    return bool(
+        not asset.file_exists
+        and image_url.startswith(("http://", "https://", "file://"))
+        and asset.asset_type in {"Etsy product photo", "external listing image"}
+    )
+
+
+def _remote_asset_preview_url(asset: AssetRecord) -> str:
+    if asset.file_exists:
+        return ""
+    for value in (asset.preview_path, asset.source_path, asset.canonical_url):
+        if value.startswith(("http://", "https://", "file://")):
+            return value
+    return ""
+
+
+def _start_reference_asset_download(factory, item_id: int, assets_root: Path) -> None:
+    def worker() -> None:
+        try:
+            with session_scope(factory) as session:
+                localize_planned_content_reference_assets(session, item_id, assets_root)
+            logging.getLogger(__name__).info("Prepared remote reference images for planned item %s", item_id)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Failed to prepare remote reference images for planned item %s", item_id)
+            with session_scope(factory) as session:
+                item = session.get(PlannedContentRecord, item_id)
+                if item is not None:
+                    item.production_error = f"Remote image preparation failed: {exc}"
+
+    thread = threading.Thread(target=worker, name=f"planning-reference-download-{item_id}", daemon=True)
+    thread.start()
 
 
 def _tag_values(value: object) -> list[str]:
@@ -1256,6 +1207,26 @@ def _tag_values(value: object) -> list[str]:
         if tag and tag not in tags:
             tags.append(tag)
     return tags
+
+
+def _all_product_tags(session) -> list[str]:
+    products = session.scalars(select(ProductRecord)).all()
+    return sorted({tag for product in products for tag in json_list(product.use_cases_json)})
+
+
+def _add_product_tag(product: ProductRecord, value: str) -> tuple[str, list[str], bool]:
+    normalized = _tag_values(value)
+    if not normalized:
+        return "", json_list(product.use_cases_json), False
+    tag = normalized[0]
+    tags = json_list(product.use_cases_json)
+    existing = {current.lower() for current in tags}
+    created = tag.lower() not in existing
+    if created:
+        tags.append(tag)
+        product.use_cases_json = json.dumps(tags)
+    saved_tag = tag if created else next((current for current in tags if current.lower() == tag.lower()), tag)
+    return saved_tag, tags, created
 
 
 def main(argv: list[str] | None = None) -> int:

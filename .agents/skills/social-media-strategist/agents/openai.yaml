@@ -1,0 +1,4 @@
+interface:
+  display_name: "Social Media Strategist"
+  short_description: "Chooses social angle, pillar, CTA, and variant plan"
+  default_prompt: "Use $social-media-strategist to create the strategy brief before social post writing."

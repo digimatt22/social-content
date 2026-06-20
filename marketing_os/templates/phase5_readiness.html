@@ -124,11 +124,11 @@ Creative approval checklist:
         </label>
         <div class="button-group">
           <button type="submit">Save creative review</button>
-          <a class="button secondary" href="{{ packet.creative_review.review_path }}">Open in Creative Assets</a>
+          <a class="button secondary" href="{{ packet.creative_review.review_path }}">Open in Assets</a>
         </div>
       </form>
     {% else %}
-      <p class="subtle">Add a generated or uploaded image before generated creative can be reviewed.</p>
+      <p class="subtle">Use Planning to generate and review post-specific image options.</p>
       {% if packet.creative_handoff %}
         {% if packet.creative_handoff.source_asset %}
           <p class="subtle">Recommended source asset #{{ packet.creative_handoff.source_asset.id }} · {{ packet.creative_handoff.source_asset.name }}</p>
@@ -159,11 +159,7 @@ Creative approval checklist:
           <button class="secondary" type="submit">Export creative handoff</button>
         </form>
       {% endif %}
-      {% if packet.creative_handoff %}
-        <a class="button secondary" href="{{ packet.creative_handoff.manual_import_query }}">Import prefilled handoff</a>
-      {% else %}
-        <a class="button secondary" href="{{ url_for('creative_assets') }}">Import in Creative Assets</a>
-      {% endif %}
+      <a class="button secondary" href="{{ url_for('planning') }}">Open Planning</a>
     {% endif %}
   </article>
 </section>

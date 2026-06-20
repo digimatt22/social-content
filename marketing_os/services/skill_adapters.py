@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -19,10 +21,15 @@ def copywriter_contract(brief: dict[str, object], destination: str) -> SkillCont
     request = {
         "destination": destination,
         "format": _copy_format(destination),
+        "recommended_skill": _recommended_copy_skill(destination),
+        "workflow": _copy_workflow(destination),
         "audience": str(brief.get("audience") or "collectors and gift buyers").strip(),
         "goal": ", ".join(goals) or "engagement",
         "brand_voice": voice,
         "details": _copy_details(brief),
+        "social_angle": _social_angle(brief, destination),
+        "content_pillar": _content_pillar(brief, destination),
+        "cta_type": _cta_type(goals),
         "must_include": products,
         "avoid": [str(item) for item in brief.get("avoid", []) if str(item).strip()],
         "review_level": "polished_draft",
@@ -34,11 +41,45 @@ def copywriter_contract(brief: dict[str, object], destination: str) -> SkillCont
             "performance_context": brief.get("performance_context", {}),
         },
     }
-    return SkillContract("copywriter", request, _copywriter_check(request))
+    return SkillContract(str(request["recommended_skill"]), request, _copywriter_check(request))
 
 
-def image_creator_contracts(brief: dict[str, object], count: int = 3) -> list[SkillContract]:
-    """Create 2-3 image-creator skill requests from a Marketing OS brief."""
+def social_copy_workflow_contract(brief: dict[str, object], destination: str) -> dict[str, object]:
+    """Build the scheduled automation handoff for strategy -> writing -> challenge."""
+    contract = copywriter_contract(brief, destination)
+    return {
+        "workflow_name": "social_media_strategy_writing_challenge",
+        "planned_item_id": brief.get("planned_item_id"),
+        "destination": destination,
+        "primary_skill": contract.skill_name,
+        "steps": contract.request.get("workflow", []),
+        "strategy_request": {
+            "skill": "social-media-strategist",
+            "input": {
+                **contract.request,
+                "task": "Choose platform strategy, content pillar, social angle, CTA type, and variant plan. Do not write final copy.",
+            },
+        },
+        "writing_request": {
+            "skill": "social-media-copywriter",
+            "input": {
+                **contract.request,
+                "task": "Write social copy from the strategy brief. Produce engagement, follower-building, and shop-click variants unless the plan says otherwise.",
+            },
+        },
+        "challenge_request": {
+            "skill": "social-media-copy-chief",
+            "input": {
+                **contract.request,
+                "task": "Challenge the strategy and draft before human review. Return ready_for_human_review, revise_before_review, or blocked.",
+            },
+        },
+        "contract_check": contract.check,
+    }
+
+
+def social_media_art_director_contracts(brief: dict[str, object], count: int = 3) -> list[SkillContract]:
+    """Create 2-3 social-media-art-director skill requests from a Marketing OS brief."""
     products = [str(item) for item in brief.get("products", []) if str(item).strip()]
     product_text = ", ".join(products) or "selected product"
     destinations = [str(item) for item in brief.get("destinations", []) if str(item).strip()]
@@ -74,10 +115,12 @@ def image_creator_contracts(brief: dict[str, object], count: int = 3) -> list[Sk
     for index, (title, best_for, scene, composition, mood) in enumerate(concepts[:count], start=1):
         request = {
             "destination": destination,
+            "platform": destination,
             "format": _image_format(destination),
             "audience": str(brief.get("audience") or "collectors and gift buyers").strip(),
             "goal": ", ".join(goals) or "engagement",
             "subject": product_text,
+            "social_angle": title,
             "brand_style": "MattMadeMe handmade, playful, product-accurate, approachable",
             "details": json.dumps(
                 {
@@ -96,13 +139,13 @@ def image_creator_contracts(brief: dict[str, object], count: int = 3) -> list[Sk
             "provider_path": "magnific-mcp",
             "fallback_provider_path": "built-in-image-edit",
             "model_preference": "Google Nano Banana 2",
-            "output_path": f"outputs/graphics/planning/planned-item-{brief.get('planned_item_id')}/option-{index}.png",
+            "output_path": _planning_output_path(brief.get("planned_item_id"), index),
             "must_include": products,
             "avoid": ["text overlays", "watermarks", "invented logos", "duplicate products", "distorted product details"],
             "option_number": index,
             "source_asset_ids": approved_ids,
         }
-        contracts.append(SkillContract("image-creator", request, _image_creator_check(request)))
+        contracts.append(SkillContract("social-media-art-director", request, _social_media_art_director_check(request)))
     return contracts
 
 
@@ -131,7 +174,7 @@ def image_option_from_contract(contract: SkillContract) -> dict[str, object]:
     )
     return {
         "option_number": request.get("option_number"),
-        "provider": f"image-creator-option-{request.get('option_number')}",
+        "provider": f"social-media-art-director-option-{request.get('option_number')}",
         "title": details.get("title") or "Image Option",
         "best_for": details.get("best_for") or "Generated image direction.",
         "provider_path": "Magnific MCP primary; built-in image edit fallback only if Magnific is unavailable",
@@ -167,11 +210,15 @@ def _copywriter_check(request: dict[str, object]) -> dict[str, object]:
         "status": "blocked" if missing else ("ready_with_assumptions" if warnings else "ready"),
         "missing_required": missing,
         "missing_recommended": warnings,
-        "notes": ["Brief has the minimum fields needed for grounded copy generation."] if not missing else [],
+        "notes": [
+            f"Brief has the minimum fields needed for grounded copy generation via {request.get('recommended_skill') or 'copywriter'}."
+        ]
+        if not missing
+        else [],
     }
 
 
-def _image_creator_check(request: dict[str, object]) -> dict[str, object]:
+def _social_media_art_director_check(request: dict[str, object]) -> dict[str, object]:
     missing = [field for field in ["destination", "subject"] if not str(request.get(field, "")).strip()]
     warnings = [field for field in ["audience", "goal", "format", "brand_style", "aspect_ratio"] if not str(request.get(field, "")).strip()]
     if request.get("provider_path") == "magnific-mcp" and not request.get("reference_images"):
@@ -214,6 +261,88 @@ def _copy_format(destination: str) -> str:
     return "social post"
 
 
+def _recommended_copy_skill(destination: str) -> str:
+    normalized = destination.lower()
+    if any(token in normalized for token in ["facebook", "instagram", "pinterest", "threads", "tiktok", "linkedin", "social"]):
+        return "social-media-copywriter"
+    return "copywriter"
+
+
+def _copy_workflow(destination: str) -> list[dict[str, str]]:
+    if _recommended_copy_skill(destination) != "social-media-copywriter":
+        return [{"step": "write", "skill": "copywriter"}]
+    return [
+        {"step": "strategy", "skill": "social-media-strategist"},
+        {"step": "writing", "skill": "social-media-copywriter"},
+        {"step": "challenge", "skill": "social-media-copy-chief"},
+    ]
+
+
+def _social_angle(brief: dict[str, object], destination: str) -> str:
+    goals = " ".join(str(item).lower() for item in brief.get("goals", []) if str(item).strip())
+    occasion = str(brief.get("occasion") or "").strip()
+    audience = str(brief.get("audience") or "").strip().lower()
+    if "cruise" in goals or "cruise" in audience:
+        return "community_prompt"
+    if "flock" in goals or "collect" in goals:
+        return "collectible"
+    if "gift" in goals or "gift" in audience:
+        return "giftable"
+    if "personality" in goals or "duck personality" in goals:
+        return "personality"
+    if "maker" in goals or "process" in goals:
+        return "maker_process"
+    if "shop" in goals or "traffic" in goals or "visit" in goals:
+        return "shop_action"
+    if "engagement" in goals or "comment" in goals or "conversation" in goals:
+        return "community_prompt"
+    if occasion and occasion.lower() != "evergreen":
+        return "occasion"
+    if _recommended_copy_skill(destination) == "social-media-copywriter":
+        return "personality"
+    return ""
+
+
+def _content_pillar(brief: dict[str, object], destination: str) -> str:
+    goals = " ".join(str(item).lower() for item in brief.get("goals", []) if str(item).strip())
+    audience = str(brief.get("audience") or "").strip().lower()
+    occasion = str(brief.get("occasion") or "").strip().lower()
+    promotion = str(brief.get("promotion") or "").strip().lower()
+    products = " ".join(str(item).lower() for item in brief.get("products", []) if str(item).strip())
+    facts = json.dumps(brief.get("product_facts", []), sort_keys=True).lower()
+    source_text = " ".join([goals, audience, occasion, promotion, products, facts])
+    if _recommended_copy_skill(destination) != "social-media-copywriter":
+        return ""
+    if any(token in source_text for token in ["cruise", "room steward", "ship", "duck hiding", "duck exchange"]):
+        return "Cruise And Sharing"
+    if any(token in source_text for token in ["state", "occupation", "career", "series", "collect", "flock"]):
+        return "Flock Building"
+    if any(token in source_text for token in ["maker", "process", "behind the scenes", "design sketch", "print video"]):
+        return "Maker Process"
+    if "gift" in source_text:
+        return "Duck Personality"
+    if "personality" in goals or "follow" in goals:
+        return "Duck Personality"
+    if "shop" in goals or "sales" in goals or "traffic" in goals:
+        return "Flock Building"
+    if occasion and occasion not in {"evergreen", "none", "n/a"}:
+        return "Cruise And Sharing" if "cruise" in occasion else "Duck Personality"
+    return "Cruise And Sharing"
+
+
+def _cta_type(goals: list[str]) -> str:
+    normalized = " ".join(goal.lower() for goal in goals)
+    if any(token in normalized for token in ["shop", "traffic", "visit", "click"]):
+        return "shop"
+    if "follow" in normalized or "follower" in normalized:
+        return "follow"
+    if any(token in normalized for token in ["engagement", "comment", "reply", "community", "conversation", "cruise"]):
+        return "comment"
+    if any(token in normalized for token in ["flock", "collect", "gift", "sales"]):
+        return "shop"
+    return "comment"
+
+
 def _image_format(destination: str) -> str:
     normalized = destination.lower()
     if "pinterest" in normalized:
@@ -250,6 +379,11 @@ def _approved_source_asset_ids(brief: dict[str, object]) -> list[int]:
             except (TypeError, ValueError):
                 continue
     return values
+
+
+def _planning_output_path(planned_item_id: object, option_number: int) -> str:
+    root = Path(os.environ.get("MARKETING_OS_PLANNING_UPLOAD_ROOT", "outputs/graphics/planning/uploads"))
+    return (root / f"planned-item-{planned_item_id}" / f"option-{option_number}.png").as_posix()
 
 
 def _reference_images(brief: dict[str, object], approved_ids: list[int]) -> list[str]:

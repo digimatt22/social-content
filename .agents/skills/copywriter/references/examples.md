@@ -17,10 +17,28 @@ Input:
 Output shape:
 
 - Hook
+- Angle
 - Body
 - CTA
+- Variant purpose
 - Source facts used
 - Review notes
+
+Weak:
+
+```text
+Check out our new 3D printed desk duck in a yellow raincoat.
+```
+
+Stronger:
+
+```text
+This tiny raincoat duck looks ready for a very serious puddle inspection.
+
+It is a 3D printed desk duck made for shelves, collections, and the friend whose workspace needs a little weather report.
+
+Who would you give this one to?
+```
 
 ## Newsletter
 

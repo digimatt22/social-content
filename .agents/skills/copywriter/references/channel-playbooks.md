@@ -6,9 +6,12 @@ Use the closest playbook when a destination is ambiguous.
 
 Best for awareness, conversation, product storytelling, launches, and lightweight offers.
 
+Use `$social-media-copywriter` for social posts and captions. Do not treat product titles or listing descriptions as finished social copy. Social copy must choose a human angle before drafting.
+
 Include:
 
 - Hook in the first sentence.
+- One chosen angle: giftable, collectible, personality, maker process, occasion, community prompt, or shop action.
 - One clear idea.
 - Concrete detail from the source facts.
 - CTA matched to the goal.
@@ -20,6 +23,8 @@ Platform notes:
 - Instagram: visual-first, concise caption, sensory/product detail, 3-8 relevant hashtags only when requested.
 - LinkedIn: insight, credibility, professional relevance, restrained CTA.
 - Pinterest: search-friendly product/use-case phrasing and concise description.
+
+Fail social drafts that mostly restate an Etsy title, start with generic announcement language, or lack a comment-worthy prompt or clear CTA.
 
 ## Newsletter
 

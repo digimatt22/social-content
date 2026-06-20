@@ -27,7 +27,7 @@ The app helps a solo business owner generate and execute marketing plans from a 
 - scriptable content-production job for Codex-assisted copy and image-brief candidates
 - read-only Etsy CSV listing import foundation
 - read-only Etsy API sync boundary for active listings and listing images
-- MattMadeMe website sync boundary for products, product images, and published blog metadata
+- MattMadeMe website adapter boundary for blog draft publishing and published blog metadata
 - manual override fields that protect local edits from future imports
 - data health view for stale, missing, or unreviewed records
 - local JSON read/write endpoints for future frontend/API reuse
@@ -108,7 +108,7 @@ To use a different local product-photo inventory:
 MARKETING_OS_ASSETS_ROOT=/path/to/assets/products python run_local.py
 ```
 
-Phase 5 planning uses `MARKETING_OS_ASSET_ROOT` for the future external-drive asset library. The current Phase 4 app still accepts `MARKETING_OS_ASSETS_ROOT` for the repo-local product-photo inventory.
+Phase 5 planning uses `MARKETING_OS_ASSET_ROOT` for the repo-local asset library. The app still accepts `MARKETING_OS_ASSETS_ROOT` for the product-photo inventory, which defaults to `assets/products`.
 
 To write JSON exports somewhere else:
 

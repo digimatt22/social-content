@@ -1,4 +1,0 @@
-interface:
-  display_name: "Image Creator"
-  short_description: "Image prompts for built-in generation or Magnific"
-  default_prompt: "Use $image-creator to prepare a marketing image prompt or Magnific/Freepik handoff from a destination, audience, and visual brief."

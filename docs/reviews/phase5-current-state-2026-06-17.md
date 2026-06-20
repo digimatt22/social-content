@@ -13,12 +13,12 @@ The current system is ready for operator review and future-phase continuation. R
 - Python/Flask/SQLAlchemy/SQLite remains the active local-first stack.
 - Service/API boundaries are in place for future frontend reuse.
 - Etsy read-only sync exists with fixture-backed tests.
-- MattMadeMe website sync exists with fixture-backed tests.
+- MattMadeMe website product sync has been retired; Etsy is the product source of truth.
 - Local asset library scanning exists with fixture-backed tests.
 - Planning supports destination, goal, date, notes, and multiple product focuses.
 - Content production can run manually or from the scheduled wrapper.
 - The content-production job exports structured briefs and writes generated candidates back for review.
-- Facebook copy generation is wired through a reusable copywriter service boundary.
+- Facebook copy generation is queued for the Codex agent social media skill workflow; local deterministic copy generation has been removed.
 - Generated copy supports edit, approve, reject, and rewrite-request review states.
 - Manual Magnific/MCP generated-output import exists and starts outputs in review.
 - Generated creative approval requires reviewer evidence and a file-backed candidate.
@@ -51,7 +51,7 @@ Remaining proof items:
 - Real creative generation and product-quality review.
 - Final Matt voice/taste approval for Facebook copy.
 - Live credential-backed Etsy API sync proof.
-- Live credential-backed MattMadeMe website sync proof.
+- Live credential-backed MattMadeMe website blog draft publishing proof.
 - Fully automated analytics ingestion.
 - Additional UI polish beyond blockers found during the real proof workflow.
 - Any Next.js or richer frontend exploration.

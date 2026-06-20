@@ -1,0 +1,4 @@
+interface:
+  display_name: "Social Media Art Director"
+  short_description: "Social creative prompts and product-preserving visuals"
+  default_prompt: "Use $social-media-art-director to prepare social image concepts, prompts, or Magnific/Freepik handoffs from a platform, audience, product, and visual brief."
