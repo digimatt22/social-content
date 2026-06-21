@@ -7,6 +7,7 @@ Create a [STYLE/MEDIUM] image for [DESTINATION/FORMAT].
 
 Subject: [MAIN SUBJECT]
 Audience and goal: [WHO IT IS FOR] / [WHAT THE IMAGE SHOULD HELP DO]
+Platform behavior: [COMMENTS / SAVES / SHARES / SEARCH DISCOVERY / PROFESSIONAL DISCUSSION]
 Scene: [SCENE DESCRIPTION]
 Environment: [SETTING, SURROUNDING OBJECTS, BACKGROUND]
 Mood and lighting: [MOOD, LIGHTING, COLOR, SEASON, TIME OF DAY]
@@ -21,6 +22,7 @@ If social copy exists, add:
 ```text
 Post story to match: [HOOK + BODY GIST]
 Story move: [TINY SCENE / SURPRISE DETAIL / COMMUNITY PROMPT / ETC.]
+Platform behavior: [FACEBOOK CONVERSATION / INSTAGRAM VISUAL PAYOFF / PINTEREST SEARCH PIN / THREADS OBSERVATION / LINKEDIN PROCESS INSIGHT]
 Visual alignment rule: the scene, props, environment, and mood must support this story. Do not create a generic product image that could pair with any caption.
 ```
 
@@ -31,6 +33,7 @@ Create a realistic photographic scene:
 
 Post story to match: [HOOK + BODY GIST]
 Story move: [STORY MOVE IF KNOWN]
+Platform behavior: [COMMENTS / SAVES / SHARES / SEARCH DISCOVERY / PROFESSIONAL DISCUSSION]
 Visual alignment rule: [HOW THE ENVIRONMENT/PROPS/MOOD SUPPORT THE COPY]
 
 Scene: [SCENE DESCRIPTION]

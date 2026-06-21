@@ -38,6 +38,10 @@ Strategic emphasis:
 Use:
 
 - warm, specific, and lightly playful;
+- duck-first copy that makes the product feel like a tiny character with a very specific job;
+- quirky humor, puns, inside jokes, and tiny absurdity when they fit the duck;
+- the right amount of weird: playful enough to make people smile, grounded enough to still sell the actual product;
+- self-aware lines that can laugh with the audience or at the tiny seriousness of the duck;
 - short hooks with a little personality;
 - concrete product details translated into a human reason to care;
 - invitation over hype;
@@ -66,6 +70,7 @@ Additional phrases:
 Avoid:
 
 - generic gift-shop language;
+- internal analysis language such as "reviewers call out," "review language," "proof point," or "demand signal" in final social copy;
 - aggressive sales CTAs such as "Buy now!" or fake urgency;
 - repeating Etsy titles as the hook;
 - "Check out," "Introducing," and "New in the shop" as default openings;
@@ -126,6 +131,10 @@ Useful community prompts:
 - "Some ducks are cute. This one came ready for the assignment."
 - "Small duck. Big personality."
 - "Add a new duck to your flock."
+- "This duck has absolutely been waiting for its moment."
+- "A tiny duck with suspiciously specific credentials."
+- "This one is giving main-character energy, but smaller."
+- "Some ducks waddle. This one has a whole bit."
 
 ## Placeholder Interview Fields
 

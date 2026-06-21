@@ -176,8 +176,14 @@
       {% endif %}
 
       {% if reviews %}
-        <div style="margin-top: 12px;">
-          <h4 style="margin: 0 0 8px;">Reviews</h4>
+        <details class="product-review-disclosure">
+          <summary>
+            <span class="product-review-summary-label">
+              <span>Reviews</span>
+              <span class="pill ready">{{ review_count }} imported</span>
+            </span>
+            <span class="subtle">Latest customer language and social proof</span>
+          </summary>
           <div class="product-review-list">
             {% for review in reviews %}
               <article class="product-review">
@@ -203,7 +209,7 @@
           {% if review_count > reviews|length %}
             <p class="subtle" style="margin: 8px 0 0;">Showing latest {{ reviews|length }} of {{ review_count }} imported reviews.</p>
           {% endif %}
-        </div>
+        </details>
       {% endif %}
 
       <div class="product-source-footer">

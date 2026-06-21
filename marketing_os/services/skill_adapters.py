@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,6 +33,8 @@ def copywriter_contract(brief: dict[str, object], destination: str) -> SkillCont
         "creative_directive": _social_creative_directive(brief, destination),
         "story_thesis": _story_thesis(brief, destination),
         "proof_points": _proof_points(brief),
+        "sales_context": _sales_context(brief),
+        "review_context": _review_context(brief),
         "missing_proof": _missing_proof(brief),
         "story_moves": _story_moves(destination),
         "cta_type": _cta_type(goals),
@@ -49,6 +52,8 @@ def copywriter_contract(brief: dict[str, object], destination: str) -> SkillCont
             "calendar_date": brief.get("calendar_date"),
             "products": products,
             "product_facts": brief.get("product_facts", []),
+            "sales_context": _sales_context(brief),
+            "review_context": _review_context(brief),
             "performance_context": brief.get("performance_context", {}),
         },
     }
@@ -68,14 +73,14 @@ def social_copy_workflow_contract(brief: dict[str, object], destination: str) ->
             "skill": "social-media-strategist",
             "input": {
                 **contract.request,
-                "task": "Choose platform strategy, content pillar, social angle, CTA type, story move, and variant plan. Do not write final copy.",
+                "task": "Choose platform strategy, content pillar, social angle, CTA type, story move, and variant plan. Use review_context when available for customer language, use cases, and source-backed proof. Do not write final copy.",
             },
         },
         "writing_request": {
             "skill": "social-media-copywriter",
             "input": {
                 **contract.request,
-                "task": "Write social copy from the strategy brief. Lead with a tiny story, surprise, opinion, scene, or community moment before product facts. Produce engagement, follower-building, and shop-click variants unless the plan says otherwise.",
+                "task": "Write 2-3 platform-native social copy options from the strategy brief. Lead with a tiny story, surprise, opinion, scene, review theme, or community moment before product facts. Use review_context as source-backed customer language or social proof without inventing broader popularity. Produce distinct engagement, follower-building, and shop-click options unless the plan says otherwise, so Planning can show selectable copy tabs.",
             },
         },
         "challenge_request": {
@@ -399,6 +404,18 @@ def _proof_points(brief: dict[str, object]) -> list[str]:
         note = str(fact.get("sales_momentum_note") or "").strip()
         if note:
             points.append(f"{name} listing/source note: {note[:500]}")
+        sales = fact.get("sales_context")
+        if isinstance(sales, dict):
+            safe_claims = sales.get("safe_public_claims")
+            quantity = sales.get("lifetime_quantity")
+            recent = sales.get("recent_90_day_quantity")
+            if safe_claims:
+                points.append(f"{name} sales context safe public claim options: {safe_claims}")
+            if quantity:
+                points.append(
+                    f"{name} internal sales signal: lifetime_quantity={quantity}; recent_90_day_quantity={recent or 0}. "
+                    "Do not publish exact counts or rankings without Matt approval."
+                )
         reviews = fact.get("etsy_reviews")
         if isinstance(reviews, list):
             for review in reviews[:3]:
@@ -406,7 +423,8 @@ def _proof_points(brief: dict[str, object]) -> list[str]:
                     continue
                 review_text = str(review.get("review") or "").strip()
                 rating = review.get("rating")
-                if review_text:
+                signal = _review_signal(review_text)
+                if review_text and signal["use_as_proof"]:
                     prefix = f"{name} Etsy review"
                     if rating:
                         prefix += f" ({rating}/5)"
@@ -418,9 +436,134 @@ def _proof_points(brief: dict[str, object]) -> list[str]:
             if value:
                 points.append(f"Performance context {key}: {value}")
     notes = str(brief.get("notes") or "").strip()
-    if any(token in notes.lower() for token in ["order", "sold", "requested", "hot", "took off", "popular"]):
+    if "weekly autoplan" not in notes.lower() and any(token in notes.lower() for token in ["order", "sold", "requested", "hot", "took off", "popular"]):
         points.append(f"Planning note demand signal: {notes}")
     return points[:5]
+
+
+def _sales_context(brief: dict[str, object]) -> dict[str, object]:
+    products: list[dict[str, object]] = []
+    for fact in brief.get("product_facts", []):
+        if not isinstance(fact, dict):
+            continue
+        sales = fact.get("sales_context")
+        if not isinstance(sales, dict):
+            continue
+        products.append(
+            {
+                "product": str(fact.get("name") or "Product"),
+                "internal_lifetime_quantity": sales.get("lifetime_quantity", 0),
+                "internal_recent_90_day_quantity": sales.get("recent_90_day_quantity", 0),
+                "last_sale_at": sales.get("last_sale_at"),
+                "safe_public_claims": sales.get("safe_public_claims", []),
+            }
+        )
+    return {
+        "usage": (
+            "Use sales data as internal momentum context. Do not reveal exact unit counts, revenue, rankings, "
+            "or which products are best sellers unless Matt explicitly approves. Prefer safe_public_claims, "
+            "customer-language proof, or playful non-specific milestone language."
+        ),
+        "products": products,
+    }
+
+
+def _review_context(brief: dict[str, object]) -> dict[str, object]:
+    snippets: list[dict[str, object]] = []
+    cautions: list[dict[str, object]] = []
+    themes: list[str] = []
+    for fact in brief.get("product_facts", []):
+        if not isinstance(fact, dict):
+            continue
+        product_name = str(fact.get("name") or "Product").strip()
+        reviews = fact.get("etsy_reviews")
+        if not isinstance(reviews, list):
+            continue
+        for review in reviews[:5]:
+            if not isinstance(review, dict):
+                continue
+            text = str(review.get("review") or "").strip()
+            if not text:
+                continue
+            signal = _review_signal(text)
+            snippet = {
+                "product": product_name,
+                "rating": review.get("rating"),
+                "review": text[:300],
+                "language": review.get("language") or "",
+                "has_photo": bool(review.get("has_photo")),
+                "social_use": signal["social_use"],
+                "meaning": signal["meaning"],
+            }
+            if signal["use_as_proof"]:
+                snippets.append(snippet)
+            else:
+                cautions.append(snippet)
+                continue
+            lower = text.lower()
+            if any(token in lower for token in ["gift", "present", "gave", "giving"]):
+                themes.append(f"{product_name}: giftable customer language")
+            if any(token in lower for token in ["cruise", "cruising", "ducking"]):
+                themes.append(f"{product_name}: cruise/customer-sharing context")
+            if any(token in lower for token in ["desk", "office", "work", "coworker"]):
+                themes.append(f"{product_name}: desk/workplace context")
+            if any(token in lower for token in ["tiny", "cute", "perfect", "love", "joy"]):
+                themes.append(f"{product_name}: delight/collectible reaction")
+    deduped_themes = list(dict.fromkeys(themes))
+    return {
+        "usage": (
+            "Use imported Etsy reviews as source-backed context for what customers value, gift, collect, "
+            "or do with this product. Interpret sentiment and meaning before writing. Use only positive, "
+            "product-relevant snippets as proof; keep caution/negative/weak snippets out of social copy. "
+            "Quote or closely paraphrase only short review snippets and keep generated copy behind human review."
+        ),
+        "snippets": snippets[:5],
+        "cautions": cautions[:5],
+        "themes": deduped_themes[:6],
+    }
+
+
+def _review_signal(text: str) -> dict[str, object]:
+    cleaned = " ".join(text.split())
+    lower = cleaned.lower()
+    tokens = re.findall(r"[a-z]+", lower)
+    alpha = re.sub(r"[^a-z]+", "", lower)
+    if len(cleaned) < 8 or (alpha and len(set(alpha)) <= 3):
+        return {"social_use": "ignore", "meaning": "Unusable or unclear review text.", "use_as_proof": False}
+    if len(tokens) >= 4 and sum(1 for token in tokens if len(token) <= 3 and len(set(token)) <= 2) >= len(tokens) - 1:
+        return {"social_use": "ignore", "meaning": "Unusable or unclear review text.", "use_as_proof": False}
+    negative_terms = [
+        "too small",
+        "so small",
+        "won't fit",
+        "will get lost",
+        "fragile",
+        "not crazy",
+        "broken",
+        "damaged",
+        "disappointed",
+        "poor quality",
+        "did not",
+        "doesn't fit",
+    ]
+    if any(term in lower for term in negative_terms):
+        return {"social_use": "caution", "meaning": "Mixed or negative context; do not use as positive social proof.", "use_as_proof": False}
+    weak_terms = [
+        "fast delivery",
+        "fast shipping",
+        "packed for shipping",
+        "well packaged",
+        "as described",
+        "as advertised",
+        "very good",
+        "great experience",
+        "thank you",
+    ]
+    if any(term in lower for term in weak_terms) and not any(
+        term in lower for term in ["gift", "cruise", "collection", "collect", "love", "cute", "adorable", "perfect"]
+    ):
+        return {"social_use": "weak", "meaning": "Service/logistics review; useful for trust, not product story copy.", "use_as_proof": False}
+    return {"social_use": "positive", "meaning": "Positive product/customer-use context.", "use_as_proof": True}
 
 
 def _missing_proof(brief: dict[str, object]) -> list[str]:

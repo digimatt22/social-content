@@ -201,6 +201,7 @@ def write_copy_workflow_request(
                     "Run social-media-strategist first and save the strategy decision.",
                     "Run social-media-copywriter second using the strategy decision and source facts.",
                     "Run social-media-copy-chief third to challenge the draft before human review.",
+                    "Register 2-3 challenged copy options in copy_options when useful so Planning can show option tabs.",
                     "Do not approve, post, or publish generated copy.",
                     "Use placeholders for missing MattMadeMe facts instead of inventing them.",
                 ],

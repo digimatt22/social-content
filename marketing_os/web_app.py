@@ -1271,8 +1271,9 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 try:
                     summary = import_etsy_sales_csv(session, temp_path)
                     flash(
-                        f"Imported Etsy order items CSV: {summary.imported} new row(s), "
-                        f"{summary.updated} updated, {summary.skipped} skipped, {summary.unmatched} unmatched."
+                        f"Import complete. Etsy order items CSV processed: {summary.imported} new row(s), "
+                        f"{summary.updated} updated, {summary.skipped} skipped, {summary.unmatched} unmatched. "
+                        "Sales signals are ready for planning."
                     )
                 except FileNotFoundError as exc:
                     flash(str(exc))

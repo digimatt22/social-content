@@ -94,6 +94,30 @@ The copy registration manifest shape is:
 }
 ```
 
+To register selectable copy tabs, use `copy_options` instead of a single `copy_text`:
+
+```json
+{
+  "planned_item_id": 1,
+  "provider": "codex_agent",
+  "copy_options": [
+    {
+      "copy_text": "Engagement hook\n\nBody copy\n\nComment CTA",
+      "social_strategy": { "selected_variant": "Engagement" },
+      "social_challenge": { "status": "ready_for_human_review" }
+    },
+    {
+      "copy_text": "Shop hook\n\nBody copy\n\nShop CTA",
+      "social_strategy": { "selected_variant": "Shop-click" },
+      "social_challenge": { "status": "ready_for_human_review" }
+    }
+  ],
+  "skill_request": {},
+  "skill_check": {},
+  "notes": "Agent-written options; review before posting."
+}
+```
+
 The registration manifest shape is:
 
 ```json
@@ -175,7 +199,7 @@ Each run:
    - Use $social-media-strategist to confirm platform, audience, content pillar, social angle, CTA type, and variant plan.
    - Use $social-media-copywriter to draft from that strategy, not directly from Etsy titles or product descriptions.
    - Use $social-media-copy-chief to challenge the draft. If it fails, revise before reporting it as ready for human review.
-   - Build register-copy.json beside copy-workflow.json with the final challenged copy, strategy, challenge result, skill_request, and skill_check.
+   - Build register-copy.json beside copy-workflow.json with 2-3 challenged `copy_options` when useful, plus strategy, challenge result, skill_request, and skill_check.
    - Register generated copy:
      python -m marketing_os.jobs.register_generated_copy --manifest data/exports/content-automation/planned-item-<id>/register-copy.json
    - Do not approve, publish, or mark copy final.

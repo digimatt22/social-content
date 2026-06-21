@@ -434,7 +434,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             planning_before_delete = client.get("/planning")
             self.assertEqual(planning_before_delete.status_code, 200)
             self.assertIn(b"Deleted planning image option", planning_before_delete.data)
-            self.assertIn(b"Use this image", planning_before_delete.data)
+            self.assertIn(b"class=\"image-select-button\"", planning_before_delete.data)
 
             delete_response = client.post(f"/assets/{image_asset_id}/delete-local", follow_redirects=True)
             self.assertEqual(delete_response.status_code, 200)
@@ -850,6 +850,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b'<div class="copybox description-preview"><span>Long imported description.', products_page.data)
             self.assertIn(b"Reviews", products_page.data)
             self.assertIn(b"1 review", products_page.data)
+            self.assertIn(b"class=\"product-review-disclosure\"", products_page.data)
+            self.assertIn(b"Latest customer language and social proof", products_page.data)
             self.assertIn(b"5/5", products_page.data)
             self.assertIn(b"Exactly the kind of tiny duck joy I wanted.", products_page.data)
             self.assertIn(b"product-source-footer", products_page.data)
@@ -1667,6 +1669,36 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             seed_database(session)
             product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Room Steward Duck"))
             self.assertIsNotNone(product)
+            session.add(
+                EtsyReviewRecord(
+                    product_id=product.id,
+                    external_source="etsy_api",
+                    external_id="transaction:copy-contract-review",
+                    shop_id="fixture-shop",
+                    listing_id=product.external_id,
+                    transaction_id="copy-contract-review",
+                    buyer_user_id="buyer-hidden",
+                    rating=5,
+                    review="Perfect thank-you gift for our cruise room steward.",
+                    language="en",
+                    created_timestamp=1_783_123_200,
+                )
+            )
+            session.add(
+                EtsyReviewRecord(
+                    product_id=product.id,
+                    external_source="etsy_api",
+                    external_id="transaction:copy-contract-negative-review",
+                    shop_id="fixture-shop",
+                    listing_id=product.external_id,
+                    transaction_id="copy-contract-negative-review",
+                    buyer_user_id="buyer-hidden-2",
+                    rating=4,
+                    review="It is soo small, it won't fit secure on my jeep dashboard.",
+                    language="en",
+                    created_timestamp=1_783_123_100,
+                )
+            )
             item = create_planned_content_item(
                 session,
                 calendar_date=date(2026, 6, 25),
@@ -1687,13 +1719,72 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn("creative_directive", contract.request)
             self.assertIn("story_thesis", contract.request)
             self.assertIn("proof_points", contract.request)
+            self.assertIn("review_context", contract.request)
             self.assertIn("missing_proof", contract.request)
             self.assertIn("story_moves", contract.request)
             self.assertIn("tiny moment", contract.request["creative_directive"])
             self.assertIn("using the supplied proof", contract.request["story_thesis"])
+            self.assertEqual(contract.request["review_context"]["snippets"][0]["review"], "Perfect thank-you gift for our cruise room steward.")
+            self.assertEqual(contract.request["review_context"]["cautions"][0]["social_use"], "caution")
+            self.assertIn("Perfect thank-you gift for our cruise room steward.", " ".join(contract.request["proof_points"]))
+            self.assertNotIn("won't fit secure", " ".join(contract.request["proof_points"]))
+            self.assertEqual(
+                contract.request["source_facts"]["review_context"]["snippets"][0]["product"],
+                "Room Steward Duck",
+            )
             self.assertTrue(any("community" in move.lower() or "conversation" in move.lower() for move in contract.request["story_moves"]))
             self.assertIn("Product-description-first body copy.", contract.request["avoid"])
             self.assertIn("Unsupported claims that the product is hot, viral, popular, or widely ordered.", contract.request["avoid"])
+
+    def test_phase5_copy_contract_exposes_private_sales_context_with_safe_claims(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+
+        with session_scope(factory) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            self.assertIsNotNone(product)
+            session.add_all(
+                [
+                    ProductSalesRecord(
+                        product_id=product.id,
+                        source_name="etsy_sales_csv",
+                        external_id="bingo-sale-1",
+                        listing_id=product.external_id,
+                        listing_title=product.name,
+                        quantity=75,
+                        revenue_cents=75000,
+                        currency_code="USD",
+                    ),
+                    ProductSalesRecord(
+                        product_id=product.id,
+                        source_name="etsy_sales_csv",
+                        external_id="bingo-sale-2",
+                        listing_id=product.external_id,
+                        listing_title=product.name,
+                        quantity=50,
+                        revenue_cents=50000,
+                        currency_code="USD",
+                    ),
+                ]
+            )
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 26),
+                destinations=["Facebook"],
+                goals=["Etsy shop visits"],
+                product_ids=[product.id],
+                audience="Cruise Duckers",
+                occasion="Gift idea",
+            )
+            contract = copywriter_contract(build_content_brief(session, item), "Facebook")
+
+            sales_context = contract.request["sales_context"]
+            self.assertIn("Do not reveal exact unit counts", sales_context["usage"])
+            self.assertEqual(sales_context["products"][0]["internal_lifetime_quantity"], 125)
+            self.assertIn("a repeat customer pick", sales_context["products"][0]["safe_public_claims"])
+            self.assertIn("sales_context", contract.request["source_facts"])
+            self.assertIn("Do not publish exact counts", " ".join(contract.request["proof_points"]))
 
     def test_phase5_social_copy_workflow_rejects_listing_summary_pattern(self) -> None:
         tmp, factory = self.build_session()
@@ -1715,6 +1806,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             writing_task = workflow["writing_request"]["input"]["task"]
             challenge_task = workflow["challenge_request"]["input"]["task"]
+            strategy_task = workflow["strategy_request"]["input"]["task"]
+            self.assertIn("review_context", strategy_task)
+            self.assertIn("review_context", writing_task)
             self.assertIn("tiny story", writing_task)
             self.assertIn("product facts", writing_task)
             self.assertIn("hook + product description + CTA", challenge_task)
@@ -1891,7 +1985,69 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(body["skill"], "social-media-copywriter")
             self.assertEqual(body["social_strategy"]["skill"], "social-media-strategist")
             self.assertEqual(body["social_challenge"]["skill"], "social-media-copy-chief")
+            self.assertEqual(body["hook"], "Who needs Bingo Duck in their flock?")
+            self.assertEqual(body["body"], "This tiny 3D printed duck is ready for a shelf, desk, or gift box.")
+            self.assertEqual(body["cta"], "Who would you give this one to?")
+            self.assertNotIn("Who would you give this one to?", body["body"])
             self.assertEqual(item.status, "waiting_image_generation")
+
+    def test_phase5_register_generated_copy_manifest_supports_options(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        db_path = Path(tmp.name) / "copy-options.sqlite"
+        app = create_app(db_path)
+        self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+        with session_scope(app.config["SESSION_FACTORY"]) as session:
+            seed_database(session)
+            product = session.scalar(select(ProductRecord).where(ProductRecord.name == "Bingo Duck"))
+            item = create_planned_content_item(
+                session,
+                calendar_date=date(2026, 6, 25),
+                destinations=["Facebook"],
+                goals=["Engagement"],
+                product_ids=[product.id],
+                audience="gift buyers",
+            )
+            item_id = item.id
+
+        manifest_path = Path(tmp.name) / "register-copy-options.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "planned_item_id": item_id,
+                    "provider": "codex_agent",
+                    "copy_options": [
+                        {
+                            "copy_text": "Who gets the lucky duck?\n\nThis option starts a comment thread for Bingo Duck.\n\nTell us your bingo number.",
+                            "social_strategy": {"selected_variant": "Engagement"},
+                        },
+                        {
+                            "copy_text": "Bingo Duck gift idea\n\nThis option is written for shop clicks and gift consideration.\n\nFind your favorite duck in our Etsy shop.",
+                            "social_strategy": {"selected_variant": "Shop-click"},
+                        },
+                    ],
+                    "social_challenge": {"status": "ready_for_human_review"},
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_register_generated_copy_job(db_path=db_path, manifest_path=manifest_path)
+        self.assertEqual(result["planned_item_id"], item_id)
+        self.assertEqual(len(result["candidate_ids"]), 2)
+        with session_scope(app.config["SESSION_FACTORY"]) as session:
+            candidates = list(
+                session.scalars(
+                    select(GeneratedContentCandidateRecord)
+                    .where(GeneratedContentCandidateRecord.planned_item_id == item_id)
+                    .where(GeneratedContentCandidateRecord.candidate_type == "facebook_post")
+                    .order_by(GeneratedContentCandidateRecord.provider)
+                )
+            )
+            self.assertEqual([candidate.provider for candidate in candidates], ["codex_agent_option_1", "codex_agent_option_2"])
+            self.assertTrue(all(candidate.review_state == "needs_review" for candidate in candidates))
 
     def test_phase5_planned_intent_creates_posting_task_from_current_copy(self) -> None:
         tmp, factory = self.build_session()
@@ -2037,7 +2193,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(upload_response.status_code, 200)
             self.assertIn(b"Custom planned post image", upload_response.data)
-            self.assertIn(b"Use this image", upload_response.data)
+            self.assertIn(b"class=\"image-select-button\"", upload_response.data)
+            self.assertIn(b"Select image: Custom planned post image", upload_response.data)
             self.assertIn(b"data-image-zoom-src", upload_response.data)
             self.assertIn(b"data-image-modal", upload_response.data)
             with session_scope(app.config["SESSION_FACTORY"]) as session:
@@ -2057,6 +2214,29 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 asset = session.get(AssetRecord, image_asset_id)
                 self.assertEqual(asset.review_state, "approved")
                 self.assertEqual(asset.readiness_state, "ready to use")
+                image_candidate = session.get(GeneratedContentCandidateRecord, image_candidate_id)
+                self.assertEqual(image_candidate.review_state, "approved")
+
+            planning_with_selected_image = client.get("/planning")
+            self.assertEqual(planning_with_selected_image.status_code, 200)
+            self.assertIn(b"Deselect image: Custom planned post image", planning_with_selected_image.data)
+
+            deselect_response = client.post(
+                f"/planning/candidates/{image_candidate_id}/review",
+                data={"review_state": "needs_review", "revision_notes": "Deselected in test."},
+                follow_redirects=True,
+            )
+            self.assertEqual(deselect_response.status_code, 200)
+            self.assertIn(b"Select image: Custom planned post image", deselect_response.data)
+            self.assertNotIn(b"Deselect image: Custom planned post image", deselect_response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                asset = session.get(AssetRecord, image_asset_id)
+                image_candidate = session.get(GeneratedContentCandidateRecord, image_candidate_id)
+                self.assertEqual(asset.review_state, "needs review")
+                self.assertEqual(asset.readiness_state, "needs human review")
+                self.assertEqual(image_candidate.review_state, "needs_review")
+                self.assertEqual(image_candidate.reviewed_by, "")
+                self.assertIsNone(image_candidate.reviewed_at)
 
             calendar_page = client.get("/calendar")
             self.assertEqual(calendar_page.status_code, 200)
@@ -2102,6 +2282,15 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
                 candidate_id = self.register_agent_copy(session, item).id
+                second_candidate = register_generated_copy_candidate(
+                    session,
+                    item.id,
+                    f"{products[0].name} gift idea\n\nThis second copy option is more shop-click oriented.\n\nFind your favorite duck in our Etsy shop.",
+                    social_strategy={"skill": "social-media-strategist", "selected_variant": "Shop-click"},
+                    social_challenge={"skill": "social-media-copy-chief", "status": "ready_for_human_review"},
+                    provider="codex_agent_option_2",
+                )
+                second_candidate_id = second_candidate.id
             edited_copy = (
                 f"{products[0].name} is ready for a gift list.\n\n"
                 "This edited Facebook draft keeps the warm MattMadeMe voice and mentions the product clearly.\n\n"
@@ -2114,6 +2303,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(edit_response.status_code, 200)
             self.assertIn(b"This edited Facebook draft", edit_response.data)
+            self.assertIn(b'data-copy-options', edit_response.data)
+            self.assertIn(b'class="copy-option-rail"', edit_response.data)
+            self.assertIn(b'aria-pressed="true"', edit_response.data)
+            self.assertIn(f'data-copy-candidate-id="{candidate_id}"'.encode(), edit_response.data)
+            self.assertIn(f'data-copy-candidate-id="{second_candidate_id}"'.encode(), edit_response.data)
+            self.assertIn(b'data-selected-copy-candidate', edit_response.data)
 
             rewrite_response = client.post(
                 f"/planning/{item_id}/regenerate",
@@ -2149,6 +2344,16 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertEqual(review_response.get_json()["candidate"]["copy_text"], edited_copy)
             self.assertEqual(review_response.get_json()["candidate"]["reviewed_by"], "Matt")
             self.assertIsNotNone(review_response.get_json()["candidate"]["reviewed_at"])
+
+            reselect_image_response = client.post(
+                f"/planning/candidates/{image_candidate_id}/review",
+                data={"review_state": "approved", "revision_notes": "Selected again for task creation.", "reviewed_by": "Matt"},
+                follow_redirects=True,
+            )
+            self.assertEqual(reselect_image_response.status_code, 200)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                image_candidate = session.get(GeneratedContentCandidateRecord, image_candidate_id)
+                self.assertEqual(image_candidate.review_state, "approved")
 
             task_response = client.post(
                 f"/api/planned-content/{item_id}/task",
@@ -2194,7 +2399,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 target = export_operating_data(session, Path(tmp) / "exports")
                 export_payload = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(len(export_payload["planned_content_items"]), 1)
-                self.assertEqual(len(export_payload["generated_content_candidates"]), 2)
+                self.assertEqual(len(export_payload["generated_content_candidates"]), 3)
                 reviewed_candidate = next(record for record in export_payload["generated_content_candidates"] if record["id"] == candidate_id)
                 self.assertEqual(reviewed_candidate["reviewed_by"], "Matt")
                 self.assertIsNotNone(reviewed_candidate["reviewed_at"])
@@ -2905,6 +3110,13 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             app = create_app(db_path, bootstrap_data=True)
             self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
             client = app.test_client()
+            settings = client.get("/settings")
+            self.assertEqual(settings.status_code, 200)
+            self.assertIn(b"data-etsy-order-items-form", settings.data)
+            self.assertIn(b"data-etsy-order-items-modal", settings.data)
+            self.assertIn(b"Importing Etsy order items", settings.data)
+            self.assertIn(b"Keep this page open", settings.data)
+
             response = client.post(
                 "/imports/etsy-sales-csv",
                 data={
@@ -2921,7 +3133,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 200)
-            self.assertIn(b"Imported Etsy order items CSV", response.data)
+            self.assertIn(b"Import complete. Etsy order items CSV processed", response.data)
+            self.assertIn(b"Sales signals are ready for planning.", response.data)
+            self.assertIn(b"Data Health", response.data)
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 sale = session.scalar(select(ProductSalesRecord).where(ProductSalesRecord.external_id == "tx-200"))
                 self.assertIsNotNone(sale)

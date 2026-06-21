@@ -25,7 +25,10 @@ Ask these of every social draft:
 - Could this apply to any product, or only this one?
 - Does the CTA ask for exactly one action?
 - Did the draft invent urgency, popularity, reviews, events, discounts, or unsupported product facts?
+- If reviews influenced the draft, did the writer interpret sentiment/context before using them?
+- Does the draft avoid internal analysis phrases such as "review language," "reviewers call out," "proof point," or "demand signal"?
 - For MattMadeMe, does it avoid "rubber duck" and generic gift-shop wording?
+- For MattMadeMe, does it feel duck-first, quirky, pun-friendly, and just weird enough without becoming nonsense?
 
 ## Output Shape
 

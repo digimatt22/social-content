@@ -8,7 +8,7 @@ description: Social media visual art director for product-preserving creative. U
 ## Core Workflow
 
 1. Normalize the request into: `platform`, `format`, `audience`, `goal`, `subject`, `social_angle`, `post_story`, `story_move`, `brand_style`, `details`, `reference_images`, `aspect_ratio`, `provider_path`, `must_include`, and `avoid`.
-2. Select the destination playbook from `references/destination-image-playbooks.md`.
+2. Select the destination playbook from `references/destination-image-playbooks.md`, including the platform-specific social format when the asset is for Facebook, Instagram, Pinterest, Threads, or LinkedIn.
 3. Choose the provider path:
    - Use **Magnific/Freepik MCP** as the primary path for MattMadeMe product images, reference-image product preservation, Freepik/Magnific requests, or external handoff packages.
    - Use **built-in image generation/image editing** only as a fallback when Magnific MCP is unavailable, blocked, or explicitly declined by the user. For product work, fallback must still pass actual reference images through an image-editing path, not just describe them in text.
@@ -57,6 +57,7 @@ For product images:
 When a post/caption has already been drafted:
 
 - include the hook, story move, and body gist in the image prompt,
+- include the platform, format, CTA behavior, and whether the copy is optimized for comments, saves, shares, search, or professional discussion,
 - choose props/environment that reinforce the story,
 - avoid visual ideas that only restate the product category,
 - reject image options that could belong to any caption.

@@ -287,58 +287,90 @@
             {% if item.waiting_for_copy %}<span class="pill blocked">Queued</span>{% endif %}
           </div>
           {% if item.copy_candidates %}
+            {% set active_copy = namespace(id=item.copy_candidates[0].id, label='Option 1') %}
             {% for candidate in item.copy_candidates %}
-              <article class="post-preview" id="candidate-{{ candidate.id }}" data-platform="{{ item.destinations[0]|lower if item.destinations else 'social' }}">
-                <div class="post-preview-header">
-                  <span class="channel-icon {{ item.destinations[0]|lower if item.destinations else '' }}">{{ (item.destinations[0][0] if item.destinations else 'S') }}</span>
-                  <div>
-                    <strong>{{ item.destinations[0] if item.destinations else 'Social' }}</strong>
-                    <span>{{ item.products|map(attribute='name')|join(', ') or 'Selected product' }}</span>
-                  </div>
-                </div>
-                <div class="post-preview-body" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</div>
-
-                <form method="post" action="{{ url_for('update_planning_copy', candidate_id=candidate.id) }}" class="copy-edit-form" data-edit-panel="copy-{{ candidate.id }}">
-                  <label>Edit post copy
-                    <textarea name="copy_text" {{ 'disabled' if item.waiting_for_copy else '' }}>{{ candidate.copy_text }}</textarea>
-                  </label>
-                  <div class="button-group">
-                    <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Save copy</button>
-                    <button class="secondary" type="button" data-hide-panel="copy-{{ candidate.id }}">Cancel</button>
-                  </div>
-                </form>
-
-                <form method="post" action="{{ url_for('regenerate_planning_item', item_id=item.id) }}" class="rewrite-form" data-edit-panel="rewrite-{{ candidate.id }}">
-                  <input type="hidden" name="target" value="copy">
-                  <label>What should change?
-                    <textarea name="feedback" placeholder="Example: make it shorter, warmer, and mention the gift angle." {{ 'disabled' if item.waiting_for_copy else '' }}></textarea>
-                  </label>
-                  <div class="button-group">
-                    <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Queue rewrite</button>
-                    <button class="secondary" type="button" data-hide-panel="rewrite-{{ candidate.id }}">Cancel</button>
-                  </div>
-                </form>
-
-                <div class="button-group icon-button-group" aria-label="Copy actions">
-                  <button class="secondary icon-button" type="button" data-show-panel="copy-{{ candidate.id }}" aria-label="Edit copy" title="Edit copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
-                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 20h9"></path>
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                    </svg>
-                    <span class="sr-only">Edit copy</span>
-                  </button>
-                  <button class="secondary icon-button" type="button" data-show-panel="rewrite-{{ candidate.id }}" aria-label="Rewrite copy" title="Rewrite copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
-                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
-                      <path d="M3 21v-5h5"></path>
-                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
-                      <path d="M16 8h5V3"></path>
-                    </svg>
-                    <span class="sr-only">Rewrite copy</span>
-                  </button>
-                </div>
-              </article>
+              {% if candidate.review_state == 'approved' %}
+                {% set active_copy.id = candidate.id %}
+                {% set active_copy.label = 'Option ' ~ loop.index %}
+              {% endif %}
             {% endfor %}
+            <article class="post-preview copy-options-card" data-copy-options data-platform="{{ item.destinations[0]|lower if item.destinations else 'social' }}">
+              <div class="post-preview-header">
+                <span class="channel-icon {{ item.destinations[0]|lower if item.destinations else '' }}">{{ (item.destinations[0][0] if item.destinations else 'S') }}</span>
+                <div>
+                  <strong>{{ item.destinations[0] if item.destinations else 'Social' }}</strong>
+                  <span>{{ item.products|map(attribute='name')|join(', ') or 'Selected product' }}</span>
+                </div>
+              </div>
+
+              <div class="copy-option-layout">
+                <div class="copy-selected-stack">
+                  {% for candidate in item.copy_candidates %}
+                    {% set is_active = candidate.id == active_copy.id %}
+                    <section class="copy-option-panel" id="candidate-{{ candidate.id }}" {{ '' if is_active else 'hidden' }} data-copy-option-panel>
+                      <div class="copy-selected-header">
+                        <div>
+                          <strong>Option {{ loop.index }} · {{ candidate.copy_option_label }}</strong>
+                        </div>
+                        <div class="button-group icon-button-group" aria-label="Copy actions">
+                          <button class="secondary icon-button" type="button" data-show-panel="copy-{{ candidate.id }}" aria-label="Edit copy" title="Edit copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M12 20h9"></path>
+                              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                            </svg>
+                            <span class="sr-only">Edit copy</span>
+                          </button>
+                          <button class="secondary icon-button" type="button" data-show-panel="rewrite-{{ candidate.id }}" aria-label="Rewrite copy" title="Rewrite copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                              <path d="M3 21v-5h5"></path>
+                              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                              <path d="M16 8h5V3"></path>
+                            </svg>
+                            <span class="sr-only">Rewrite copy</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="post-preview-body" id="candidate-copy-{{ candidate.id }}">{{ candidate.copy_text }}</div>
+
+                      <form method="post" action="{{ url_for('update_planning_copy', candidate_id=candidate.id) }}" class="copy-edit-form" data-edit-panel="copy-{{ candidate.id }}">
+                        <label>Edit post copy
+                          <textarea name="copy_text" {{ 'disabled' if item.waiting_for_copy else '' }}>{{ candidate.copy_text }}</textarea>
+                        </label>
+                        <div class="button-group">
+                          <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Save copy</button>
+                          <button class="secondary" type="button" data-hide-panel="copy-{{ candidate.id }}">Cancel</button>
+                        </div>
+                      </form>
+
+                      <form method="post" action="{{ url_for('regenerate_planning_item', item_id=item.id) }}" class="rewrite-form" data-edit-panel="rewrite-{{ candidate.id }}">
+                        <input type="hidden" name="target" value="copy">
+                        <label>What should change?
+                          <textarea name="feedback" placeholder="Example: make it shorter, warmer, and mention the gift angle." {{ 'disabled' if item.waiting_for_copy else '' }}></textarea>
+                        </label>
+                        <div class="button-group">
+                          <button class="secondary" type="submit" {{ 'disabled' if item.waiting_for_copy else '' }}>Queue rewrite</button>
+                          <button class="secondary" type="button" data-hide-panel="rewrite-{{ candidate.id }}">Cancel</button>
+                        </div>
+                      </form>
+                    </section>
+                  {% endfor %}
+                </div>
+
+                <div class="copy-option-rail" aria-label="Copy options">
+                  {% for candidate in item.copy_candidates %}
+                    {% set is_active = candidate.id == active_copy.id %}
+                    <button class="copy-option-button {{ 'active' if is_active else '' }}" type="button" aria-pressed="{{ 'true' if is_active else 'false' }}" data-copy-option-target="candidate-{{ candidate.id }}" data-copy-candidate-id="{{ candidate.id }}" data-copy-option-label="Option {{ loop.index }}">
+                      <span class="copy-option-number">{{ loop.index }}</span>
+                      <span class="copy-option-text">
+                        <strong>{{ candidate.copy_option_label }}</strong>
+                      </span>
+                    </button>
+                  {% endfor %}
+                </div>
+              </div>
+            </article>
           {% else %}
             <div class="empty-state">Copy will appear here after automation runs.</div>
           {% endif %}
@@ -353,17 +385,32 @@
             {% if item.image_candidates %}
               {% for candidate in item.image_candidates %}
                 {% if candidate.image_asset %}
-                  <article class="image-review-card" id="candidate-{{ candidate.id }}">
+                  <article class="image-review-card {{ 'selected' if candidate.review_state == 'approved' else '' }}" id="candidate-{{ candidate.id }}">
                     <div class="image-thumb-frame">
-                      <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" alt="{{ candidate.image_asset.title }}">
-                      <button class="image-zoom-button" type="button" aria-label="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" data-image-zoom-title="{{ candidate.image_asset.title }}">+</button>
+                      <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}" class="image-select-form">
+                        {% if candidate.review_state == 'approved' %}
+                          <input type="hidden" name="review_state" value="needs_review">
+                          <input type="hidden" name="revision_notes" value="Deselected in Planning.">
+                        {% else %}
+                          <input type="hidden" name="review_state" value="approved">
+                          <input type="hidden" name="reviewed_by" value="Matt">
+                          <input type="hidden" name="revision_notes" value="Selected in Planning.">
+                        {% endif %}
+                        <button class="image-select-button" type="submit" aria-label="{{ 'Deselect image' if candidate.review_state == 'approved' else 'Select image' }}: {{ candidate.image_asset.title }}" title="{{ 'Deselect image' if candidate.review_state == 'approved' else 'Select image' }}">
+                          <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" alt="{{ candidate.image_asset.title }}">
+                          {% if candidate.review_state == 'approved' %}
+                            <span class="selected-image-badge">Selected</span>
+                          {% endif %}
+                        </button>
+                      </form>
+                      <button class="image-zoom-button" type="button" aria-label="Open full-size preview" title="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" data-image-zoom-title="{{ candidate.image_asset.title }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="11" cy="11" r="7"></circle>
+                          <path d="m21 21-4.3-4.3"></path>
+                        </svg>
+                        <span class="sr-only">Open full-size preview</span>
+                      </button>
                     </div>
-                    <form method="post" action="{{ url_for('review_planning_candidate', candidate_id=candidate.id) }}">
-                      <input type="hidden" name="review_state" value="approved">
-                      <input type="hidden" name="reviewed_by" value="Matt">
-                      <input type="hidden" name="revision_notes" value="Selected in Planning.">
-                      <button class="secondary" type="submit">Use this image</button>
-                    </form>
                   </article>
                 {% endif %}
               {% endfor %}
@@ -409,9 +456,9 @@
       {% set can_create_task = item.has_current_copy and not item.waiting_for_copy and item.has_selected_image %}
       {% set create_task_disabled_reason = "A post can be created after fresh copy is ready and an image is selected." %}
       {% if item.copy_candidates %}
-        <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 14px;">
+        <form method="post" action="{{ url_for('create_task_from_planning_item', item_id=item.id) }}" style="margin-top: 14px;" data-create-task-form="{{ item.id }}">
           <input type="hidden" name="destination" value="{{ item.destinations[0] if item.destinations else '' }}">
-          <input type="hidden" name="candidate_id" value="{{ item.copy_candidates[0].id }}">
+          <input type="hidden" name="candidate_id" value="{{ active_copy.id if active_copy is defined else item.copy_candidates[0].id }}" data-selected-copy-candidate>
           {% if can_create_task %}
             <button class="secondary" type="submit">Create posting task</button>
           {% else %}
@@ -458,8 +505,26 @@
   document.addEventListener("click", (event) => {
     const next = event.target.closest("[data-next-step]");
     const prev = event.target.closest("[data-prev-step]");
+    const copyOption = event.target.closest("[data-copy-option-target]");
     const showPanel = event.target.closest("[data-show-panel]");
     const hidePanel = event.target.closest("[data-hide-panel]");
+
+    if (copyOption) {
+      const options = copyOption.closest("[data-copy-options]");
+      if (!options) return;
+      options.querySelectorAll("[data-copy-option-target]").forEach((button) => {
+        const active = button === copyOption;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      options.querySelectorAll("[data-copy-option-panel]").forEach((panel) => {
+        panel.hidden = panel.id !== copyOption.dataset.copyOptionTarget;
+      });
+      const card = options.closest(".planned-post-card");
+      const selectedInput = card?.querySelector("[data-selected-copy-candidate]");
+      if (selectedInput) selectedInput.value = copyOption.dataset.copyCandidateId;
+      return;
+    }
 
     if (next || prev) {
       const targetStep = next ? next.dataset.nextStep : prev.dataset.prevStep;
@@ -507,6 +572,36 @@
       return;
     }
     if (event.target.closest("[data-image-modal-close]")) closeImageModal();
+  });
+
+  document.addEventListener("submit", async (event) => {
+    const form = event.target.closest(".image-select-form");
+    if (!form) return;
+    const card = form.closest(".planned-post-card");
+    if (!card?.id) return;
+    event.preventDefault();
+    const button = form.querySelector("button[type='submit']");
+    if (button) button.disabled = true;
+    card.setAttribute("aria-busy", "true");
+    try {
+      const response = await fetch(form.action, {
+        method: form.method || "POST",
+        body: new FormData(form),
+        headers: { "X-Requested-With": "fetch" },
+      });
+      if (!response.ok) throw new Error(`Image review failed with ${response.status}`);
+      const html = await response.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const updatedCard = doc.getElementById(card.id);
+      if (!updatedCard) throw new Error("Updated planning card was not found.");
+      card.replaceWith(updatedCard);
+    } catch (error) {
+      console.error(error);
+      form.submit();
+    } finally {
+      card.removeAttribute("aria-busy");
+      if (button) button.disabled = false;
+    }
   });
 
   document.addEventListener("keydown", (event) => {

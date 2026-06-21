@@ -11,6 +11,44 @@ Use line breaks for scanability. Never produce a dense paragraph for Facebook or
 
 Do not default to `hook -> product description -> CTA`. That structure is usually too salesy for MattMadeMe social content. Product facts are optional support, not the main attraction.
 
+## Platform-First Drafting
+
+Before drafting, choose the destination structure:
+
+- `facebook_conversation`: hook/question, tiny story or proof, one reply/shop CTA.
+- `instagram_visual_payoff`: first-line hook, caption that adds meaning to the image, save/share/follow CTA, optional alt text.
+- `pinterest_search_pin`: keyword title, search-friendly description, gift/occasion/use context, save/click CTA.
+- `threads_live_observation`: compact observation, confession, playful claim, or direct question.
+- `linkedin_process_insight`: maker/business/process insight, lesson, evidence, discussion CTA.
+
+Map that structure to one `platform_intent`: `conversation`, `visual_save`, `search_discovery`, `casual_reply`, or `professional_insight`.
+
+The same product angle must change shape by platform. If the copy sounds interchangeable across Facebook, Instagram, and Pinterest, rewrite it.
+
+Default lengths:
+
+- Facebook: 2-5 short lines or one short paragraph plus a question.
+- Instagram feed: 2-6 short lines; put the strongest idea in the first 125 characters.
+- Pinterest: title plus 1-3 sentence description; optimize for search and saving, not banter.
+- Threads: 1-3 compact sentences.
+- LinkedIn: 4-8 short lines when there is a real maker/process/business lesson.
+
+Hashtag/search defaults:
+
+- Facebook: 0-2 hashtags, usually none.
+- Instagram: 3-5 niche hashtags only when useful or requested; use searchable nouns in the caption.
+- Pinterest: no hashtag dependence; put keywords in title and description.
+- Threads: avoid hashtag clutter.
+- LinkedIn: 0-3 relevant professional tags only if they add discovery context.
+
+Reach and engagement priorities:
+
+- Facebook: original, relevant posts that create real comments or shares.
+- Instagram: views, saves, shares/sends, comments, and a caption that matches the visual.
+- Pinterest: search relevance, product clarity, saves, clicks, and seasonal planning intent.
+- Threads: replies, quotes, reposts, and conversation momentum.
+- LinkedIn: relevant professional comments, expertise, consistency, and useful discussion.
+
 ## Social Middle Rule
 
 The middle must stay social. It should continue the chosen story move with personality, a tiny scene, a playful opinion, audience meaning, or community tension before product details appear.
@@ -60,6 +98,7 @@ Strong prompts to answer before writing:
 - Who is responding to it?
 - Why this product, why now?
 - What human role, relationship, inside joke, appreciation moment, or identity does it serve?
+- What are customers actually saying in supplied `review_context`?
 - Which proof point makes this story feel real: sales, reviews, buyer group, gifting pattern, personalization choice, customer photo, social comment, or a truly distinctive product detail?
 
 Example shape:
@@ -84,6 +123,8 @@ Proof hierarchy:
 4. Distinctive product details that create an emotional or social reason to care.
 5. Generic product details only for Pinterest/search or when the user asks for product-forward copy.
 
+Use imported Etsy reviews carefully: exact short snippets can support human-reviewed copy, but review themes are often better for social captions than turning a review into a testimonial.
+
 ## Facebook
 
 Best for community, conversation, product personality, and small stories.
@@ -93,8 +134,9 @@ Best for community, conversation, product personality, and small stories.
 - A direct question often outperforms a statement.
 - The middle should create a reply-worthy moment before describing features.
 - For products with proof of demand, lead with what happened and who it matters to.
-- Links can appear in the body, but only when traffic is the goal.
+- Links can appear in the body, but only when traffic is the goal; otherwise keep the ask in-platform.
 - Use 0-2 hashtags. Prefer none unless there is a branded/community reason.
+- Avoid engagement bait such as "comment YES" or generic "thoughts?" prompts.
 
 Good CTA types:
 
@@ -112,18 +154,29 @@ Best for visuals, saves, shares, and personality.
 - Give the image a tiny story, inner monologue, or collector payoff.
 - When a product has traction, turn the caption into a save/share-worthy mini story about the audience or occasion.
 - Use save/share CTAs for gift lists, collections, or ideas.
-- Use 3-8 relevant hashtags only when requested or useful.
-- Provide alt text when useful.
+- Use 3-5 relevant niche hashtags only when requested or useful.
+- Include searchable nouns naturally in the caption: product type, occasion, recipient, hobby, or collection theme.
+- Provide concise alt text when useful, especially if the visual carries the joke, product detail, or scene.
+- Avoid writing a catalog description of the photo.
 
 ## Pinterest
 
 Best for searchable gift ideas and product discovery.
 
 - Write a title and description, not a social caption.
-- Lead with keywords a buyer would search.
+- Lead with keywords a buyer would search; make the first 40 characters of the title clear and searchable.
 - No hashtag reliance.
 - Mention audience, occasion, and product category naturally.
 - Keep the description useful for search, but add a save-worthy idea or gift context instead of only listing features.
+- Product facts can be more direct here than on Facebook or Instagram, but they still need buyer context.
+- Avoid vague cute-copy titles that omit what the item is.
+
+Good shape:
+
+```text
+Title: [searchable product/gift phrase]
+Description: [buyer keyword + audience/occasion + why to save/click]
+```
 
 ## Threads
 
@@ -132,6 +185,8 @@ Best for casual personality and community.
 - Keep it human and compact.
 - Avoid polished ad language.
 - Use relatable observation, playful confession, or direct question.
+- Skip formal CTAs unless the user specifically wants traffic.
+- Do not make it a shortened Facebook caption; make it feel like a standalone thought.
 
 ## LinkedIn
 
@@ -140,16 +195,25 @@ Use only when the angle is maker/business/process-focused.
 - Lead with a real maker/business insight, not a product pitch.
 - Use line breaks every 1-2 sentences.
 - CTA should invite discussion, not immediate shopping.
+- Use product details only as evidence for a design, customer, operations, or creative-business point.
+- Avoid posting a cute product caption with professional vocabulary pasted on top.
 
 ## Cross-Platform Rule
 
 Do not paste the same post across platforms without adapting:
 
-- Facebook gets conversation.
-- Instagram gets visual payoff and save/share behavior.
-- Pinterest gets search.
+- Facebook gets conversation and comments.
+- Instagram gets visual payoff, saves, shares, and alt text when useful.
+- Pinterest gets search, title/description, and evergreen discovery.
 - Threads gets casual immediacy.
-- LinkedIn gets process insight.
+- LinkedIn gets process insight and professional discussion.
+
+When copy implies that better performance requires a different visual, note it in `Review notes` instead of inventing a new image. Examples:
+
+- Pinterest needs a clean `2:3` vertical product/gift idea image with the item easy to identify.
+- Instagram may need a `1:1` or `4:5` scene that leaves room for the caption to add meaning, not repeat the visual.
+- Facebook can use a less polished community-prompt image if it feels authentic and reply-worthy.
+- LinkedIn needs a process, workspace, packaging, or making image when the copy is about business/maker insight.
 
 ## Scheduling Strategy
 

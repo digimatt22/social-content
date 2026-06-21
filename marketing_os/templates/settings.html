@@ -27,11 +27,11 @@
   <section class="panel">
     <h3>Etsy Order Items</h3>
     <p class="subtle">Upload an Etsy sold order items CSV so planning can use product-level sales signals.</p>
-    <form method="post" action="{{ url_for('import_etsy_sales_csv_upload') }}" enctype="multipart/form-data">
+    <form method="post" action="{{ url_for('import_etsy_sales_csv_upload') }}" enctype="multipart/form-data" data-etsy-order-items-form>
       <label>Order items CSV
-        <input type="file" name="sales_csv" accept=".csv,text/csv" required>
+        <input type="file" name="sales_csv" accept=".csv,text/csv" required data-etsy-order-items-file>
       </label>
-      <button type="submit">Import order items</button>
+      <button type="submit" data-etsy-order-items-submit>Import order items</button>
     </form>
   </section>
   <section class="panel">
@@ -61,4 +61,47 @@
     </form>
   </section>
 </div>
+
+<div class="processing-modal" data-etsy-order-items-modal hidden>
+  <div class="processing-modal-backdrop"></div>
+  <div class="processing-modal-panel" role="dialog" aria-modal="true" aria-labelledby="etsy-order-items-progress-title" aria-describedby="etsy-order-items-progress-copy" tabindex="-1">
+    <div class="eyebrow">Import Running</div>
+    <h3 id="etsy-order-items-progress-title">Importing Etsy order items</h3>
+    <p id="etsy-order-items-progress-copy">Keep this page open while Marketing OS uploads the CSV and updates sales signals.</p>
+    <progress class="processing-meter" aria-label="Etsy order items import progress"></progress>
+    <ul class="processing-steps">
+      <li data-etsy-order-items-filename>Preparing selected CSV</li>
+      <li>Reading Etsy sold order item rows</li>
+      <li>Matching orders to local products</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const form = document.querySelector("[data-etsy-order-items-form]");
+    if (!form) return;
+    const modal = document.querySelector("[data-etsy-order-items-modal]");
+    const fileInput = form.querySelector("[data-etsy-order-items-file]");
+    const submitButton = form.querySelector("[data-etsy-order-items-submit]");
+    const filename = document.querySelector("[data-etsy-order-items-filename]");
+
+    form.addEventListener("submit", (event) => {
+      if (!form.checkValidity()) return;
+      const selectedFile = fileInput?.files?.[0];
+      if (filename && selectedFile) {
+        filename.textContent = `Uploading ${selectedFile.name}`;
+      }
+      form.setAttribute("aria-busy", "true");
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Importing...";
+      }
+      if (modal) {
+        modal.hidden = false;
+        modal.querySelector(".processing-modal-panel")?.focus();
+      }
+    });
+  })();
+</script>
 {% endblock %}

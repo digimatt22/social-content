@@ -16,6 +16,8 @@ assets/products/*
 !assets/products/.gitkeep
 data/*.sqlite
 data/*.sqlite-*
+data/*.db
+data/*.db-*
 data/backups/
 data/exports/
 data/logs/

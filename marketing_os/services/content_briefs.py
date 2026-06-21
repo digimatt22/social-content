@@ -17,6 +17,7 @@ from ..db_models import (
     PlanRecord,
     PlannedContentRecord,
     ProductRecord,
+    ProductSalesRecord,
     TaskRecord,
     utc_now,
 )
@@ -860,6 +861,9 @@ def serialize_planned_content_item(session: Session, item: PlannedContentRecord)
 
 
 def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str, object]:
+    body_data = _json_dict(candidate.body)
+    social_strategy = body_data.get("social_strategy") if isinstance(body_data.get("social_strategy"), dict) else {}
+    selected_variant = str(social_strategy.get("selected_variant") or "").strip()
     return {
         "id": candidate.id,
         "planned_item_id": candidate.planned_item_id,
@@ -872,6 +876,8 @@ def serialize_candidate(candidate: GeneratedContentCandidateRecord) -> dict[str,
         "image_asset": _candidate_image_asset(candidate.body),
         "skill_request": _candidate_skill_request(candidate.body),
         "skill_check": _candidate_skill_check(candidate.body),
+        "social_strategy": social_strategy,
+        "copy_option_label": selected_variant or "Option",
         "source_facts": _json_dict(candidate.source_facts_json),
         "source_asset_ids": json_list(candidate.source_asset_ids_json),
         "review_state": candidate.review_state,
@@ -932,6 +938,9 @@ def record_candidate_review(
         candidate.revision_notes = revision_notes.strip()
     if reviewed_by.strip():
         candidate.reviewed_by = reviewed_by.strip()
+    elif review_state == "needs_review":
+        candidate.reviewed_by = ""
+        candidate.reviewed_at = None
     if review_state != "needs_review" or reviewed_by.strip():
         candidate.reviewed_at = utc_now()
     return candidate
@@ -1242,7 +1251,11 @@ def _candidate_copy_body(value: str) -> str:
     data = _json_dict(value)
     if not data:
         return value.strip()
-    pieces = [str(data.get("hook") or "").strip(), str(data.get("body") or "").strip()]
+    pieces = [
+        str(data.get("hook") or "").strip(),
+        str(data.get("body") or "").strip(),
+        str(data.get("cta") or "").strip(),
+    ]
     return "\n\n".join(piece for piece in pieces if piece)
 
 
@@ -1251,7 +1264,10 @@ def _parse_copy_text(copy_text: str) -> dict[str, str]:
     if not paragraphs:
         return {"hook": "", "body": "", "cta": "", "copy_text": ""}
     hook = paragraphs[0]
-    body = "\n\n".join(paragraphs[1:]) if len(paragraphs) > 1 else hook
+    if len(paragraphs) > 2:
+        body = "\n\n".join(paragraphs[1:-1])
+    else:
+        body = "\n\n".join(paragraphs[1:]) if len(paragraphs) > 1 else hook
     cta = paragraphs[-1]
     return {"hook": hook, "body": body, "cta": cta, "copy_text": "\n\n".join(paragraphs)}
 
@@ -1330,8 +1346,58 @@ def _product_facts(session: Session, product: ProductRecord) -> dict[str, object
         "seasonality": json_list(product.seasonality_json),
         "sales_momentum_note": product.sales_momentum_note,
         "canonical_url": product.canonical_url,
+        "sales_context": _product_sales_facts(session, product),
         "etsy_reviews": _product_review_facts(session, product),
     }
+
+
+def _product_sales_facts(session: Session, product: ProductRecord) -> dict[str, object]:
+    rows = list(
+        session.scalars(
+            select(ProductSalesRecord)
+            .where(ProductSalesRecord.product_id == product.id)
+            .order_by(ProductSalesRecord.sold_at.desc().nullslast(), ProductSalesRecord.id.desc())
+        )
+    )
+    lifetime_quantity = sum(row.quantity for row in rows)
+    lifetime_transactions = len(rows)
+    last_sale_at = next((row.sold_at for row in rows if row.sold_at is not None), None)
+    recent_cutoff = utc_now().date().toordinal() - 90
+    recent_quantity = sum(
+        row.quantity
+        for row in rows
+        if row.sold_at is not None and row.sold_at.date().toordinal() >= recent_cutoff
+    )
+    return {
+        "source": "etsy_sales_csv",
+        "lifetime_quantity": lifetime_quantity,
+        "lifetime_transactions": lifetime_transactions,
+        "recent_90_day_quantity": recent_quantity,
+        "last_sale_at": last_sale_at.isoformat() if last_sale_at else None,
+        "safe_public_claims": _safe_sales_claims(lifetime_quantity, recent_quantity),
+        "usage": (
+            "Sales counts are internal context. Use them to judge momentum and choose story angles. "
+            "Do not publish exact unit counts, revenue, product rankings, or best-seller comparisons unless Matt explicitly approves. "
+            "Prefer safe_public_claims or playful milestone language."
+        ),
+    }
+
+
+def _safe_sales_claims(lifetime_quantity: int, recent_quantity: int) -> list[str]:
+    claims: list[str] = []
+    if lifetime_quantity >= 1000:
+        claims.extend(["a proven flock favorite", "one of the flock's frequent flyers"])
+    elif lifetime_quantity >= 250:
+        claims.extend(["a steady flock favorite", "a duck that keeps finding its people"])
+    elif lifetime_quantity >= 100:
+        claims.append("a repeat customer pick")
+    elif lifetime_quantity >= 25:
+        claims.append("a duck with real order history behind it")
+    if recent_quantity >= 25:
+        claims.append("currently getting fresh attention")
+    elif recent_quantity > 0:
+        claims.append("recently ordered")
+    return claims
 
 
 def _product_review_facts(session: Session, product: ProductRecord, limit: int = 5) -> list[dict[str, object]]:

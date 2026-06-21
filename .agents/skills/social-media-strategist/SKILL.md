@@ -12,15 +12,17 @@ Create the strategy brief before writing copy. Do not draft final post copy.
 1. Read `.agents/skills/social-media-copywriter/references/social-context.md`.
 2. For MattMadeMe, read `.agents/skills/social-media-copywriter/references/mattmademe-social-context.md`.
 3. Read `.agents/skills/social-media-copywriter/references/social-post-playbook.md` for platform structure, CTA behavior, and scheduling heuristics.
-4. Normalize the source facts into: `platform`, `audience`, `goal`, `product_or_topic`, `content_pillar`, `social_angle`, `story_move`, `cta_type`, `visual_context`, `must_include`, `avoid`, and `unknowns`.
+4. Normalize the source facts into: `platform`, `audience`, `goal`, `product_or_topic`, `content_pillar`, `social_angle`, `story_move`, `cta_type`, `visual_context`, `sales_context`, `review_context`, `must_include`, `avoid`, and `unknowns`.
 5. Choose one primary content pillar and one primary social angle.
 6. Choose a story move before choosing product details. The story move should define how the post creates interest: proof-led product story, tiny scene, surprise, community question, collector observation, playful opinion, gift moment, maker detail, or origin story.
-7. Check recent product/topic coverage when that context is available. Avoid repeating the same small subset of products unless there is a deliberate campaign reason.
-8. Decide whether this is a product story, audience story, maker story, gift story, or community story. Avoid treating every product as a generic character caption.
-9. Choose the best CTA type for the platform and goal.
-10. Define the platform-specific best-practice emphasis and scheduling hypothesis. Prefer owned audience analytics when available; otherwise use the playbook default as a starting test, not a universal promise.
-11. Define the variant plan: engagement, follower-building, and shop-click.
-12. Mark missing facts as `[MATT_TO_CONFIRM: ...]`; do not invent them.
+7. When `review_context` or imported Etsy reviews are supplied, treat them as source-backed customer language: identify themes, use cases, recipient groups, delight words, or short review snippets that can support the story.
+8. When `sales_context` is supplied, treat counts as internal momentum context. Use safe public claim options or broad milestone language; do not reveal exact units, revenue, rankings, or best-seller comparisons unless Matt explicitly approves.
+9. Check recent product/topic coverage when that context is available. Avoid repeating the same small subset of products unless there is a deliberate campaign reason.
+10. Decide whether this is a product story, audience story, maker story, gift story, or community story. Avoid treating every product as a generic character caption.
+11. Choose the best CTA type for the platform and goal.
+12. Define the platform-specific best-practice emphasis and scheduling hypothesis. Prefer owned audience analytics when available; otherwise use the playbook default as a starting test, not a universal promise.
+13. Define the variant plan: engagement, follower-building, and shop-click.
+14. Mark missing facts as `[MATT_TO_CONFIRM: ...]`; do not invent them.
 
 ## Output Shape
 
@@ -58,6 +60,8 @@ Create the strategy brief before writing copy. Do not draft final post copy.
 - Product details are proof points, not the story. Choose the emotional or social reason first.
 - When a product has evidence of demand, make the demand the story: who is buying it, who it honors, what moment it serves, why it caught on, and what that says about the audience.
 - Do not invent popularity. If order counts, customer groups, comments, or timing are missing, ask for them or use placeholders.
+- Do not expose exact sales counts, revenue, product rankings, or "best seller" language from internal sales data without explicit Matt approval.
+- Do not invent reviews or customer quotes. Use only supplied `review_context`/Etsy review snippets, and prefer review themes unless an exact short quote is needed for human review.
 - Strategy should keep the product mix fresh. Recently featured products need a specific reason to repeat.
 - For engagement or follower growth, the product link should not be the emotional center of the post.
 - For Facebook, prioritize conversation, community, and product personality.

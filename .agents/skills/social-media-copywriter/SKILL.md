@@ -13,16 +13,17 @@ Act like a social media copywriter, not a product description summarizer. Use pr
 2. Read `references/social-context.md`.
 3. Read `references/social-post-playbook.md`.
 4. If the work is for MattMadeMe, read `references/mattmademe-social-context.md`.
-5. Normalize the brief into: `platform`, `format`, `audience`, `goal`, `product_or_topic`, `source_facts`, `visual_context`, `angle`, `story_move`, `story_thesis`, `proof_points`, `hook_pattern`, `cta_type`, `must_include`, `avoid`, and `unknowns`.
+5. Normalize the brief into: `platform`, `format`, `platform_intent`, `audience`, `goal`, `product_or_topic`, `source_facts`, `visual_context`, `sales_context`, `review_context`, `angle`, `story_move`, `story_thesis`, `proof_points`, `hook_pattern`, `platform_structure`, `cta_type`, `must_include`, `avoid`, and `unknowns`.
 6. Select one primary angle and one story move before drafting. Do not draft directly from an Etsy title or product description.
-7. Generate 5-7 hook candidates using `references/social-hooks.md`; pick the best hook for the platform and goal.
-8. Draft the body around a proof-led product story, origin story, audience story, tiny scene, surprise, opinion, community prompt, collector observation, gift moment, or maker detail before using product facts. Product facts are optional. Use them only when they add attention value, prove the story, reveal something specific, or make the post more human. If a detail feels forced, generic, or flow-breaking, leave it out.
-9. Draft 3 variants when the user has not specified otherwise:
+7. Select the platform structure from `references/social-post-playbook.md` before writing hooks. The same idea must become different copy on Facebook, Instagram, Pinterest, Threads, and LinkedIn.
+8. Generate 5-7 hook candidates using `references/social-hooks.md`; pick the best hook for the platform, format, and goal.
+9. Draft the body around a proof-led product story, origin story, audience story, tiny scene, surprise, opinion, community prompt, collector observation, gift moment, maker detail, or review theme before using product facts. Product facts are optional. Use them only when they add attention value, prove the story, reveal something specific, support search intent, or make the post more human. If a detail feels forced, generic, or flow-breaking, leave it out.
+10. Draft 3 variants when the user has not specified otherwise:
    - `Engagement`: optimized for comments, replies, saves, or shares.
    - `Follower-building`: optimized for brand affinity and page personality.
    - `Shop-click`: optimized for product interest and a clear next action.
-10. Run `$social-media-copy-chief` as the challenge step before finalizing when automation or the user requests review-ready output.
-11. Return ready-to-review copy with metadata: strategy, angle, story move, hook pattern, CTA, source facts used, placeholders, challenge status, and review notes.
+11. Run `$social-media-copy-chief` as the challenge step before finalizing when automation or the user requests review-ready output.
+12. Return ready-to-review copy with metadata: strategy, platform intent, platform structure, angle, story move, hook pattern, CTA, source facts used, placeholders, challenge status, and review notes.
 
 ## Placeholder Rule
 
@@ -45,7 +46,8 @@ After drafting, list the 3-5 most useful questions needed to replace placeholder
 
 Do not invent:
 
-- sales, discounts, limited quantities, urgency, reviews, testimonials, customer stories, shipping promises, guarantees, events, booth appearances, or platform integrations;
+- sales, discounts, limited quantities, urgency, reviews, testimonials, customer stories, shipping promises, guarantees, events, booth appearances, or platform integrations unless supplied in source facts;
+- exact unit counts, revenue, product rankings, or best-seller comparisons from internal sales data unless Matt explicitly approves them for publication;
 - product materials, dimensions, colors, accessories, or compatibility unless provided by source facts;
 - performance claims such as "best seller" or "fan favorite" unless supplied.
 
@@ -69,6 +71,18 @@ Before naming features, make the post earn attention through one of these moves:
 - `maker_detail`: use a grounded craft/process detail when supplied.
 
 Product facts should usually arrive as proof after the moment, not as the main paragraph. They are not required. If the body could be pasted into an Etsy listing with almost no changes, rewrite it.
+
+## Platform-Native Rule
+
+Never make every destination sound like a Facebook caption. Choose the platform behavior first, then adapt the story:
+
+- Facebook: conversation-first post with a reply-worthy prompt, compact story, and optional link only when traffic is the goal.
+- Instagram: visual payoff caption with a strong first line, save/share behavior, optional alt text, and no description of what the image already shows.
+- Pinterest: searchable Pin title and description built around buyer keywords, occasion, audience, and product discovery.
+- Threads: short, casual observation or question that feels like a live thought, not a polished ad.
+- LinkedIn: maker/process/business lesson only; avoid direct product promotion unless the product proves the lesson.
+
+If the requested platforms include more than one destination, write separate platform-native copy for each platform. Do not provide one universal caption unless the user explicitly requests a cross-post draft.
 
 ## Social Middle Rule
 
@@ -126,12 +140,54 @@ Prefer real proof over product features when available:
 - customer photos or use cases;
 - comment patterns from social posts.
 
+## Imported Review Context
+
+When Marketing OS supplies `review_context`, use it as source-backed customer language.
+
+Good uses:
+
+- identify why people say they bought, gifted, collected, hid, or displayed the product;
+- turn repeated review language into a proof-led story or audience story;
+- interpret context and sentiment before using a snippet;
+- use a short exact positive snippet only when it is clearly supplied and will stay behind human review;
+- paraphrase themes for safer social copy, for example "people are using this as a cruise group gift."
+
+Do not:
+
+- invent reviews, buyer identities, or volume;
+- write "reviewers said," "review language," "customers call out," or other analysis-visible phrasing unless the post is explicitly a testimonial/review post;
+- turn one review into "customers love..." unless multiple supplied reviews support that theme;
+- use negative, mixed, sizing-complaint, shipping-only, or unclear/gibberish reviews as product proof;
+- expose buyer names, usernames, locations, addresses, or private order details;
+- use review text as a final testimonial without human review.
+
+## Imported Sales Context
+
+When Marketing OS supplies `sales_context`, use it as internal momentum context.
+
+Good uses:
+
+- decide whether a post can lean into a proof-led story;
+- use supplied `safe_public_claims` such as "a proven flock favorite" or "a duck that keeps finding its people";
+- write playful, non-specific milestone language such as "this duck has been busy" or "this one keeps waddling into new homes";
+- ask Matt for approval before publishing exact count milestones.
+
+Do not:
+
+- publish exact unit counts, revenue, product rank, or "best seller" language unless Matt explicitly approves;
+- compare products against each other;
+- reveal which duck is the top seller;
+- turn internal sales data into a competitor-readable leaderboard.
+
 ## Output Shape
 
 For each variant:
 
 ```text
 Variant: [Engagement | Follower-building | Shop-click]
+Platform: [destination and format]
+Platform intent: [conversation | visual_save | search_discovery | casual_reply | professional_insight]
+Platform structure: [why the copy fits this platform]
 Angle: [chosen angle]
 Story move: [chosen story move]
 Story thesis: [why this post exists beyond describing the product]
