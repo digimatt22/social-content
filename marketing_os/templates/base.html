@@ -171,15 +171,6 @@
       .image-option { display: grid; gap: 8px; }
       .planner-shell { width: 100%; }
       .post-brief-canvas { display: grid; gap: 14px; margin-bottom: 24px; }
-      .wizard-progress { display: flex; gap: 8px; margin-bottom: 14px; }
-      .planner-progress-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-bottom: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, .9); box-shadow: 0 12px 28px rgba(31, 35, 40, .06); }
-      .planner-step-tab { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); box-shadow: none; text-align: left; }
-      .planner-step-tab:last-child { border-right: 0; }
-      .planner-step-tab:hover, .planner-step-tab.active { background: var(--accent-soft); color: #0f5f58; }
-      .planner-step-tab strong, .planner-step-tab small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .planner-step-tab small { margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 650; }
-      .planner-step-tab .step-index { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); background: white; color: var(--muted); font-weight: 900; }
-      .planner-step-tab.active .step-index { border-color: var(--accent); background: var(--accent); color: white; }
       .brief-canvas-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
       .brief-section-stack { display: grid; gap: 10px; min-width: 0; }
       .brief-section { border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 255, 255, .94); box-shadow: 0 12px 28px rgba(31, 35, 40, .06); overflow: hidden; }
@@ -500,9 +491,6 @@
         .pagination-actions .button { flex: 1; text-align: center; }
         .gallery-card h3 { font-size: 14px; }
         .gallery-card .pill { font-size: 11px; min-height: 22px; }
-        .planner-progress-row { grid-template-columns: 1fr; }
-        .planner-step-tab { border-right: 0; border-bottom: 1px solid var(--line); }
-        .planner-step-tab:last-child { border-bottom: 0; }
         .brief-canvas-layout { grid-template-columns: 1fr; }
         .brief-section-grid { grid-template-columns: 1fr; }
         .brief-field-grid.two-up { grid-template-columns: 1fr; }

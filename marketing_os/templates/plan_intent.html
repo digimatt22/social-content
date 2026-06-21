@@ -38,21 +38,6 @@
 } %}
 
 <section class="planner-shell post-brief-canvas">
-  <div class="wizard-progress planner-progress-row" aria-label="Planner progress">
-    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '1' else '' }}" data-progress-step="1" data-jump-step="1" aria-current="{{ 'step' if active_planning_step == '1' else 'false' }}">
-      <span class="step-index">1</span>
-      <span><strong>Destination</strong><small>Schedule and goal</small></span>
-    </button>
-    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '2' else '' }}" data-progress-step="2" data-jump-step="2" aria-current="{{ 'step' if active_planning_step == '2' else 'false' }}">
-      <span class="step-index">2</span>
-      <span><strong>Subject</strong><small>Product and audience</small></span>
-    </button>
-    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '3' else '' }}" data-progress-step="3" data-jump-step="3" aria-current="{{ 'step' if active_planning_step == '3' else 'false' }}">
-      <span class="step-index">3</span>
-      <span><strong>Direction</strong><small>Offer and notes</small></span>
-    </button>
-  </div>
-
   <form method="post" action="{{ url_for('create_planning_item') }}" data-planner-wizard>
     <div class="brief-canvas-layout">
       <div class="brief-section-stack">
@@ -610,17 +595,11 @@
       const state = section.querySelector("[data-step-state]");
       if (state) state.textContent = active ? "Active" : "Pending";
     });
-    document.querySelectorAll("[data-progress-step]").forEach((step) => {
-      const active = step.dataset.progressStep === targetStep;
-      step.classList.toggle("active", active);
-      step.setAttribute("aria-current", active ? "step" : "false");
-    });
   }
 
   document.addEventListener("click", (event) => {
     const next = event.target.closest("[data-next-step]");
     const prev = event.target.closest("[data-prev-step]");
-    const jump = event.target.closest("[data-jump-step]");
     const copyOption = event.target.closest("[data-copy-option-target]");
     const showPanel = event.target.closest("[data-show-panel]");
     const hidePanel = event.target.closest("[data-hide-panel]");
@@ -642,9 +621,9 @@
       return;
     }
 
-    if (next || prev || jump) {
-      const targetStep = next ? next.dataset.nextStep : prev ? prev.dataset.prevStep : jump.dataset.jumpStep;
-      const form = event.target.closest("[data-planner-wizard]") || document.querySelector("[data-planner-wizard]");
+    if (next || prev) {
+      const targetStep = next ? next.dataset.nextStep : prev.dataset.prevStep;
+      const form = event.target.closest("[data-planner-wizard]");
       if (!form) return;
       setPlannerStep(form, targetStep);
       return;

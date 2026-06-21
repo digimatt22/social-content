@@ -2509,7 +2509,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             missing_reference_page = client.get(missing_reference.headers["Location"])
             self.assertEqual(missing_reference_page.status_code, 200)
             self.assertIn(b'<div class="wizard-step brief-section-body active" data-step="2">', missing_reference_page.data)
-            self.assertIn(b'data-progress-step="2" data-jump-step="2" aria-current="step"', missing_reference_page.data)
+            self.assertIn(b'<section class="brief-section active" data-step-section="2">', missing_reference_page.data)
             self.assertIn(b"Select at least one product reference image", missing_reference_page.data)
 
             queued = client.post(
