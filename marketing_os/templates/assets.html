@@ -18,10 +18,7 @@
         aria-label="Reset image tag filter"
         title="Reset image tag filter"
       >
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-          <path d="M3 3v6h6"></path>
-        </svg>
+        <i data-lucide="filter-x" aria-hidden="true"></i>
         <span class="sr-only">Reset image tag filter</span>
       </a>
     </form>
@@ -74,10 +71,7 @@
     <label class="add-photo-placeholder" data-photo-dropzone>
       <input class="sr-only" type="file" name="photo" accept="image/*" data-photo-input>
       <span class="add-photo-plus" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 5v14"></path>
-          <path d="M5 12h14"></path>
-        </svg>
+        <i data-lucide="plus" aria-hidden="true"></i>
       </span>
       <span class="add-photo-drop-copy">Drop image</span>
       <span class="add-photo-file-name" data-photo-filename>No file selected</span>
@@ -165,18 +159,10 @@
             title="{{ 'Restore image for automation' if asset.hidden_from_generation else 'Hide image from automation' }}"
           >
             {% if asset.hidden_from_generation %}
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
+              <i data-lucide="eye" aria-hidden="true"></i>
               <span class="sr-only">Restore image for automation</span>
             {% else %}
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 3l18 18"></path>
-                <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"></path>
-                <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 8 10 8a17.8 17.8 0 0 1-3.1 4.4"></path>
-                <path d="M6.6 6.6C3.8 8.5 2 12 2 12s3.5 8 10 8a9.7 9.7 0 0 0 4.4-1.1"></path>
-              </svg>
+              <i data-lucide="eye-off" aria-hidden="true"></i>
               <span class="sr-only">Hide image from automation</span>
             {% endif %}
           </button>
@@ -189,22 +175,13 @@
           >
             <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}">
             <button class="warn icon-button" type="submit" aria-label="Delete local image" title="Delete local image">
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 6h18"></path>
-                <path d="M8 6V4h8v2"></path>
-                <path d="M19 6l-1 14H6L5 6"></path>
-                <path d="M10 11v5"></path>
-                <path d="M14 11v5"></path>
-              </svg>
+              <i data-lucide="trash-2" aria-hidden="true"></i>
               <span class="sr-only">Delete local image</span>
             </button>
           </form>
         {% endif %}
         <button class="drawer-close icon-button" type="button" data-drawer-close aria-label="Close drawer" title="Close">
-          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 6 6 18"></path>
-            <path d="m6 6 12 12"></path>
-          </svg>
+          <i data-lucide="x" aria-hidden="true"></i>
           <span class="sr-only">Close drawer</span>
         </button>
       </div>
@@ -323,9 +300,6 @@
       input.files = files;
       updateFilename();
     });
-  });
-  document.querySelectorAll("[data-auto-submit]").forEach((input) => {
-    input.addEventListener("change", () => input.form?.requestSubmit());
   });
 </script>
 {% endblock %}

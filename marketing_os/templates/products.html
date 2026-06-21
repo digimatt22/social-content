@@ -1,13 +1,36 @@
 {% extends "base.html" %}
+{% macro product_controls() %}
+  <div class="pagination-bar gallery-control-bar" aria-label="Product controls">
+    <span class="subtle">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+    <form method="get" action="{{ url_for('products_admin') }}" class="gallery-filter-form">
+      {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
+      <input type="hidden" name="page" value="1">
+      <span class="sr-only">Product sort</span>
+      <select name="sort" aria-label="Product sort" data-auto-submit>
+        <option value="name" {{ 'selected' if selected_sort == 'name' else '' }}>Name</option>
+        <option value="source" {{ 'selected' if selected_sort == 'source' else '' }}>Source</option>
+        <option value="synced" {{ 'selected' if selected_sort == 'synced' else '' }}>Last synced</option>
+      </select>
+    </form>
+    <div class="button-group pagination-actions">
+      {% if pagination.has_previous %}
+        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.previous_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Previous</a>
+      {% endif %}
+      {% if pagination.has_next %}
+        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.next_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
 {% block content %}
 <div class="topline">
   <div>
-    <div class="eyebrow">Product Intelligence</div>
-    <h2>Products</h2>
+    <div class="eyebrow">Products</div>
+    <h2>Product Intelligence</h2>
     <div class="subtle">The product memory the assistant uses for positioning, image references, and Etsy-aware planning.</div>
   </div>
-    <div class="button-group">
-      {% if show_hidden %}
+  <div class="button-group">
+    {% if show_hidden %}
       <a class="button secondary" href="{{ url_for('products_admin', sort=selected_sort, page=pagination.page) }}">Hide hidden images</a>
     {% elif hidden_asset_count %}
       <a class="button secondary" href="{{ url_for('products_admin', sort=selected_sort, show_hidden=1, page=pagination.page) }}">Show hidden images ({{ hidden_asset_count }})</a>
@@ -19,43 +42,26 @@
   </div>
 </div>
 
-<section class="panel" style="margin-bottom: 14px;">
-  <form method="get" action="{{ url_for('products_admin') }}" class="grid">
-    {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
-    <input type="hidden" name="page" value="1">
-    <label>Sort
-      <select name="sort">
-        <option value="name" {{ 'selected' if selected_sort == 'name' else '' }}>Name</option>
-        <option value="source" {{ 'selected' if selected_sort == 'source' else '' }}>Source</option>
-        <option value="synced" {{ 'selected' if selected_sort == 'synced' else '' }}>Last synced</option>
-      </select>
-    </label>
-    <div class="button-group" style="align-self: end; margin-bottom: 10px;">
-      <button type="submit">Apply</button>
-      <a class="button secondary" href="{{ url_for('products_admin') }}">Reset</a>
-    </div>
-  </form>
-</section>
-
-<div class="pagination-bar" aria-label="Product pages">
-  <span class="subtle">
-    {% if pagination.total %}
-      Products {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total }}
-    {% else %}
-      No products
+<div class="gallery-toolbar">
+  <div>
+    <div class="eyebrow">Product inventory</div>
+    <h3>
+      {% if pagination.total %}
+        {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total }} product{{ '' if pagination.total == 1 else 's' }}
+      {% else %}
+        No products
+      {% endif %}
+    </h3>
+    {% if selected_sort != 'name' %}
+      <p class="subtle">Sorted by {{ 'last synced' if selected_sort == 'synced' else selected_sort }}.</p>
     {% endif %}
-  </span>
-  {% if pagination.total_pages > 1 %}
-    <div class="button-group">
-      {% if pagination.has_previous %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.previous_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Previous</a>
-      {% endif %}
-      {% if pagination.has_next %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.next_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Next</a>
-      {% endif %}
-    </div>
-  {% endif %}
+    {% if not show_hidden and hidden_asset_count %}
+      <p class="subtle">{{ hidden_asset_count }} hidden image{{ '' if hidden_asset_count == 1 else 's' }} excluded from product image grids.</p>
+    {% endif %}
+  </div>
 </div>
+
+{{ product_controls() }}
 
 <section class="agenda">
   {% for product in products %}
@@ -93,9 +99,15 @@
 
       <h4 style="margin: 14px 0 8px;">Images</h4>
       {% if assets %}
-        <form method="post" action="{{ url_for('product_default_reference_assets', product_id=product.id) }}">
+        <form
+          method="post"
+          action="{{ url_for('product_default_reference_assets', product_id=product.id) }}"
+          data-reference-form
+          data-api-url="{{ url_for('api_product_default_reference_assets', product_id=product.id) }}"
+        >
           <input type="hidden" name="return_to" value="{{ url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id) }}">
           <p class="subtle">Select the default reference images I should use when this product needs generated creative.</p>
+          <div class="reference-save-state" aria-live="polite" data-reference-status></div>
           <div class="product-image-grid">
             {% for asset in assets %}
               <article class="product-image-card" title="{{ asset.name }}">
@@ -110,18 +122,14 @@
                   <span class="pill">{{ asset.external_source.replace('_', ' ').title() if asset.external_source else asset.asset_type }}</span>
                   <span class="pill {{ 'complete' if asset.file_exists else 'blocked' }}">{{ 'local' if asset.file_exists else 'remote' }}</span>
                   {% if asset.hidden_from_generation %}<span class="pill blocked">hidden</span>{% endif %}
-                  {% if asset.default_reference %}<span class="pill ready">default reference</span>{% endif %}
+                  <span class="pill ready" data-reference-pill {{ '' if asset.default_reference else 'hidden' }}>default reference</span>
                 </div>
                 <div class="product-card-actions">
                   <label class="reference-toggle" title="{{ 'Hidden images cannot be selected as references' if asset.hidden_from_generation else 'Toggle default reference image' }}">
-                    <input type="checkbox" name="asset_ids" value="{{ asset.id }}" {{ 'checked' if asset.default_reference else '' }} {{ 'disabled' if asset.hidden_from_generation else '' }}>
+                    <input type="checkbox" name="asset_ids" value="{{ asset.id }}" data-reference-checkbox {{ 'checked' if asset.default_reference else '' }} {{ 'disabled' if asset.hidden_from_generation else '' }}>
                     <span class="reference-toggle-icon" aria-hidden="true">
-                      <svg class="reference-icon-off" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="8"></circle>
-                      </svg>
-                      <svg class="reference-icon-on" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 6 9 17l-5-5"></path>
-                      </svg>
+                      <i class="reference-icon-off" data-lucide="circle" aria-hidden="true"></i>
+                      <i class="reference-icon-on" data-lucide="check" aria-hidden="true"></i>
                     </span>
                     <span class="sr-only">{{ 'Hidden image' if asset.hidden_from_generation else 'Toggle default reference image' }}</span>
                   </label>
@@ -135,27 +143,16 @@
                     title="{{ 'Restore image for automation' if asset.hidden_from_generation else 'Hide image from automation' }}"
                   >
                     {% if asset.hidden_from_generation %}
-                      <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                      </svg>
+                      <i data-lucide="eye" aria-hidden="true"></i>
                       <span class="sr-only">Restore image for automation</span>
                     {% else %}
-                      <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 3l18 18"></path>
-                        <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"></path>
-                        <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 8 10 8a17.8 17.8 0 0 1-3.1 4.4"></path>
-                        <path d="M6.6 6.6C3.8 8.5 2 12 2 12s3.5 8 10 8a9.7 9.7 0 0 0 4.4-1.1"></path>
-                      </svg>
+                      <i data-lucide="eye-off" aria-hidden="true"></i>
                       <span class="sr-only">Hide image from automation</span>
                     {% endif %}
                   </button>
                 </div>
               </article>
             {% endfor %}
-          </div>
-          <div class="button-group" style="margin-top: 10px;">
-            <button class="secondary" type="submit">Save default references</button>
           </div>
         </form>
       {% else %}
@@ -182,7 +179,7 @@
               <span>Reviews</span>
               <span class="pill ready">{{ review_count }} imported</span>
             </span>
-            <span class="subtle">Latest customer language and social proof</span>
+            <span class="subtle product-review-kicker">Latest customer language and social proof</span>
           </summary>
           <div class="product-review-list">
             {% for review in reviews %}
@@ -207,7 +204,7 @@
             {% endfor %}
           </div>
           {% if review_count > reviews|length %}
-            <p class="subtle" style="margin: 8px 0 0;">Showing latest {{ reviews|length }} of {{ review_count }} imported reviews.</p>
+            <p class="subtle product-review-footnote">Showing latest {{ reviews|length }} of {{ review_count }} imported reviews.</p>
           {% endif %}
         </details>
       {% endif %}
@@ -235,17 +232,7 @@
 </section>
 
 {% if pagination.total_pages > 1 %}
-  <div class="pagination-bar" aria-label="Product pages">
-    <span class="subtle">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
-    <div class="button-group">
-      {% if pagination.has_previous %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.previous_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Previous</a>
-      {% endif %}
-      {% if pagination.has_next %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.next_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Next</a>
-      {% endif %}
-    </div>
-  </div>
+  {{ product_controls() }}
 {% endif %}
 <script>
   (() => {
@@ -389,6 +376,64 @@
       suggestions.addEventListener("click", (event) => {
         const option = event.target.closest("[data-tag-value]");
         if (option) addTag(form, option.dataset.tagValue);
+      });
+    });
+
+    function referenceAssetIds(form) {
+      return Array.from(form.querySelectorAll("[data-reference-checkbox]:checked")).map((input) => Number.parseInt(input.value, 10)).filter(Number.isFinite);
+    }
+
+    function setReferenceStatus(form, message) {
+      const status = form.querySelector("[data-reference-status]");
+      if (!status) return;
+      status.textContent = message;
+      if (message === "Saved") window.setTimeout(() => { status.textContent = ""; }, 1400);
+    }
+
+    function syncReferencePills(form, selectedIds) {
+      const selected = new Set(selectedIds.map(String));
+      form.querySelectorAll(".product-image-card").forEach((card) => {
+        const input = card.querySelector("[data-reference-checkbox]");
+        const pill = card.querySelector("[data-reference-pill]");
+        if (!input || !pill) return;
+        pill.hidden = !selected.has(input.value);
+      });
+    }
+
+    async function saveReferences(form, changedInput) {
+      const previousChecked = changedInput.checked;
+      const toggle = changedInput.closest(".reference-toggle");
+      form.querySelectorAll(".reference-toggle").forEach((item) => item.classList.remove("error"));
+      toggle?.classList.add("saving");
+      setReferenceStatus(form, "Saving");
+      try {
+        const response = await fetch(form.dataset.apiUrl, {
+          method: "POST",
+          headers: { "Accept": "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ asset_ids: referenceAssetIds(form) }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "Could not save default references.");
+        syncReferencePills(form, payload.asset_ids || referenceAssetIds(form));
+        setReferenceStatus(form, "Saved");
+      } catch (error) {
+        changedInput.checked = !previousChecked;
+        toggle?.classList.add("error");
+        setReferenceStatus(form, error.message || "Could not save");
+      } finally {
+        toggle?.classList.remove("saving");
+      }
+    }
+
+    document.querySelectorAll("[data-reference-form]").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (event.submitter?.name === "hidden") return;
+        event.preventDefault();
+      });
+      form.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-reference-checkbox]");
+        if (!input) return;
+        saveReferences(form, input);
       });
     });
 

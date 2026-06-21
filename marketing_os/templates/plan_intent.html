@@ -9,13 +9,13 @@
 </div>
 
 {% set destination_icons = {
-  "Facebook": "f",
-  "Instagram": "◎",
-  "Pinterest": "P",
-  "Blog post": "✎",
-  "Etsy": "E",
-  "Website": "⌂",
-  "Email": "@"
+  "Facebook": "send",
+  "Instagram": "camera",
+  "Pinterest": "pin",
+  "Blog post": "pencil-line",
+  "Etsy": "shopping-bag",
+  "Website": "home",
+  "Email": "mail"
 } %}
 
 {% set goal_labels = {
@@ -37,155 +37,272 @@
   "Engagement": "Starting a conversation"
 } %}
 
-<section class="panel planner-shell">
-  <div class="wizard-progress" aria-label="Planner progress">
-    <span class="{{ 'active' if active_planning_step == '1' else '' }}" data-progress-step="1">1</span>
-    <span class="{{ 'active' if active_planning_step == '2' else '' }}" data-progress-step="2">2</span>
-    <span class="{{ 'active' if active_planning_step == '3' else '' }}" data-progress-step="3">3</span>
+<section class="planner-shell post-brief-canvas">
+  <div class="wizard-progress planner-progress-row" aria-label="Planner progress">
+    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '1' else '' }}" data-progress-step="1" data-jump-step="1" aria-current="{{ 'step' if active_planning_step == '1' else 'false' }}">
+      <span class="step-index">1</span>
+      <span><strong>Destination</strong><small>Schedule and goal</small></span>
+    </button>
+    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '2' else '' }}" data-progress-step="2" data-jump-step="2" aria-current="{{ 'step' if active_planning_step == '2' else 'false' }}">
+      <span class="step-index">2</span>
+      <span><strong>Subject</strong><small>Product and audience</small></span>
+    </button>
+    <button type="button" class="planner-step-tab {{ 'active' if active_planning_step == '3' else '' }}" data-progress-step="3" data-jump-step="3" aria-current="{{ 'step' if active_planning_step == '3' else 'false' }}">
+      <span class="step-index">3</span>
+      <span><strong>Direction</strong><small>Offer and notes</small></span>
+    </button>
   </div>
 
   <form method="post" action="{{ url_for('create_planning_item') }}" data-planner-wizard>
-    <div class="wizard-step {{ 'active' if active_planning_step == '1' else '' }}" data-step="1">
-      <div class="step-kicker">Step 1</div>
-      <h3>Where should this post go?</h3>
-      <p class="subtle">Pick the date, destination, and main job for this post.</p>
+    <div class="brief-canvas-layout">
+      <div class="brief-section-stack">
+        <section class="brief-section {{ 'active' if active_planning_step == '1' else '' }}" data-step-section="1">
+          <header class="brief-section-header">
+            <span class="brief-section-number">1</span>
+            <div>
+              <div class="step-kicker">Destination and intent</div>
+              <h3>Where should this post go?</h3>
+            </div>
+            <span class="brief-state" data-step-state>{{ 'Active' if active_planning_step == '1' else 'Pending' }}</span>
+          </header>
+          <div class="brief-section-preview">
+            <span>Choose the date, time, channel, and job for this post.</span>
+          </div>
+          <div class="wizard-step brief-section-body {{ 'active' if active_planning_step == '1' else '' }}" data-step="1">
+            <div class="brief-section-grid">
+              <aside class="brief-section-note">
+                <p>Start with the publishing context so the rest of the brief has a clear job to do.</p>
+                <div class="planner-tip">
+                  <i data-lucide="lightbulb" aria-hidden="true"></i>
+                  <span>Clear intent makes stronger first drafts.</span>
+                </div>
+              </aside>
+              <div class="brief-fields">
+                <div class="brief-field-grid two-up">
+                  <label>
+                    Date
+                    <input type="date" name="calendar_date" value="{{ today.isoformat() }}" required>
+                  </label>
+                  <label>
+                    Time
+                    <input type="time" name="scheduled_time" value="{{ default_scheduled_time }}" required data-scheduled-time-input>
+                  </label>
+                </div>
 
-      <label>
-        When should it go out?
-        <input type="date" name="calendar_date" value="{{ today.isoformat() }}" required>
-      </label>
+                <div class="field-label">Destination</div>
+                <div class="destination-picker">
+                  {% for destination in destinations %}
+                    <label class="destination-card">
+                      <input type="radio" name="destinations" value="{{ destination }}" required {{ 'checked' if loop.first else '' }} data-default-scheduled-time="{{ destination_default_times.get(destination, default_scheduled_time) }}">
+                      <span class="destination-icon"><i data-lucide="{{ destination_icons.get(destination, 'send') }}" aria-hidden="true"></i></span>
+                      <span>{{ destination }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
 
-      <label>
-        What time should it be scheduled for?
-        <input type="time" name="scheduled_time" value="{{ default_scheduled_time }}" required data-scheduled-time-input>
-      </label>
+                <label>
+                  Primary goal
+                  <select name="goals" required data-other-select="goal-other">
+                    {% for goal in goals %}
+                      <option value="{{ goal }}">{{ goal_labels.get(goal, goal) }}</option>
+                    {% endfor %}
+                    <option value="__other__">Something else</option>
+                  </select>
+                </label>
+                <label class="other-field" id="goal-other">
+                  Describe the focus
+                  <input name="goals_other" placeholder="Example: remind people about Father's Day gifts">
+                </label>
+                <div class="button-group wizard-actions">
+                  <button type="button" data-next-step="2">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <div class="field-label">Where is it going?</div>
-      <div class="destination-picker">
-        {% for destination in destinations %}
-          <label class="destination-card">
-            <input type="radio" name="destinations" value="{{ destination }}" required {{ 'checked' if loop.first else '' }} data-default-scheduled-time="{{ destination_default_times.get(destination, default_scheduled_time) }}">
-            <span class="destination-icon">{{ destination_icons.get(destination, destination[0]) }}</span>
-            <span>{{ destination }}</span>
-          </label>
-        {% endfor %}
+        <section class="brief-section {{ 'active' if active_planning_step == '2' else '' }}" data-step-section="2">
+          <header class="brief-section-header">
+            <span class="brief-section-number">2</span>
+            <div>
+              <div class="step-kicker">Product and audience</div>
+              <h3>What should it be about?</h3>
+            </div>
+            <span class="brief-state" data-step-state>{{ 'Active' if active_planning_step == '2' else 'Pending' }}</span>
+          </header>
+          <div class="brief-section-preview">
+            <span>Select a catalog product, references, audience, and occasion.</span>
+            <div class="brief-thumb-strip" aria-hidden="true">
+              {% for asset in product_reference_assets[:4] %}
+                {% if asset.file_exists %}
+                  <img src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="">
+                {% elif asset.preview_url %}
+                  <img src="{{ asset.preview_url }}" alt="">
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="wizard-step brief-section-body {{ 'active' if active_planning_step == '2' else '' }}" data-step="2">
+            <div class="brief-section-grid">
+              <aside class="brief-section-note">
+                <p>Attach the product and image references the generator should preserve.</p>
+                <div class="planner-tip">
+                  <i data-lucide="image" aria-hidden="true"></i>
+                  <span>Remote listing images download locally when queued.</span>
+                </div>
+              </aside>
+              <div class="brief-fields">
+                <label>
+                  Featured product
+                  <select name="product_ids" required data-product-reference-select>
+                    {% for product in products %}
+                      <option value="{{ product.id }}">{{ product.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+
+                <div class="field-label">Reference images for image creation</div>
+                <p class="subtle">Select at least one product image.</p>
+                <div class="reference-picker" data-reference-picker>
+                  {% for asset in product_reference_assets %}
+                    <label class="reference-card {{ '' if asset.selectable else 'disabled' }}" data-product-id="{{ asset.product_id }}" title="{{ asset.name }}">
+                      <input type="checkbox" name="selected_source_asset_ids" value="{{ asset.id }}" aria-label="{{ asset.name }}" {{ '' if asset.selectable else 'disabled' }}>
+                      {% if asset.file_exists %}
+                        <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
+                      {% elif asset.preview_url %}
+                        <img class="reference-thumb" src="{{ asset.preview_url }}" alt="{{ asset.name }}">
+                      {% else %}
+                        <span class="asset-missing">No preview</span>
+                      {% endif %}
+                    </label>
+                  {% else %}
+                    <div class="empty-state">No product reference images are registered yet.</div>
+                  {% endfor %}
+                </div>
+
+                <div class="brief-field-grid two-up">
+                  <label>
+                    Audience
+                    <select name="audience" data-other-select="audience-other">
+                      {% for audience in audiences %}
+                        <option value="{{ audience }}">{{ audience }}</option>
+                      {% endfor %}
+                      <option value="__other__">Someone else</option>
+                    </select>
+                  </label>
+                  <label>
+                    Occasion
+                    <select name="occasion" data-other-select="occasion-other">
+                      <option value="">No special moment</option>
+                      {% for occasion in occasions %}
+                        <option value="{{ occasion }}">{{ occasion }}</option>
+                      {% endfor %}
+                      <option value="__other__">Something else</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="other-field" id="audience-other">
+                  Describe the audience
+                  <input name="audience_other" placeholder="Example: teachers buying end-of-year gifts">
+                </label>
+                <label class="other-field" id="occasion-other">
+                  Describe the moment
+                  <input name="occasion_other" placeholder="Example: cruise friend gift before a sailing">
+                </label>
+
+                <div class="button-group wizard-actions">
+                  <button class="secondary" type="button" data-prev-step="1">Back</button>
+                  <button type="button" data-next-step="3">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="brief-section {{ 'active' if active_planning_step == '3' else '' }}" data-step-section="3">
+          <header class="brief-section-header">
+            <span class="brief-section-number">3</span>
+            <div>
+              <div class="step-kicker">Offer and direction</div>
+              <h3>Any creative direction?</h3>
+            </div>
+            <span class="brief-state" data-step-state>{{ 'Active' if active_planning_step == '3' else 'Pending' }}</span>
+          </header>
+          <div class="brief-section-preview">
+            <span>Add optional offer details, timing notes, or creative constraints.</span>
+          </div>
+          <div class="wizard-step brief-section-body {{ 'active' if active_planning_step == '3' else '' }}" data-step="3">
+            <div class="brief-section-grid">
+              <aside class="brief-section-note">
+                <p>Use this for the nuance that helps the first generated options land closer to the mark.</p>
+                <div class="planner-tip">
+                  <i data-lucide="sparkles" aria-hidden="true"></i>
+                  <span>Keep notes specific and decision-ready.</span>
+                </div>
+              </aside>
+              <div class="brief-fields">
+                <label>
+                  Offer or timing note
+                  <select name="promotion" data-other-select="promotion-other">
+                    <option value="">No offer</option>
+                    {% for promotion in promotions %}
+                      <option value="{{ promotion }}">{{ promotion }}</option>
+                    {% endfor %}
+                    <option value="__other__">Something else</option>
+                  </select>
+                </label>
+                <label class="other-field" id="promotion-other">
+                  Describe the offer or timing
+                  <input name="promotion_other" placeholder="Example: made-to-order window closes Friday">
+                </label>
+
+                <label>
+                  Notes for generation
+                  <textarea name="notes" placeholder="Example: keep it warm, make it feel like a small gift, avoid holiday language."></textarea>
+                </label>
+
+                <div class="button-group wizard-actions">
+                  <button class="secondary" type="button" data-prev-step="2">Back</button>
+                  <button type="submit">Save and queue post</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <label>
-        What should this move accomplish?
-        <select name="goals" required data-other-select="goal-other">
-          {% for goal in goals %}
-            <option value="{{ goal }}">{{ goal_labels.get(goal, goal) }}</option>
-          {% endfor %}
-          <option value="__other__">Something else</option>
-        </select>
-      </label>
-      <label class="other-field" id="goal-other">
-        Describe the focus
-        <input name="goals_other" placeholder="Example: remind people about Father’s Day gifts">
-      </label>
-      <div class="button-group wizard-actions">
-        <button type="button" data-next-step="2">Continue</button>
-      </div>
-    </div>
-
-    <div class="wizard-step {{ 'active' if active_planning_step == '2' else '' }}" data-step="2">
-      <div class="step-kicker">Step 2</div>
-      <h3>What should it be about?</h3>
-      <p class="subtle">Choose the product and audience. Product stays tied to the catalog; the rest can be custom.</p>
-
-      <label>
-        Which product should be featured?
-        <select name="product_ids" required data-product-reference-select>
-          {% for product in products %}
-            <option value="{{ product.id }}">{{ product.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-
-      <div class="field-label">Reference images for image creation</div>
-      <p class="subtle">Select at least one product image. Remote listing images are downloaded into local assets when this post is queued.</p>
-      <div class="reference-picker" data-reference-picker>
-        {% for asset in product_reference_assets %}
-          <label class="reference-card {{ '' if asset.selectable else 'disabled' }}" data-product-id="{{ asset.product_id }}" title="{{ asset.name }}">
-            <input type="checkbox" name="selected_source_asset_ids" value="{{ asset.id }}" aria-label="{{ asset.name }}" {{ '' if asset.selectable else 'disabled' }}>
-            {% if asset.file_exists %}
-              <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}">
-            {% elif asset.preview_url %}
-              <img class="reference-thumb" src="{{ asset.preview_url }}" alt="{{ asset.name }}">
-            {% else %}
-              <span class="asset-missing">No preview</span>
-            {% endif %}
-          </label>
-        {% else %}
-          <div class="empty-state">No product reference images are registered yet.</div>
-        {% endfor %}
-      </div>
-
-      <label>
-        Who are we talking to?
-        <select name="audience" data-other-select="audience-other">
-          {% for audience in audiences %}
-            <option value="{{ audience }}">{{ audience }}</option>
-          {% endfor %}
-          <option value="__other__">Someone else</option>
-        </select>
-      </label>
-      <label class="other-field" id="audience-other">
-        Describe the audience
-        <input name="audience_other" placeholder="Example: teachers buying end-of-year gifts">
-      </label>
-
-      <label>
-        Is there a moment behind it?
-        <select name="occasion" data-other-select="occasion-other">
-          <option value="">No special moment</option>
-          {% for occasion in occasions %}
-            <option value="{{ occasion }}">{{ occasion }}</option>
-          {% endfor %}
-          <option value="__other__">Something else</option>
-        </select>
-      </label>
-      <label class="other-field" id="occasion-other">
-        Describe the moment
-        <input name="occasion_other" placeholder="Example: cruise friend gift before a sailing">
-      </label>
-
-      <div class="button-group wizard-actions">
-        <button class="secondary" type="button" data-prev-step="1">Back</button>
-        <button type="button" data-next-step="3">Continue</button>
-      </div>
-    </div>
-
-    <div class="wizard-step {{ 'active' if active_planning_step == '3' else '' }}" data-step="3">
-      <div class="step-kicker">Step 3</div>
-      <h3>Any creative direction?</h3>
-      <p class="subtle">Add only what would help the copywriter and social media art director make better first options.</p>
-
-      <label>
-        Is there an offer or timing note?
-        <select name="promotion" data-other-select="promotion-other">
-          <option value="">No offer</option>
-          {% for promotion in promotions %}
-            <option value="{{ promotion }}">{{ promotion }}</option>
-          {% endfor %}
-          <option value="__other__">Something else</option>
-        </select>
-      </label>
-      <label class="other-field" id="promotion-other">
-        Describe the offer or timing
-        <input name="promotion_other" placeholder="Example: made-to-order window closes Friday">
-      </label>
-
-      <label>
-        Anything else the generator should know?
-        <textarea name="notes" placeholder="Example: keep it warm, make it feel like a small gift, avoid holiday language."></textarea>
-      </label>
-
-      <div class="button-group wizard-actions">
-        <button class="secondary" type="button" data-prev-step="2">Back</button>
-        <button type="submit">Save and queue post</button>
-      </div>
+      <aside class="queue-preview-panel" aria-label="Queue preview">
+        <div class="step-kicker">Queue Preview</div>
+        <h3>What will be queued</h3>
+        <div class="queue-preview-list">
+          <div>
+            <i data-lucide="file-text" aria-hidden="true"></i>
+            <span><strong>Copy options</strong><small>Caption drafts prepared for review.</small></span>
+          </div>
+          <div>
+            <i data-lucide="image" aria-hidden="true"></i>
+            <span><strong>Image options</strong><small>Product-aware creative references.</small></span>
+          </div>
+          <div>
+            <i data-lucide="check-circle-2" aria-hidden="true"></i>
+            <span><strong>Review handoff</strong><small>Nothing publishes automatically.</small></span>
+          </div>
+        </div>
+        <dl class="queue-preview-details">
+          <div>
+            <dt>Date</dt>
+            <dd>{{ today.isoformat() }}</dd>
+          </div>
+          <div>
+            <dt>Time</dt>
+            <dd>{{ default_scheduled_time }}</dd>
+          </div>
+          <div>
+            <dt>First destination</dt>
+            <dd>{{ destinations[0] if destinations else 'Not selected' }}</dd>
+          </div>
+        </dl>
+      </aside>
     </div>
   </form>
 </section>
@@ -211,13 +328,7 @@
         </div>
         <form method="post" action="{{ url_for('delete_planning_item', item_id=item.id) }}" onsubmit="return confirm('Delete this queued post?');">
           <button class="warn icon-button" type="submit" aria-label="Delete queued post" title="Delete queued post">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18"></path>
-              <path d="M8 6V4h8v2"></path>
-              <path d="M19 6l-1 14H6L5 6"></path>
-              <path d="M10 11v5"></path>
-              <path d="M14 11v5"></path>
-            </svg>
+            <i data-lucide="trash-2" aria-hidden="true"></i>
             <span class="sr-only">Delete queued post</span>
           </button>
         </form>
@@ -314,19 +425,11 @@
                         </div>
                         <div class="button-group icon-button-group" aria-label="Copy actions">
                           <button class="secondary icon-button" type="button" data-show-panel="copy-{{ candidate.id }}" aria-label="Edit copy" title="Edit copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
-                            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M12 20h9"></path>
-                              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                            </svg>
+                            <i data-lucide="pencil" aria-hidden="true"></i>
                             <span class="sr-only">Edit copy</span>
                           </button>
                           <button class="secondary icon-button" type="button" data-show-panel="rewrite-{{ candidate.id }}" aria-label="Rewrite copy" title="Rewrite copy" {{ 'disabled' if item.waiting_for_copy else '' }}>
-                            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
-                              <path d="M3 21v-5h5"></path>
-                              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
-                              <path d="M16 8h5V3"></path>
-                            </svg>
+                            <i data-lucide="refresh-ccw" aria-hidden="true"></i>
                             <span class="sr-only">Rewrite copy</span>
                           </button>
                         </div>
@@ -404,10 +507,7 @@
                         </button>
                       </form>
                       <button class="image-zoom-button" type="button" aria-label="Open full-size preview" title="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=candidate.image_asset.asset_id) }}" data-image-zoom-title="{{ candidate.image_asset.title }}">
-                        <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                          <circle cx="11" cy="11" r="7"></circle>
-                          <path d="m21 21-4.3-4.3"></path>
-                        </svg>
+                        <i data-lucide="search" aria-hidden="true"></i>
                         <span class="sr-only">Open full-size preview</span>
                       </button>
                     </div>
@@ -416,7 +516,7 @@
               {% endfor %}
             {% endif %}
             <article class="image-upload-card" data-show-panel="upload-image-{{ item.id }}" role="button" tabindex="0" aria-controls="upload-image-{{ item.id }}">
-              <div class="upload-glyph">+</div>
+              <div class="upload-glyph"><i data-lucide="plus" aria-hidden="true"></i></div>
               <h3>Use your own image</h3>
               <p>Upload a finished visual instead of using a generated option.</p>
             </article>
@@ -480,10 +580,7 @@
   <div class="image-modal-backdrop" data-image-modal-close></div>
   <div class="image-modal-panel" role="dialog" aria-modal="true" aria-label="Image preview">
     <button class="drawer-close image-modal-close icon-button" type="button" data-image-modal-close aria-label="Close image preview" title="Close">
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 6 6 18"></path>
-        <path d="m6 6 12 12"></path>
-      </svg>
+      <i data-lucide="x" aria-hidden="true"></i>
       <span class="sr-only">Close image preview</span>
     </button>
     <img data-image-modal-img alt="">
@@ -502,9 +599,28 @@
     select.addEventListener("change", () => syncOtherField(select));
   });
 
+  function setPlannerStep(form, targetStep) {
+    if (!form || !targetStep) return;
+    form.querySelectorAll(".wizard-step").forEach((step) => {
+      step.classList.toggle("active", step.dataset.step === targetStep);
+    });
+    form.querySelectorAll("[data-step-section]").forEach((section) => {
+      const active = section.dataset.stepSection === targetStep;
+      section.classList.toggle("active", active);
+      const state = section.querySelector("[data-step-state]");
+      if (state) state.textContent = active ? "Active" : "Pending";
+    });
+    document.querySelectorAll("[data-progress-step]").forEach((step) => {
+      const active = step.dataset.progressStep === targetStep;
+      step.classList.toggle("active", active);
+      step.setAttribute("aria-current", active ? "step" : "false");
+    });
+  }
+
   document.addEventListener("click", (event) => {
     const next = event.target.closest("[data-next-step]");
     const prev = event.target.closest("[data-prev-step]");
+    const jump = event.target.closest("[data-jump-step]");
     const copyOption = event.target.closest("[data-copy-option-target]");
     const showPanel = event.target.closest("[data-show-panel]");
     const hidePanel = event.target.closest("[data-hide-panel]");
@@ -526,16 +642,11 @@
       return;
     }
 
-    if (next || prev) {
-      const targetStep = next ? next.dataset.nextStep : prev.dataset.prevStep;
-      const form = event.target.closest("[data-planner-wizard]");
+    if (next || prev || jump) {
+      const targetStep = next ? next.dataset.nextStep : prev ? prev.dataset.prevStep : jump.dataset.jumpStep;
+      const form = event.target.closest("[data-planner-wizard]") || document.querySelector("[data-planner-wizard]");
       if (!form) return;
-      form.querySelectorAll(".wizard-step").forEach((step) => {
-        step.classList.toggle("active", step.dataset.step === targetStep);
-      });
-      document.querySelectorAll("[data-progress-step]").forEach((step) => {
-        step.classList.toggle("active", step.dataset.progressStep === targetStep);
-      });
+      setPlannerStep(form, targetStep);
       return;
     }
 

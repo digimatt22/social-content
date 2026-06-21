@@ -473,8 +473,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             self.assertEqual(first_page.status_code, 200)
             self.assertEqual(second_page.status_code, 200)
-            self.assertIn(b"Products 1-20 of 25", first_page.data)
-            self.assertIn(b"Products 21-25 of 25", second_page.data)
+            self.assertIn(b"1-20 of 25 products", first_page.data)
+            self.assertIn(b"21-25 of 25 products", second_page.data)
             self.assertIn(b"Paged Product 000", first_page.data)
             self.assertNotIn(b"Paged Product 020", first_page.data)
             self.assertNotIn(b"Paged Product Asset 020", first_page.data)
@@ -840,7 +840,15 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertNotIn(b"Match duplicate products", products_page.data)
             self.assertIn(b"data-tag-combobox", products_page.data)
             self.assertIn(b"data-tag-suggestions", products_page.data)
-            self.assertIn(b"Save default references", products_page.data)
+            self.assertIn(b"vendor/lucide.min.js", products_page.data)
+            self.assertIn(b"aria-label=\"Product sort\"", products_page.data)
+            self.assertIn(b"data-auto-submit", products_page.data)
+            self.assertNotIn(b"data-lucide=\"filter-x\"", products_page.data)
+            self.assertNotIn(b"Reset product sort", products_page.data)
+            self.assertNotIn(b"<button type=\"submit\">Apply</button>", products_page.data)
+            self.assertNotIn(b"Save default references", products_page.data)
+            self.assertIn(b"data-reference-form", products_page.data)
+            self.assertIn(b"data-reference-checkbox", products_page.data)
             self.assertIn(b"reference-toggle", products_page.data)
             self.assertIn(b"Toggle default reference image", products_page.data)
             self.assertNotIn(b"Local product tag", products_page.data)
@@ -2111,7 +2119,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             planning_page = client.get("/planning")
             self.assertEqual(planning_page.status_code, 200)
             self.assertIn(b"Where should this post go", planning_page.data)
-            self.assertIn(b"Step 1", planning_page.data)
+            self.assertIn(b"Destination and intent", planning_page.data)
             self.assertIn(b"What should it be about", planning_page.data)
 
             missing_reference_response = client.post(
@@ -2500,8 +2508,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             missing_reference_page = client.get(missing_reference.headers["Location"])
             self.assertEqual(missing_reference_page.status_code, 200)
-            self.assertIn(b'<div class="wizard-step active" data-step="2">', missing_reference_page.data)
-            self.assertIn(b'<span class="active" data-progress-step="2">2</span>', missing_reference_page.data)
+            self.assertIn(b'<div class="wizard-step brief-section-body active" data-step="2">', missing_reference_page.data)
+            self.assertIn(b'data-progress-step="2" data-jump-step="2" aria-current="step"', missing_reference_page.data)
             self.assertIn(b"Select at least one product reference image", missing_reference_page.data)
 
             queued = client.post(

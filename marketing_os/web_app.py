@@ -971,7 +971,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     if product_id is not None:
                         review_counts_by_product[product_id] = int(count or 0)
                 for review in reviews:
-                    if review.product_id is None or len(reviews_by_product.setdefault(review.product_id, [])) >= 3:
+                    if review.product_id is None:
                         continue
                     reviews_by_product[review.product_id].append(_product_review_model(review))
             return render_template(
