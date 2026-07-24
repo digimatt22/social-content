@@ -40,6 +40,10 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
 - Implementation branches use the `codex/` prefix and are committed phase by phase.
 - The worktree contains separate pre-existing Art Studio/video/harness changes. Phase commits stage only their owned files/hunks.
 - The public website does have an `origin` remote; Phase 0 website changes are on `codex/pinterest-growth-phase-0`.
+- Phase 1 website hub work is on `codex/pinterest-growth-phase-1` in both
+  repositories and adds canonical product routes, typed editorial drafts,
+  dedicated portrait metadata images, and separately scoped agent v2 contracts
+  without direct database coupling.
 
 ## Strategy source
 
@@ -62,3 +66,6 @@ Phase -1 evidence and decisions:
 - Configure alert delivery/owner, acknowledgement, and cost ceiling.
 - Authorize provider accounts before any public Pinterest write.
 - Rotate existing long-lived local AWS credentials before hosted operation.
+- Apply the website growth-event Terraform table and configure/rotate distinct
+  catalog-read, draft-write, and measurement-read production credentials before
+  enabling the deployed Phase 1 receiver.

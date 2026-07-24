@@ -26,6 +26,17 @@
 
 No public Pinterest publish handler exists in Phase 0.
 
+`MattMadeMeAgentApiAdapter.list_products_v2` provides strict,
+content-revision-aware public catalog reads and preserves the last valid revision
+when a malformed response is rejected. `create_blog_draft_v2` and
+`create_editorial_draft_v2` use the separately scoped draft credential and a
+16–128 character stable idempotency key. They create only admin-preview drafts;
+neither can publish.
+
+`list_growth_events_v2` uses a measurement-only credential and reads ordered
+cursor pages from the website’s approved first-party receiver. Marketing OS
+never reads the website DynamoDB table directly.
+
 ## Schedules
 
 The durable scheduler process evaluates on a configurable polling interval. The Phase 0 built-in `system.noop` schedule proves leadership/idempotency only. Business cadences remain defined by later phase policy and must not be guessed.

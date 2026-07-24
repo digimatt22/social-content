@@ -38,6 +38,8 @@ Human passwords use Argon2id. Browser sessions are opaque, hashed in PostgreSQL,
 
 See `docs/architecture/growth-measurement-contract.md`.
 
+The public hub route and v2 draft/read contracts are defined in `docs/architecture/website-hub-v2-contract.md`.
+
 ## Hosting
 
 Sheldon is the initial internal always-on target using rootless Docker. The web origin binds loopback only; PostgreSQL uses an internal network and persistent named volume. Caddy/Cloudflare routing and deployment are separate approval gates.

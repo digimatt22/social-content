@@ -2,7 +2,7 @@
 
 ## Status
 
-- Status: in progress; Phase -1 completed, Phase 0 next, and live external capabilities remain gated by the capability matrix
+- Status: in progress; Phases -1 through 1 completed, Phase 2 next, and live external capabilities remain gated by the capability matrix
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
 - PR: Not applicable to this planning pass because this repository has no `origin` remote configured. Configure a remote before implementation and use PR review.
@@ -825,10 +825,23 @@ These block Phase 1+, not Phase -1 discovery:
 - Permanent-service decision added: retain Flask, move hosted production persistence to PostgreSQL, add durable jobs, and require authenticated/authorized access; 2026-07-24.
 - Phase -1 completed: service-foundation ADR accepted, capability matrix recorded, live Etsy/website reads passed, Sheldon preflight passed, and PostgreSQL durable-job locking proved; 2026-07-24.
 - Phase 0 completed: frozen PostgreSQL/Alembic schema, controlled SQLite cutover, durable scheduler/workers, hosted auth/authz, service identities, audit, container/backup operations, product identity and feedback contracts, baseline evidence, website Etsy-click tracking/structured-data repair, and current-state docs; 2026-07-24.
+- Phase 1 completed: canonical product routes, one
+  collection and two guides, typed idempotent editorial/blog drafts,
+  content-complete catalog revisions, scoped read/write credentials, dedicated
+  portrait metadata images, sitemap coverage, and automated Etsy-exit
+  enforcement, plus an approved privacy-bounded attribution receiver and
+  measurement-read contract; website commit `3166790`; 2026-07-24.
+- Phase 1 final independent review — `PASS`; atomic attribution semantics,
+  streamed payload limits, replay protection, bounded quotas, least-privilege
+  credentials, strict serialization, and Marketing OS validation passed with no
+  implementation blockers; 2026-07-24.
 
 ## Closeout
 
 - Final planning status: implementation in progress.
-- Phase -1 and Phase 0 are complete; Phase 1 is the next implementation phase.
+- Phases -1 through 1 are complete; Phase 2 coverage intelligence and catalog
+  monitoring is next.
 - Phase 0 website changes were committed separately as `fb92e37` on `codex/pinterest-growth-phase-0`.
+- Phase 1 website changes were committed separately as `3166790` on
+  `codex/pinterest-growth-phase-1`.
 - lifeOS context was unavailable and did not inform the plan; no durable lifeOS update was identified.
