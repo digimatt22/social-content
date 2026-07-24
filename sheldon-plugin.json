@@ -1,0 +1,22 @@
+{
+  "build_secret_ids": {},
+  "hook_image": {
+    "build": {
+      "dockerfile": "Dockerfile",
+      "target": "database-tools"
+    },
+    "dedicated": true,
+    "required_commands": [
+      "pg_dump",
+      "pg_restore",
+      "psql",
+      "initdb",
+      "pg_ctl"
+    ],
+    "user": "marketing-os"
+  },
+  "manifest_schema": 2,
+  "plugin": "sheldon-deploy",
+  "plugin_version": "0.4.1",
+  "schema": 1
+}

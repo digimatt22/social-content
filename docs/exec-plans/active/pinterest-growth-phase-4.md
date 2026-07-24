@@ -2,8 +2,8 @@
 
 ## Status
 
-- Status: blocked after committed-ready disabled implementation; awaiting external activation inputs
-- Branch: `codex/pinterest-growth-phase-3`
+- Status: in progress; disabled connector complete and hosted deployment contract under exact-release validation
+- Branch: `codex/marketing-os-sheldon-deployment`
 - Started: 2026-07-24
 - Production activation: blocked by external capability and authority gates
 
@@ -43,8 +43,8 @@ present.
 3. Alert destination, named owner, acknowledgement policy, and cost ceiling.
 4. Off-host encrypted backup destination, key custodian, retention, RPO/RTO.
 5. Production hostname/route, administrator handoff, and cutover approval.
-6. Approved deployment tooling for the five-service Compose topology; the
-   installed single-container Sheldon deployer cannot deploy this architecture.
+6. Live Sheldon mutations remain separately gated, but the upgraded deployer
+   now supports and validates the required multi-service topology.
 
 ## Work sequence
 
@@ -56,6 +56,20 @@ present.
 6. Have the plan challenger assess strategy fit, automation, and feedback loop.
 7. Commit the disabled readiness increment while leaving this plan active.
 8. Resume hosted/sample operation only when the external blockers are supplied.
+
+## Hosted deployment increment
+
+- Work Items and Relay Hub SMS were redeployed and read-only verified healthy
+  on 2026-07-24.
+- `sheldon.json` now declares web, worker, scheduler, one-shot migration,
+  dedicated database hooks, and application-owned PostgreSQL 17.10.
+- Migration, runtime, backup, and cluster-bootstrap identities are separated.
+- Worker/scheduler health now fails on expired leases or queue lag beyond the
+  declared Sheldon attention contract.
+- Backup and isolated restore hooks produce/verify schema revision plus
+  protected row counts.
+- Garage, AWS S3, off-host encrypted retention, alert recipient/fallback, first
+  administrator handoff, and public Pinterest authority remain explicit gates.
 
 ## Disabled increment result
 

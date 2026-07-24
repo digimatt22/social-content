@@ -77,9 +77,19 @@ See `docs/architecture/pinterest-controlled-publishing-v1.md`.
 
 ## Hosting
 
-Sheldon is the initial internal always-on target using rootless Docker. The web origin binds loopback only; PostgreSQL uses an internal network and persistent named volume. Caddy/Cloudflare routing and deployment are separate approval gates.
+Sheldon is the initial internal always-on target using rootless Docker. The
+schema-2 deployment declares separate web, worker, scheduler, one-shot
+migration, and database-hook images. The web origin binds loopback only.
+Application-owned PostgreSQL 17.10 runs on a labeled stable private network
+with a persistent named volume, separate cluster-bootstrap, migration, runtime,
+and backup identities, and no published database port. Migration, backup,
+isolated restore check, deployment, and Caddy/Cloudflare routing remain
+separate approval gates.
 
-See `docs/architecture/adr-001-permanent-marketing-service-foundation.md` and `deploy/sheldon/compose.yml`.
+See `docs/architecture/adr-001-permanent-marketing-service-foundation.md`,
+`sheldon.json`, and `SHELDON_DEPLOY.md`. The older
+`deploy/sheldon/compose.yml` remains a local/manual reference and is not the
+hosted release authority.
 
 ## Principal risks
 

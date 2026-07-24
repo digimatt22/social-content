@@ -78,3 +78,24 @@ provider calls. Migration validation applies revision
 `0005_pinterest_control_plane`, downgrades to
 `0004_pinterest_shadow_production`, and reapplies head on SQLite and
 PostgreSQL.
+
+## Sheldon exact-release checks
+
+Use the installed reviewed Sheldon Deploy release:
+
+```sh
+python3 <plugin>/scripts/deploy.py doctor --project-dir .
+python3 <plugin>/scripts/deploy.py sync-metadata --project-dir .
+python3 <plugin>/scripts/deploy.py verify-release --project-dir . \
+  --output /tmp/marketing-os-release-verification.json
+python3 <plugin>/scripts/deploy.py plan --project-dir .
+python3 <plugin>/scripts/deploy.py package-audit --project-dir . \
+  --output /tmp/marketing-os-package-audit.json
+python3 <plugin>/scripts/deploy.py preflight --project-dir .
+```
+
+`verify-release` must build the runtime and database-tools targets, confirm
+non-root execution, verify `pg_dump`, `pg_restore`, `psql`, `initdb`, and
+`pg_ctl`, and syntax-check the committed hook scripts. Live provisioning,
+migration, deployment, backup, restore check, and rollback are distinct
+human-authorized validations.

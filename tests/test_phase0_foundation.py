@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, inspect, select
 
 from marketing_os.db import create_db_engine, init_db, require_current_schema, session_factory
 from marketing_os.db_models import (
+    AutomationJobRecord,
     AuditEventRecord,
     Base,
     DemandEvidenceRecord,
@@ -24,6 +25,7 @@ from marketing_os.db_models import (
 )
 from marketing_os.jobs.durable_scheduler import emit_due_jobs
 from marketing_os.jobs.migrate_sqlite_to_postgres import migrate, plan_migration
+from marketing_os.jobs.operational_status import collect_status
 from marketing_os.secure_app import create_secure_app
 from marketing_os.services.auth import (
     authenticate_password,
@@ -111,6 +113,38 @@ class Phase0FoundationTests(unittest.TestCase):
         now = utc_now().replace(hour=3, minute=12, second=0, microsecond=0)
         self.assertEqual(5, emit_due_jobs(factory, now))
         self.assertEqual(1, emit_due_jobs(factory, now + timedelta(minutes=20)))
+        engine.dispose()
+
+    def test_operational_status_enforces_queue_and_lease_attention_contract(self) -> None:
+        engine = create_db_engine(self.root / "status.sqlite")
+        init_db(engine)
+        factory = session_factory(engine)
+        now = utc_now()
+        with factory.begin() as session:
+            queued, _ = enqueue_job(
+                session,
+                job_type="system.noop",
+                scheduled_at=now - timedelta(minutes=20),
+            )
+            expired, _ = enqueue_job(session, job_type="system.noop")
+            expired.state = "running"
+            expired.lease_owner = "worker-1"
+            expired.lease_expires_at = now - timedelta(seconds=1)
+            expired.heartbeat_at = now - timedelta(minutes=5)
+            session.flush()
+            queued_id, expired_id = queued.id, expired.id
+
+        report = collect_status(factory, attention_seconds=900)
+        self.assertEqual("attention_required", report["status"])
+        self.assertTrue(report["queue_attention"])
+        self.assertGreaterEqual(report["queue_lag_seconds"], 1200)
+        self.assertEqual(1, report["expired_leases"])
+
+        with factory.begin() as session:
+            session.delete(session.get(AutomationJobRecord, queued_id))
+            session.delete(session.get(AutomationJobRecord, expired_id))
+        healthy = collect_status(factory, attention_seconds=900)
+        self.assertEqual("ok", healthy["status"])
         engine.dispose()
 
     def test_job_control_requires_active_admin(self) -> None:

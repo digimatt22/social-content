@@ -53,12 +53,9 @@ Use `deploy/sheldon/secrets.env.example` only as a field list. The actual Sheldo
 
 ## Remote state
 
-Marketing OS has no `origin` remote as of 2026-07-24. Do not invent one. Once the owner supplies the repository:
-
-```sh
-git remote add origin <approved-private-remote>
-git push -u origin <phase-branch>
-```
+Marketing OS has an `origin` remote. Phase branches use the `codex/` prefix and
+the exact Sheldon release commit must be pushed to its configured upstream
+before deployment.
 
 The MattMadeMe website is a separate Git repository and must use its own branch, validation, commit, and deployment workflow.
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-- Status: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and hosted/live activation remains gated by the capability matrix
+- Status: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and the hosted Marketing OS release contract is under exact-release validation
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
 - PR: Not applicable to this planning pass because this repository has no `origin` remote configured. Configure a remote before implementation and use PR review.
@@ -847,11 +847,17 @@ These block Phase 1+, not Phase -1 discovery:
 ## Closeout
 
 - Final planning status: implementation in progress.
-- Phases -1 through 2 are complete; Phase 3 Pinterest production in shadow mode
-  is next.
+- Phases -1 through 3 are complete. Phase 4 disabled connector readiness is
+  complete, and the hosted Marketing OS deployment increment is active.
 - Phase 0 website changes were committed separately as `fb92e37` on `codex/pinterest-growth-phase-0`.
 - Phase 1 website changes were committed separately as `3166790` on
   `codex/pinterest-growth-phase-1`.
 - Phase 2 uses separate scoped website and Marketing OS commits on
   `codex/pinterest-growth-phase-2`.
+- Phase 3 and the disabled Phase 4 connector increment are committed on
+  `codex/pinterest-growth-phase-3`.
+- Hosted deployment work continues on
+  `codex/marketing-os-sheldon-deployment`; live provisioning, migration,
+  backup/restore, administrator handoff, route activation, and public Pinterest
+  authority remain separately gated.
 - lifeOS context was unavailable and did not inform the plan; no durable lifeOS update was identified.

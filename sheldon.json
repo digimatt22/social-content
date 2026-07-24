@@ -1,0 +1,234 @@
+{
+  "schema": 2,
+  "name": "marketing-os",
+  "release": {
+    "source": {
+      "type": "git",
+      "require_clean": true,
+      "require_upstream_reachable": true,
+      "workspace_policy": "isolated-commit",
+      "generated_allowlist": []
+    }
+  },
+  "services": {
+    "web": {
+      "framework": "flask",
+      "build": {
+        "dockerfile": "Dockerfile",
+        "target": "runtime"
+      },
+      "command": [
+        "gunicorn",
+        "--bind",
+        "0.0.0.0:8080",
+        "--workers",
+        "2",
+        "--access-logfile",
+        "-",
+        "marketing_os.wsgi:app"
+      ],
+      "container_port": 8080,
+      "user": "marketing-os",
+      "resources": {
+        "memory_bytes": 805306368,
+        "cpus": 1,
+        "pids": 256
+      },
+      "restart": "unless-stopped",
+      "stop_grace_seconds": 30,
+      "health": {
+        "path": "/health",
+        "readiness_path": "/ready"
+      },
+      "secrets": {
+        "runtime": [
+          "MARKETING_OS_DB_URL",
+          "MARKETING_OS_SECRET",
+          "MARKETING_OS_ENV",
+          "MARKETING_OS_TRUSTED_HOSTS",
+          "MARKETING_OS_PROXY_HOPS",
+          "MARKETING_OS_BOOTSTRAP_DATA"
+        ],
+        "build": []
+      }
+    },
+    "worker": {
+      "build": {
+        "dockerfile": "Dockerfile",
+        "target": "runtime"
+      },
+      "command": [
+        "marketing-os-worker"
+      ],
+      "user": "marketing-os",
+      "resources": {
+        "memory_bytes": 536870912,
+        "cpus": 0.75,
+        "pids": 192
+      },
+      "restart": "unless-stopped",
+      "stop_grace_seconds": 60,
+      "health": {
+        "command": [
+          "marketing-os-status",
+          "--fail-on-attention"
+        ],
+        "attention_seconds": 900
+      },
+      "secrets": {
+        "runtime": [
+          "MARKETING_OS_DB_URL",
+          "MARKETING_OS_ENV"
+        ],
+        "build": []
+      }
+    },
+    "scheduler": {
+      "build": {
+        "dockerfile": "Dockerfile",
+        "target": "runtime"
+      },
+      "command": [
+        "marketing-os-scheduler"
+      ],
+      "user": "marketing-os",
+      "resources": {
+        "memory_bytes": 268435456,
+        "cpus": 0.25,
+        "pids": 128
+      },
+      "restart": "unless-stopped",
+      "stop_grace_seconds": 30,
+      "health": {
+        "command": [
+          "marketing-os-status",
+          "--fail-on-attention"
+        ],
+        "attention_seconds": 1800
+      },
+      "secrets": {
+        "runtime": [
+          "MARKETING_OS_DB_URL",
+          "MARKETING_OS_ENV"
+        ],
+        "build": []
+      }
+    },
+    "migration": {
+      "build": {
+        "dockerfile": "Dockerfile",
+        "target": "runtime"
+      },
+      "command": [
+        "scripts/sheldon-migrate.sh"
+      ],
+      "user": "marketing-os",
+      "resources": {
+        "memory_bytes": 536870912,
+        "cpus": 0.5,
+        "pids": 128
+      },
+      "restart": "no",
+      "stop_grace_seconds": 30,
+      "revision": "0005_pinterest_control_plane",
+      "backup_required": true,
+      "authority": "separate",
+      "secrets": {
+        "runtime": [
+          "MARKETING_OS_DB_MIGRATION_URL"
+        ],
+        "build": []
+      }
+    }
+  },
+  "ingress": {
+    "hostname": "mmm.digicolony.net",
+    "service": "web",
+    "host_port": null
+  },
+  "networks": {
+    "application_subnet": null,
+    "platform_subnet": null
+  },
+  "secrets": {
+    "runtime": [
+      "MARKETING_OS_DB_URL",
+      "MARKETING_OS_DB_MIGRATION_URL",
+      "MARKETING_OS_DB_BACKUP_URL",
+      "MARKETING_OS_DB_ADMIN_PASSWORD",
+      "MARKETING_OS_DB_MIGRATION_PASSWORD",
+      "MARKETING_OS_DB_RUNTIME_PASSWORD",
+      "MARKETING_OS_SECRET",
+      "MARKETING_OS_ENV",
+      "MARKETING_OS_TRUSTED_HOSTS",
+      "MARKETING_OS_PROXY_HOPS",
+      "MARKETING_OS_BOOTSTRAP_DATA"
+    ],
+    "build": []
+  },
+  "storage": [],
+  "database": {
+    "profile": "application-owned-postgresql",
+    "engine": "postgresql",
+    "version": "17.10",
+    "image": "postgres:17.10@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394",
+    "volume": "marketing-os-postgres",
+    "database": "marketing_os",
+    "runtime_role": "marketing_os_runtime",
+    "migration_role": "marketing_os_migrator",
+    "admin_role": "marketing_os_cluster_admin",
+    "connection_limit": 20,
+    "isolation_tier": "stateful-automation",
+    "secret_names": {
+      "runtime_url": "MARKETING_OS_DB_URL",
+      "migration_url": "MARKETING_OS_DB_MIGRATION_URL",
+      "backup_url": "MARKETING_OS_DB_BACKUP_URL",
+      "runtime_password": "MARKETING_OS_DB_RUNTIME_PASSWORD",
+      "migration_password": "MARKETING_OS_DB_MIGRATION_PASSWORD",
+      "admin_password": "MARKETING_OS_DB_ADMIN_PASSWORD"
+    },
+    "readiness_command": [
+      "scripts/sheldon-database-readiness.sh"
+    ],
+    "backup": {
+      "command": [
+        "scripts/sheldon-database-backup.sh"
+      ],
+      "owner": "marketing_os",
+      "max_age_hours": 24
+    },
+    "restore_check": {
+      "command": [
+        "scripts/sheldon-database-restore-check.sh"
+      ]
+    },
+    "hooks": {
+      "build": {
+        "dockerfile": "Dockerfile",
+        "target": "database-tools"
+      },
+      "user": "marketing-os",
+      "required_commands": [
+        "pg_dump",
+        "pg_restore",
+        "psql",
+        "initdb",
+        "pg_ctl"
+      ]
+    },
+    "resources": {
+      "memory_bytes": 1073741824,
+      "cpus": 1,
+      "pids": 256
+    }
+  },
+  "rollout": {
+    "health_deadline_seconds": 180,
+    "release_retention": 5,
+    "lock_timeout_seconds": 30
+  },
+  "observability": {
+    "inventory": true,
+    "audit_destination": "release"
+  }
+}

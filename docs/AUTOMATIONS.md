@@ -12,6 +12,11 @@
 | `marketing-os-preflight` | Startup/policy gate | Read-only capability report | Select reported safe degraded mode |
 | `marketing-os-admin` | Manual TTY | Human/service identities and audit | Tokens revocable; passwords never CLI args |
 | `migrate_sqlite_to_postgres` | Controlled cutover | Dry-run or verified copy | SQLite remains authority until acceptance |
+| Sheldon Deploy `doctor` / `plan` / `preflight` | Read-only hosted-release gate | Exact Git/package/build/dependency evidence | Resolve reported contract; no live mutation |
+| Sheldon Deploy dependency/database provision | Separately approved live setup | Labeled private network, PostgreSQL service/volume/roles | Inspect inventory; never recreate or relabel blindly |
+| Sheldon Deploy `migrate` | Separately approved one-shot migration | Alembic head bound to staged exact release and backup reference | Inspect partial state before an approved retry |
+| Sheldon Deploy `deploy` / `update` | Separately approved release promotion | Health-gated immutable web/worker/scheduler release | Known-healthy rollback; no database downgrade |
+| Sheldon Deploy `backup` / `restore-check` | Separately approved recovery proof | Protected dump and network-isolated restore evidence | No production restore authority |
 
 ## Existing business jobs
 
@@ -90,6 +95,18 @@ replay cannot call Create Pin while the publication is ambiguous. Exact
 authority and state rules are in
 `docs/architecture/pinterest-controlled-publishing-v1.md`.
 
+## Sheldon health contracts
+
+- `/health` proves web-process liveness.
+- `/ready` proves PostgreSQL connectivity and the production foundation gate.
+- Worker and scheduler health run `marketing-os-status --fail-on-attention`.
+  Sheldon supplies each service's maximum queue-attention interval through
+  `SHELDON_ATTENTION_SECONDS`; expired leases, dead letters, quarantines, or
+  excessive due-queue lag fail the health command.
+- Database readiness proves the expected database, runtime/migration roles,
+  PostgreSQL 17.10 contract, connection ceiling, and Alembic head without
+  printing credentials.
+
 ## Failure semantics
 
 - retryable/transient: bounded exponential backoff with deterministic jitter;
@@ -101,7 +118,8 @@ authority and state rules are in
 
 ## Operations
 
-`deploy/sheldon/compose.yml` defines PostgreSQL, one-shot migration, web, worker, and scheduler services. It is packaging, not proof of a production deployment.
+`sheldon.json` is the hosted release authority. `deploy/sheldon/compose.yml`
+remains a local/manual reference and is not proof of a production deployment.
 
 Encrypted backup/restore commands:
 

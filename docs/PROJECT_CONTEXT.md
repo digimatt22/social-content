@@ -35,8 +35,7 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
 
 ## Repository and collaboration
 
-- This repository currently has no `origin` remote.
-- Pull requests and pushes are unavailable until a remote is configured.
+- This repository has an `origin` remote and phase branches are pushed there.
 - Implementation branches use the `codex/` prefix and are committed phase by phase.
 - The worktree contains separate pre-existing Art Studio/video/harness changes. Phase commits stage only their owned files/hunks.
 - The public website does have an `origin` remote; Phase 0 website changes are on `codex/pinterest-growth-phase-0`.
@@ -55,6 +54,23 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
   checksummed review fixtures, append-only QA/review evidence, duplicate payload
   leases, durable generation/digest jobs, and authenticated shadow surfaces.
   It has no external publishing or generation authority.
+- The hosted Marketing OS deployment increment is on
+  `codex/marketing-os-sheldon-deployment`. It uses Sheldon Deploy schema 2
+  with independently bounded web, worker, scheduler, migration, database-hook,
+  and application-owned PostgreSQL 17.10 services. Live database and deployment
+  mutations remain separately authorized.
+
+## Sheldon deployment state
+
+- Sheldon Deploy 0.4.0 is installed; the reviewed 0.4.1 compatibility patch is
+  on `codex/sheldon-deploy-0-4-1`.
+- The current Work Items and Relay Hub SMS releases were read-only verified
+  healthy on 2026-07-24. Exact live release identifiers remain in local
+  operational evidence rather than this public repository.
+- Marketing OS targets `mmm.digicolony.net` with loopback-only Caddy ingress
+  and a dedicated application-owned PostgreSQL instance.
+- The deployment contract intentionally has no Garage or AWS S3 profile yet;
+  exact bucket/account/identity selections remain human gates.
 
 ## Strategy source
 
@@ -88,3 +104,5 @@ Phase -1 evidence and decisions:
   enabling Phase 3 schedules.
 - Complete one timed representative real-output shadow review before claiming a
   review-time improvement or graduating Phase 4 autonomy.
+- Approve each live Sheldon dependency-network, PostgreSQL provisioning,
+  migration, deployment, backup, and restore-check operation separately.
