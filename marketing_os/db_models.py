@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -397,3 +397,212 @@ class MetricRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     task: Mapped[TaskRecord] = relationship(back_populates="metrics")
+
+
+class PrincipalRecord(Base):
+    __tablename__ = "principals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    principal_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    username: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    roles_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    sessions: Mapped[list["OperatorSessionRecord"]] = relationship(
+        back_populates="principal", cascade="all, delete-orphan"
+    )
+    service_credentials: Mapped[list["ServiceCredentialRecord"]] = relationship(
+        back_populates="principal", cascade="all, delete-orphan"
+    )
+
+
+class OperatorSessionRecord(Base):
+    __tablename__ = "operator_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    principal_id: Mapped[int] = mapped_column(ForeignKey("principals.id"), nullable=False)
+    session_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    csrf_token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    idle_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    absolute_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[str] = mapped_column(String(240), default="", nullable=False)
+    user_agent_hash: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    remote_address_hash: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+
+    principal: Mapped[PrincipalRecord] = relationship(back_populates="sessions")
+
+    __table_args__ = (
+        Index("ix_operator_sessions_principal_active", "principal_id", "revoked_at"),
+        Index("ix_operator_sessions_expiry", "idle_expires_at", "absolute_expires_at"),
+    )
+
+
+class ServiceCredentialRecord(Base):
+    __tablename__ = "service_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    principal_id: Mapped[int] = mapped_column(ForeignKey("principals.id"), nullable=False)
+    token_prefix: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    scopes_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    description: Mapped[str] = mapped_column(String(240), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[str] = mapped_column(String(240), default="", nullable=False)
+
+    principal: Mapped[PrincipalRecord] = relationship(back_populates="service_credentials")
+
+
+class AuditEventRecord(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    principal_id: Mapped[int | None] = mapped_column(ForeignKey("principals.id"), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    target_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    detail_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        Index("ix_audit_events_created_type", "created_at", "event_type"),
+        Index("ix_audit_events_correlation", "correlation_id"),
+    )
+
+
+class AutomationRunRecord(Base):
+    __tablename__ = "automation_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    state: Mapped[str] = mapped_column(String(40), default="running", nullable=False)
+    input_revision: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    queued_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    succeeded_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    dead_letter_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    jobs: Mapped[list["AutomationJobRecord"]] = relationship(back_populates="run")
+
+
+class AutomationJobRecord(Base):
+    __tablename__ = "automation_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("automation_runs.id"), nullable=True)
+    job_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    state: Mapped[str] = mapped_column(String(40), default="queued", nullable=False)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(240), unique=True, nullable=True)
+    lease_owner: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    result_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    last_error_code: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    run: Mapped[AutomationRunRecord | None] = relationship(back_populates="jobs")
+
+    __table_args__ = (
+        Index("ix_automation_jobs_claim", "state", "scheduled_at", "priority", "id"),
+        Index("ix_automation_jobs_lease", "state", "lease_expires_at"),
+        Index("ix_automation_jobs_correlation", "correlation_id"),
+    )
+
+
+class ProductIdentityRecord(Base):
+    __tablename__ = "product_identities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), unique=True, nullable=False)
+    website_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    website_slug: Mapped[str] = mapped_column(String(220), default="", nullable=False)
+    etsy_listing_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    mapping_state: Mapped[str] = mapped_column(String(40), default="unresolved", nullable=False)
+    exception_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord] = relationship()
+
+    __table_args__ = (
+        Index("ix_product_identities_mapping_state", "mapping_state"),
+        UniqueConstraint("website_id", name="uq_product_identity_website_id"),
+        UniqueConstraint("etsy_listing_id", name="uq_product_identity_etsy_listing_id"),
+    )
+
+
+class DemandEvidenceRecord(Base):
+    __tablename__ = "demand_evidence"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    evidence_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    topic: Mapped[str] = mapped_column(String(260), nullable=False)
+    deduplication_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    evidence_state: Mapped[str] = mapped_column(String(40), default="observed", nullable=False)
+    source_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    raw_data_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+
+    __table_args__ = (
+        Index("ix_demand_evidence_source_time", "source_name", "source_timestamp"),
+        Index("ix_demand_evidence_topic_state", "topic", "evidence_state"),
+    )
+
+
+class GrowthEventRecord(Base):
+    __tablename__ = "growth_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    content_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    publication_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    session_id: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    source_timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    attribution_quality: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    destination_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+
+    product: Mapped[ProductRecord | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_growth_events_type_source_time", "event_type", "source_timestamp"),
+        Index("ix_growth_events_campaign_content", "campaign_id", "content_id"),
+    )

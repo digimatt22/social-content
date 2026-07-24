@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import re
+from dataclasses import asdict, dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_models import ProductExternalReference, ProductRecord, utc_now
+from ..db_models import ProductExternalReference, ProductIdentityRecord, ProductRecord, utc_now
+
+
+ETSY_LISTING_PATTERN = re.compile(r"/listing/(\d+)")
 
 
 def find_product_by_identity(session: Session, source: str, external_id: str, url: str, name: str) -> ProductRecord | None:
@@ -105,3 +109,63 @@ def _is_prefix_product_match(longer_tokens: list[str], shorter_tokens: list[str]
     if len(shorter_tokens) > len(longer_tokens):
         return False
     return longer_tokens[: len(shorter_tokens)] == shorter_tokens
+
+
+@dataclass(frozen=True)
+class IdentityException:
+    product_id: int
+    product_name: str
+    reason: str
+
+
+def etsy_listing_id(value: str) -> str:
+    match = ETSY_LISTING_PATTERN.search(value or "")
+    return match.group(1) if match else ""
+
+
+def reconcile_product_identities(
+    session: Session,
+    website_products: list[dict],
+) -> dict:
+    by_etsy = {
+        etsy_listing_id(str(item.get("etsyUrl", ""))): item
+        for item in website_products
+        if etsy_listing_id(str(item.get("etsyUrl", "")))
+    }
+    exceptions: list[IdentityException] = []
+    mapped = 0
+    products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.id)))
+    for product in products:
+        listing_id = product.external_id if product.external_source == "etsy" else etsy_listing_id(product.canonical_url)
+        website = by_etsy.get(listing_id)
+        identity = session.scalar(
+            select(ProductIdentityRecord).where(ProductIdentityRecord.product_id == product.id)
+        )
+        if identity is None:
+            identity = ProductIdentityRecord(product_id=product.id)
+            session.add(identity)
+        identity.etsy_listing_id = listing_id or None
+        identity.checked_at = utc_now()
+        if not listing_id:
+            identity.website_id = None
+            identity.mapping_state = "exception"
+            identity.exception_reason = "missing_etsy_listing_id"
+        elif website is None:
+            identity.website_id = None
+            identity.mapping_state = "exception"
+            identity.exception_reason = "no_website_product_with_matching_etsy_listing"
+        else:
+            identity.website_id = str(website.get("id", ""))
+            identity.website_slug = str(website.get("slug") or website.get("id") or "")
+            identity.mapping_state = "mapped"
+            identity.exception_reason = ""
+            mapped += 1
+        if identity.mapping_state != "mapped":
+            exceptions.append(IdentityException(product.id, product.name, identity.exception_reason))
+    session.flush()
+    return {
+        "marketing_products": len(products),
+        "website_products": len(website_products),
+        "mapped": mapped,
+        "exceptions": [asdict(item) for item in exceptions],
+    }

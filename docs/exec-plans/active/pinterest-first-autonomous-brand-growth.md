@@ -824,10 +824,11 @@ These block Phase 1+, not Phase -1 discovery:
 - Sub-agent challenge round 3 — `PASS`; strategy fit 9.5/10, low-touch automation 9/10, feedback/safe adaptation 9/10; no remaining P0/P1 blockers; 2026-07-24.
 - Permanent-service decision added: retain Flask, move hosted production persistence to PostgreSQL, add durable jobs, and require authenticated/authorized access; 2026-07-24.
 - Phase -1 completed: service-foundation ADR accepted, capability matrix recorded, live Etsy/website reads passed, Sheldon preflight passed, and PostgreSQL durable-job locking proved; 2026-07-24.
+- Phase 0 completed: frozen PostgreSQL/Alembic schema, controlled SQLite cutover, durable scheduler/workers, hosted auth/authz, service identities, audit, container/backup operations, product identity and feedback contracts, baseline evidence, website Etsy-click tracking/structured-data repair, and current-state docs; 2026-07-24.
 
 ## Closeout
 
 - Final planning status: implementation in progress.
-- Phase -1 is complete; Phase 0 is the next implementation phase.
-- No website or application behavior was changed in this planning pass.
+- Phase -1 and Phase 0 are complete; Phase 1 is the next implementation phase.
+- Phase 0 website changes were committed separately as `fb92e37` on `codex/pinterest-growth-phase-0`.
 - lifeOS context was unavailable and did not inform the plan; no durable lifeOS update was identified.

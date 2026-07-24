@@ -9,6 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session, sessionmaker
+from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 
 from .db_models import Base
 
@@ -32,10 +34,39 @@ def create_db_engine(db_path: str | Path | None = None, echo: bool = False) -> E
 
 
 def init_db(engine: Engine) -> None:
+    if os.environ.get("MARKETING_OS_ENV", "").lower() == "production" and engine.dialect.name != "postgresql":
+        raise RuntimeError("Production Marketing OS processes require PostgreSQL.")
+    if engine.dialect.name != "sqlite":
+        require_current_schema(engine)
+        return
     Base.metadata.create_all(engine)
     _apply_lightweight_sqlite_migrations(engine)
     _drop_removed_product_columns(engine)
     _normalize_remote_image_reference_states(engine)
+
+
+def schema_revisions(engine: Engine, alembic_config_path: str = "alembic.ini") -> tuple[str | None, str]:
+    script = ScriptDirectory.from_config(_alembic_config(alembic_config_path))
+    expected = script.get_current_head()
+    with engine.connect() as connection:
+        current = MigrationContext.configure(connection).get_current_revision()
+    return current, expected
+
+
+def require_current_schema(engine: Engine, alembic_config_path: str = "alembic.ini") -> None:
+    current, expected = schema_revisions(engine, alembic_config_path)
+    if current != expected:
+        raise RuntimeError(
+            "Database schema is not current "
+            f"(database={current or 'unversioned'}, expected={expected}). "
+            "Run `alembic upgrade head` before starting the service."
+        )
+
+
+def _alembic_config(path: str):
+    from alembic.config import Config
+
+    return Config(path)
 
 
 def _apply_lightweight_sqlite_migrations(engine: Engine) -> None:
