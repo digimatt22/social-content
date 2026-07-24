@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -826,4 +826,221 @@ class CoverageOutcomeRecord(Base):
     __table_args__ = (
         Index("ix_coverage_outcomes_product_metric", "product_id", "metric_name", "period_end"),
         Index("ix_coverage_outcomes_cell_metric", "coverage_cell_id", "metric_name", "period_end"),
+    )
+
+
+class ShadowCampaignRecord(Base):
+    __tablename__ = "shadow_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    coverage_cell_id: Mapped[int] = mapped_column(ForeignKey("coverage_cells.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    landing_page_id: Mapped[int | None] = mapped_column(ForeignKey("landing_pages.id"), nullable=True)
+    decision_run_id: Mapped[int | None] = mapped_column(ForeignKey("decision_runs.id"), nullable=True)
+    source_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    repository_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    adapter_provenance_json: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), nullable=False)
+    page_artifact_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    coverage_cell: Mapped[CoverageCellRecord] = relationship()
+    product: Mapped[ProductRecord] = relationship()
+    landing_page: Mapped[LandingPageRecord | None] = relationship()
+    decision_run: Mapped[DecisionRunRecord | None] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "coverage_cell_id",
+            "input_hash",
+            name="uq_shadow_campaign_input",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('generating','blocked','ready_for_review','reviewed','superseded')",
+            name="ck_shadow_campaign_lifecycle",
+        ),
+        Index("ix_shadow_campaigns_state_created", "lifecycle_state", "created_at"),
+    )
+
+
+class ShadowPublicationRecord(Base):
+    __tablename__ = "shadow_publications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("shadow_campaigns.id"), nullable=False)
+    content_id: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    publication_id: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    variant_role: Mapped[str] = mapped_column(String(60), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    board_recommendation: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    canonical_destination_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    tracked_destination_url: Mapped[str] = mapped_column(String(800), default="", nullable=False)
+    page_artifact_json: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(60), nullable=False)
+    superseded_by_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_publications.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    campaign: Mapped[ShadowCampaignRecord] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "variant_role", name="uq_shadow_publication_variant"),
+        CheckConstraint(
+            "variant_role IN ('search_exact','gift_context','audience_context')",
+            name="ck_shadow_publication_variant",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('generating','blocked','ready_for_review','reviewed','superseded')",
+            name="ck_shadow_publication_lifecycle",
+        ),
+        Index("ix_shadow_publications_state_created", "lifecycle_state", "created_at"),
+        Index("ix_shadow_publications_payload_hash", "payload_hash"),
+    )
+
+
+class ShadowCreativeManifestRecord(Base):
+    __tablename__ = "shadow_creative_manifests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    publication_id: Mapped[int] = mapped_column(ForeignKey("shadow_publications.id"), nullable=False)
+    option_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    source_asset_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    source_checksums_json: Mapped[str] = mapped_column(Text, nullable=False)
+    review_asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    review_asset_origin: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    provider_path: Mapped[str] = mapped_column(String(120), nullable=False)
+    model_preference: Mapped[str] = mapped_column(String(120), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    negative_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    crop_ratio: Mapped[str] = mapped_column(String(20), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    expected_output_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    generation_state: Mapped[str] = mapped_column(String(60), nullable=False)
+    provenance_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    publication: Mapped[ShadowPublicationRecord] = relationship()
+    review_asset: Mapped[AssetRecord | None] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("publication_id", "option_number", name="uq_shadow_manifest_option"),
+        CheckConstraint("option_number > 0", name="ck_shadow_manifest_option_positive"),
+        CheckConstraint(
+            "crop_ratio = '2:3' AND width = 1000 AND height = 1500",
+            name="ck_shadow_manifest_dimensions",
+        ),
+    )
+
+
+class ShadowQADecisionRecord(Base):
+    __tablename__ = "shadow_qa_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_campaigns.id"), nullable=True)
+    publication_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_publications.id"), nullable=True)
+    manifest_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_creative_manifests.id"), nullable=True)
+    gate_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    gate_version: Mapped[str] = mapped_column(String(60), nullable=False)
+    result: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason_codes_json: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "result IN ('pass','fail','not_evaluated')",
+            name="ck_shadow_qa_result",
+        ),
+        Index("ix_shadow_qa_campaign_gate", "campaign_id", "gate_name"),
+        Index("ix_shadow_qa_publication_gate", "publication_id", "gate_name"),
+        Index("ix_shadow_qa_result_created", "result", "created_at"),
+    )
+
+
+class ShadowReviewSessionRecord(Base):
+    __tablename__ = "shadow_review_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_token: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("shadow_campaigns.id"), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(160), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    elapsed_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "elapsed_seconds IS NULL OR elapsed_seconds >= 0",
+            name="ck_shadow_review_elapsed",
+        ),
+        Index("ix_shadow_review_sessions_campaign", "campaign_id", "started_at"),
+    )
+
+
+class ShadowReviewDecisionRecord(Base):
+    __tablename__ = "shadow_review_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("shadow_review_sessions.id"), nullable=False)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("shadow_campaigns.id"), nullable=False)
+    publication_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_publications.id"), nullable=True)
+    manifest_id: Mapped[int | None] = mapped_column(ForeignKey("shadow_creative_manifests.id"), nullable=True)
+    review_asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    decision_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    result: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason_codes_json: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewer_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    decided_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "decision_kind IN ('copy','board','destination','creative','package')",
+            name="ck_shadow_review_decision_kind",
+        ),
+        CheckConstraint(
+            "result IN ('accepted_for_shadow','revise','rejected','exception')",
+            name="ck_shadow_review_result",
+        ),
+        Index("ix_shadow_review_decisions_session", "session_id", "decided_at"),
+        Index("ix_shadow_review_decisions_campaign", "campaign_id", "decision_kind"),
+        Index("ix_shadow_review_decisions_publication", "publication_id", "decision_kind"),
+    )
+
+
+class ShadowPayloadLeaseRecord(Base):
+    __tablename__ = "shadow_payload_leases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    publication_id: Mapped[int] = mapped_column(ForeignKey("shadow_publications.id"), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (Index("ix_shadow_payload_leases_active", "released_at", "superseded_at"),)
+
+
+class ShadowDigestRecord(Base):
+    __tablename__ = "shadow_digests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    utc_week: Mapped[date] = mapped_column(Date, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    ready_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    blocked_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("utc_week", "input_hash", name="uq_shadow_digest_week_input"),
+        Index("ix_shadow_digests_week", "utc_week"),
     )

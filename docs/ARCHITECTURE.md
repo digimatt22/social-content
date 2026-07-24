@@ -53,6 +53,18 @@ ranked publication opportunity.
 
 See `docs/architecture/coverage-intelligence-v1.md`.
 
+## Pinterest shadow production
+
+Phase 3 converts ranked Phase 2 opportunities into immutable, deterministic
+campaign packages with Pinterest-native copy, exact shadow-board
+recommendations, tracked destinations, product-preserving creative handoffs,
+checksummed review fixtures, append-only QA, payload leases, timed item-level
+review, and observational weekly digests. It performs no Pinterest, website, or
+provider writes. Fixture workflow proof never becomes automated product
+approval.
+
+See `docs/architecture/pinterest-shadow-production-v1.md`.
+
 ## Hosting
 
 Sheldon is the initial internal always-on target using rootless Docker. The web origin binds loopback only; PostgreSQL uses an internal network and persistent named volume. Caddy/Cloudflare routing and deployment are separate approval gates.
@@ -67,3 +79,5 @@ See `docs/architecture/adr-001-permanent-marketing-service-foundation.md` and `d
 - Identity mapping is 80.6%; exceptions must remain excluded.
 - Provider response ambiguity can create duplicate external writes; such jobs quarantine.
 - Local development credentials must not be copied to hosted production.
+- Phase 3 review fixtures prove packaging and ergonomics only; a human must
+  verify real-output product accuracy before Phase 4 autonomy graduation.

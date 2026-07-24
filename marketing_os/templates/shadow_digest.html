@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+{% if digest %}
+<div class="topline">
+  <div>
+    <p class="eyebrow">Observational learning loop</p>
+    <h2>Shadow weekly digest</h2>
+    <p class="subtle">Week of {{ digest.utcWeek }} · no causal performance claim</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('pinterest_shadow.shadow_page') }}">Campaigns</a>
+</div>
+<div class="grid">
+  <section class="panel"><h3>Campaign states</h3><pre class="copybox">{{ digest.campaignStates | tojson(indent=2) }}</pre></section>
+  <section class="panel"><h3>Publication states</h3><pre class="copybox">{{ digest.publicationStates | tojson(indent=2) }}</pre></section>
+  <section class="panel"><h3>Gate failures</h3><pre class="copybox">{{ digest.gateFailures | tojson(indent=2) }}</pre></section>
+  <section class="panel"><h3>Review effort</h3><pre class="copybox">{{ digest.reviewEffort | tojson(indent=2) }}</pre></section>
+  <section class="panel"><h3>Actionable revision groups</h3><pre class="copybox">{{ digest.revisionGroups | tojson(indent=2) }}</pre></section>
+</div>
+<section class="panel" style="margin-top: 16px">
+  <h3>Evidence maturity</h3>
+  <p>{{ digest.evidenceMaturity.fixtureBacked }} fixture-backed manifests. Product accuracy: {{ digest.evidenceMaturity.productAccuracy }}.</p>
+</section>
+{% else %}
+<div class="topline">
+  <div><p class="eyebrow">Observational learning loop</p><h2>Shadow weekly digest</h2></div>
+  <a class="button secondary" href="{{ url_for('pinterest_shadow.shadow_page') }}">Campaigns</a>
+</div>
+<section class="panel"><p>No persisted digest is available yet. The durable weekly job creates the first report.</p></section>
+{% endif %}
+{% endblock %}

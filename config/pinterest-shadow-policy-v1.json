@@ -1,0 +1,138 @@
+{
+  "version": "pinterest-shadow-v1",
+  "review": {
+    "status": "passed",
+    "reviewedAt": "2026-07-24",
+    "gate": "independent_phase3_strategy_automation_feedback_review",
+    "scores": {
+      "strategyBps": 9600,
+      "automationBps": 9500,
+      "feedbackBps": 9600
+    }
+  },
+  "execution": {
+    "mode": "deterministic_local_adapter",
+    "publicWrites": false,
+    "providerCalls": false,
+    "websiteWrites": false
+  },
+  "variants": [
+    "search_exact",
+    "gift_context",
+    "audience_context"
+  ],
+  "format": {
+    "contentFormat": "static_pin",
+    "aspectRatio": "2:3",
+    "width": 1000,
+    "height": 1500,
+    "textOverlay": false,
+    "titleMaxCharacters": 90,
+    "descriptionMaxCharacters": 400,
+    "hashtagsAllowed": false,
+    "cta": "Explore the gift guide at MattMadeMe.com."
+  },
+  "destination": {
+    "allowedOrigin": "https://mattmademe.com",
+    "utmSource": "pinterest",
+    "utmMedium": "organic_social"
+  },
+  "boards": [
+    {
+      "key": "everyday-heroes-gift-ideas",
+      "name": "Everyday Heroes Gift Ideas",
+      "shadowOnly": true
+    },
+    {
+      "key": "mail-carrier-gift-ideas",
+      "name": "Mail Carrier Gift Ideas",
+      "shadowOnly": true
+    },
+    {
+      "key": "first-responder-gift-ideas",
+      "name": "First Responder Gift Ideas",
+      "shadowOnly": true
+    }
+  ],
+  "intentBoardMap": {
+    "everyday-heroes-gifts": "everyday-heroes-gift-ideas",
+    "mail-carrier-gifts": "mail-carrier-gift-ideas",
+    "first-responder-gifts": "first-responder-gift-ideas"
+  },
+  "claims": {
+    "bannedPatterns": [
+      "\\bbest[ -]?seller\\b",
+      "\\bviral\\b",
+      "\\bfan favorite\\b",
+      "\\blimited (time|quantity|stock)\\b",
+      "\\bbuy now\\b",
+      "\\bguaranteed\\b",
+      "\\b\\d+ (orders|sales|sold)\\b",
+      "\\b\\$\\d+\\b"
+    ],
+    "bannedProductTerms": [
+      "rubber duck"
+    ],
+    "placeholderPattern": "\\[MATT_TO_CONFIRM:[^\\]]+\\]"
+  },
+  "assets": {
+    "maximumReferences": 4,
+    "allowedRights": [
+      "owned",
+      "licensed",
+      "approved"
+    ],
+    "allowedBrandSafety": [
+      "approved",
+      "safe"
+    ],
+    "requiredReviewState": "approved",
+    "modelPreference": "Google Nano Banana 2",
+    "providerPath": "magnific-mcp",
+    "fallbackProviderPath": "built-in-image-edit"
+  },
+  "limits": {
+    "campaignsPerJob": 20,
+    "artifactsPerJob": 60
+  },
+  "adapters": {
+    "strategy": {
+      "name": "pinterest-shadow-strategy-v1",
+      "version": "1",
+      "informedBy": "social-media-strategist",
+      "sourceHash": "8fcfe643ab330a0167a8519778e86e8deda9dff5492b291199f07c4cc3ecb43d"
+    },
+    "copy": {
+      "name": "pinterest-shadow-copy-v1",
+      "version": "1",
+      "informedBy": "social-media-copywriter",
+      "sourceHash": "bd0d639dd8352254456df76cff95be2ea48ca91d15683440d3921b79768c078d"
+    },
+    "copyReview": {
+      "name": "pinterest-shadow-copy-review-v1",
+      "version": "1",
+      "informedBy": "social-media-copy-chief",
+      "sourceHash": "c28e168385f4f8d8823e194810e9ba713bc6a5e60b6480047d5720bfd1a2a457"
+    },
+    "creative": {
+      "name": "pinterest-shadow-creative-v1",
+      "version": "1",
+      "informedBy": "social-media-art-director",
+      "sourceHash": "997402535f2bfc819b819887eff391e0600797236ba69e8b6efad8ef460d1b85"
+    },
+    "videoPlanningReference": {
+      "name": "pinterest-shadow-video-planning-reference-v1",
+      "version": "1",
+      "informedBy": "video-content-planner",
+      "sourceHash": "5a98be212e8d8349bbdb127ba08ec3bb0fc832343f7d7b6e4d859079e9673542"
+    },
+    "videoEditingReference": {
+      "name": "pinterest-shadow-video-editing-reference-v1",
+      "version": "1",
+      "informedBy": "video-editor",
+      "sourceHash": "18cfade0e8ba5c8304224b5c909983939de06d907e06fdcb7c93a86afc9d7339"
+    }
+  },
+  "promptVersion": "pinterest-shadow-prompt-v1",
+  "qaVersion": "pinterest-shadow-qa-v1"
+}

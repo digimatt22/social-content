@@ -43,6 +43,10 @@ def default_registry() -> HandlerRegistry:
         editorial_reconcile_handler,
         measurement_ingest_handler,
     )
+    from ..jobs.pinterest_shadow import (
+        shadow_digest_handler,
+        shadow_generate_handler,
+    )
 
     registry = HandlerRegistry()
     registry.register("system.noop", 1, lambda payload: {"echo": payload})
@@ -50,4 +54,6 @@ def default_registry() -> HandlerRegistry:
     registry.register("editorial.reconcile", 1, editorial_reconcile_handler)
     registry.register("coverage.materialize", 1, coverage_materialize_handler)
     registry.register("measurement.ingest", 1, measurement_ingest_handler)
+    registry.register("shadow.generate", 1, shadow_generate_handler)
+    registry.register("shadow.digest", 1, shadow_digest_handler)
     return registry

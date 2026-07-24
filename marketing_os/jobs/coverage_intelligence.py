@@ -141,11 +141,25 @@ def coverage_materialize_handler(payload: dict[str, Any]) -> dict[str, Any]:
     factory = session_factory(engine)
     try:
         with session_scope(factory) as session:
-            return materialize_product_coverage(
+            result = materialize_product_coverage(
                 session,
                 product_id,
                 source_revision=source_revision,
             )
+            _, created = enqueue_job(
+                session,
+                job_type="shadow.generate",
+                payload={
+                    "productId": product_id,
+                    "sourceRevision": source_revision,
+                    "trigger": "coverage.materialize",
+                },
+                idempotency_key=(
+                    f"shadow.generate:coverage:{product_id}:{source_revision[:64]}"
+                ),
+                correlation_id=f"shadow:{product_id}:{source_revision[:16]}",
+            )
+            return {**result, "shadowJobs": int(created)}
     except (LookupError, ValueError) as exc:
         raise NonRetryableJobError(str(exc)) from exc
     finally:

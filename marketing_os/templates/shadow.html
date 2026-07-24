@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <p class="eyebrow">Pinterest · Phase 3</p>
+    <h2>Shadow campaign production</h2>
+    <p class="subtle">Reviewable packages only. Pinterest, website, and provider writes remain disabled.</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('pinterest_shadow.shadow_digest_page') }}">Weekly digest</a>
+</div>
+<div class="grid">
+  <section class="panel">
+    <h3>{{ shadow.count }} campaigns</h3>
+    <div class="meta">
+      {% for state, count in shadow.summary.items() %}
+      <span class="pill {{ 'ready' if state == 'ready_for_review' else 'blocked' if state == 'blocked' else '' }}">{{ state }} · {{ count }}</span>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <h3>{{ exceptions.count }} QA exceptions</h3>
+    <p class="subtle">Failures are preserved as evidence and grouped for correction.</p>
+  </section>
+</div>
+<div class="agenda" style="margin-top: 16px">
+{% for campaign in shadow.campaigns %}
+  <article class="task">
+    <div class="meta">
+      <span class="pill {{ 'ready' if campaign.state == 'ready_for_review' else 'blocked' }}">{{ campaign.state }}</span>
+      <span class="pill">{{ campaign.publications|length }} variants</span>
+      <span class="pill">{{ campaign.executionMode }}</span>
+    </div>
+    <a class="task-title" href="{{ url_for('pinterest_shadow.shadow_campaign_page', campaign_id=campaign.campaignId) }}">{{ campaign.product.name }}</a>
+    <p class="subtle">{{ campaign.pageArtifact.action }} · source {{ campaign.sourceRevision[:12] }} · repo {{ campaign.repositoryRevision[:12] }}</p>
+  </article>
+{% else %}
+  <section class="panel"><p>No shadow campaigns have been generated yet.</p></section>
+{% endfor %}
+</div>
+{% endblock %}

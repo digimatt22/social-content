@@ -49,6 +49,12 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
   complete catalog/editorial reads, durable measurement cursors, sparse
   explainable opportunities, and authenticated Coverage/Exceptions surfaces.
   It does not publish externally.
+- Phase 3 shadow campaign production is on
+  `codex/pinterest-growth-phase-3`. It adds Alembic revision
+  `0004_pinterest_shadow_production`, deterministic Pinterest package adapters,
+  checksummed review fixtures, append-only QA/review evidence, duplicate payload
+  leases, durable generation/digest jobs, and authenticated shadow surfaces.
+  It has no external publishing or generation authority.
 
 ## Strategy source
 
@@ -77,3 +83,8 @@ Phase -1 evidence and decisions:
 - Deploy the Phase 2 website completeness/editorial-read contract and apply
   Alembic revision `0003_coverage_intelligence` before enabling hosted Phase 2
   schedules.
+- Apply Alembic revision `0004_pinterest_shadow_production` and inject
+  `MARKETING_OS_REPOSITORY_REVISION` when deployed without Git metadata before
+  enabling Phase 3 schedules.
+- Complete one timed representative real-output shadow review before claiming a
+  review-time improvement or graduating Phase 4 autonomy.

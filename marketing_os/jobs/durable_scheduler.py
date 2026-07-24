@@ -44,6 +44,24 @@ def emit_due_jobs(factory, now: datetime | None = None) -> int:
                     correlation_id=f"daily:{current_date}",
                 )
                 emitted += int(created)
+        if (checked_at.hour, checked_at.minute) >= (3, 10):
+            _, created = enqueue_job(
+                session,
+                job_type="shadow.generate",
+                payload={"utc_date": current_date, "trigger": "daily"},
+                idempotency_key=f"shadow.generate:{current_date}",
+                correlation_id=f"shadow:{current_date}",
+            )
+            emitted += int(created)
+        if checked_at.weekday() == 0 and (checked_at.hour, checked_at.minute) >= (9, 10):
+            _, created = enqueue_job(
+                session,
+                job_type="shadow.digest",
+                payload={"utc_week": current_date, "trigger": "weekly"},
+                idempotency_key=f"shadow.digest:{current_date}",
+                correlation_id=f"shadow-digest:{current_date}",
+            )
+            emitted += int(created)
         measurement_slot = checked_at.replace(
             minute=(checked_at.minute // 15) * 15,
             second=0,

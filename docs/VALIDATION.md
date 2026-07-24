@@ -16,7 +16,10 @@ Set `MARKETING_OS_TEST_POSTGRES_URL` to a disposable PostgreSQL 17 database:
 
 ```sh
 MARKETING_OS_TEST_POSTGRES_URL='postgresql+psycopg://…' \
-  .venv/bin/python -m unittest tests.test_phase0_postgres tests.test_phase2_postgres -q
+  .venv/bin/python -m unittest \
+    tests.test_phase0_postgres \
+    tests.test_phase2_postgres \
+    tests.test_phase3_shadow_postgres -q
 ```
 
 Required evidence:
@@ -27,6 +30,8 @@ Required evidence:
 - concurrent idempotent enqueue;
 - atomic/concurrent complete catalog snapshot, change, and outbox creation;
 - atomic/concurrent measurement event, outcome, cursor, and rescore creation;
+- same-input shadow replay serialization and one active semantic-payload lease
+  under concurrent changed inputs;
 - lease expiry/retry/dead-letter/quarantine/replay tests;
 - logical dump/restore and revision/row comparison;
 - production image build;
@@ -58,3 +63,4 @@ Record results and pre-existing exceptions in the phase review. A separate dirty
 
 Phase 0 evidence is in `docs/reviews/phase0-validation.md`.
 Phase 2 evidence is in `docs/reviews/phase2-coverage-validation.md`.
+Phase 3 evidence is in `docs/reviews/phase3-shadow-validation.md`.

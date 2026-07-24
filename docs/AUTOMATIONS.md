@@ -47,6 +47,19 @@ The durable scheduler process evaluates on a configurable polling interval.
 - `measurement.ingest` every 15-minute UTC slot;
 - `coverage.materialize` as a change/outcome-triggered outbox job.
 
+Phase 3 adds:
+
+- `shadow.generate` after each coverage materialization and once per UTC date,
+  first scheduler pass at or after 03:10;
+- `shadow.digest` once per UTC week, first Monday scheduler pass at or after
+  09:10.
+
+`shadow.generate` is capped at 20 campaigns/60 variants. It writes only
+transactional database state and reads/checksums already registered files. It
+does not generate a file or call Pinterest, the website, Magnific, or another
+provider. `shadow.digest` stores an authenticated observational report; it does
+not send email or chat notifications.
+
 Identity reconciliation also emits a deterministic repair materialization when
 a previously unresolved website product becomes mapped, including when the
 catalog and editorial content revisions are unchanged. Stored website product
@@ -65,6 +78,9 @@ separate credential. All four handlers are internal read/decision jobs and have
 no public Pinterest or website publish authority. Exact budgets, cursor
 semantics, qualification, and catch-up rules are in
 `docs/architecture/coverage-intelligence-v1.md`.
+
+Shadow selection, provenance, QA, review, leases, and authority boundaries are
+in `docs/architecture/pinterest-shadow-production-v1.md`.
 
 ## Failure semantics
 

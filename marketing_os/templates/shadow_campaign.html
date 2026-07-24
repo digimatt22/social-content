@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <p class="eyebrow">Shadow package</p>
+    <h2>{{ campaign.product.name }}</h2>
+    <p class="subtle">{{ campaign.campaignId }} · {{ campaign.state }}</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('pinterest_shadow.shadow_page') }}">All campaigns</a>
+</div>
+<section class="panel">
+  <h3>Destination page action</h3>
+  <pre class="copybox">{{ campaign.pageArtifact | tojson(indent=2) }}</pre>
+</section>
+{% if not review_session_token %}
+<form method="post" action="{{ url_for('pinterest_shadow.api_start_shadow_review') }}" style="margin: 14px 0">
+  <input type="hidden" name="campaignId" value="{{ campaign.campaignId }}">
+  <button type="submit">Start timed review</button>
+</form>
+{% else %}
+<section class="panel" style="margin: 14px 0">
+  <h3>Timed review in progress</h3>
+  <p class="subtle">Decisions are append-only. Completing the session derives counts and elapsed time from evidence.</p>
+  <form method="post" action="{{ url_for('pinterest_shadow.api_complete_shadow_review', session_token=review_session_token) }}">
+    <button type="submit">Complete review session</button>
+  </form>
+</section>
+{% endif %}
+<div class="agenda">
+{% for publication in campaign.publications %}
+  <article class="task">
+    <div class="meta">
+      <span class="pill">{{ publication.variant }}</span>
+      <span class="pill {{ 'ready' if publication.state == 'ready_for_review' else 'blocked' }}">{{ publication.state }}</span>
+      <span class="pill">{{ publication.board or 'board blocked' }}</span>
+    </div>
+    <h3>{{ publication.title }}</h3>
+    <p>{{ publication.description }}</p>
+    <p><a href="{{ publication.trackedUrl }}">{{ publication.canonicalUrl }}</a></p>
+    {% if publication.manifest %}
+    <div class="grid">
+      <section class="panel">
+        <h3>Creative review image</h3>
+        {% if publication.manifest.reviewAsset %}
+        <img class="asset-thumb" src="{{ publication.manifest.reviewAsset.previewUrl }}" alt="{{ publication.manifest.reviewAsset.name }}" loading="lazy">
+        <p class="subtle">{{ publication.manifest.reviewAsset.width }}×{{ publication.manifest.reviewAsset.height }} · {{ publication.manifest.reviewAsset.origin }} · {{ publication.manifest.reviewAsset.productAccuracy }}</p>
+        {% else %}
+        <p class="subtle">No immutable review image is linked.</p>
+        {% endif %}
+      </section>
+      <section class="panel">
+        <h3>Creative manifest</h3>
+        <p class="subtle">{{ publication.manifest.modelPreference }} · {{ publication.manifest.cropRatio }} · {{ publication.manifest.generationState }}</p>
+        <div class="copybox">{{ publication.manifest.prompt }}</div>
+        <details><summary>Negative prompt and provenance</summary>
+          <div class="copybox">{{ publication.manifest.negativePrompt }}</div>
+          <pre class="copybox">{{ publication.manifest.provenance | tojson(indent=2) }}</pre>
+        </details>
+      </section>
+    </div>
+    <details>
+      <summary>QA evidence ({{ publication.qa|length }} gates)</summary>
+      <table>
+        <thead><tr><th>Gate</th><th>Result</th><th>Reasons</th></tr></thead>
+        <tbody>{% for decision in publication.qa %}
+          <tr><td>{{ decision.gate }}</td><td>{{ decision.result }}</td><td>{{ decision.reasons|join(', ') or '—' }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </details>
+    {% endif %}
+    {% if review_session_token %}
+    <form method="post" action="{{ url_for('pinterest_shadow.api_record_shadow_decision', session_token=review_session_token) }}">
+      <input type="hidden" name="publicationId" value="{{ publication.publicationId }}">
+      {% if publication.manifest %}<input type="hidden" name="manifestId" value="{{ publication.manifest.id }}">{% endif %}
+      {% if publication.manifest and publication.manifest.reviewAsset %}<input type="hidden" name="reviewAssetId" value="{{ publication.manifest.reviewAsset.id }}">{% endif %}
+      <label>Decision kind
+        <select name="decisionKind">
+          <option value="package">Package</option><option value="copy">Copy</option>
+          <option value="board">Board</option><option value="destination">Destination</option>
+          <option value="creative">Creative</option>
+        </select>
+      </label>
+      <label>Result
+        <select name="result">
+          <option value="accepted_for_shadow">Accept for shadow</option>
+          <option value="revise">Revise</option><option value="rejected">Reject</option>
+          <option value="exception">Exception</option>
+        </select>
+      </label>
+      <label>Reason codes <span>Comma-separated, normalized labels.</span>
+        <input name="reasonCodes">
+      </label>
+      <label>Reviewer note<textarea name="reviewerNote"></textarea></label>
+      <button type="submit">Record decision</button>
+    </form>
+    {% endif %}
+  </article>
+{% else %}
+  <section class="panel">
+    <p>This is a page-only draft package. Pin variants remain blocked until a fresh editorial read verifies the destination.</p>
+    {% if review_session_token %}
+    <form method="post" action="{{ url_for('pinterest_shadow.api_record_shadow_decision', session_token=review_session_token) }}">
+      <input type="hidden" name="decisionKind" value="destination">
+      <label>Editorial result
+        <select name="result">
+          <option value="accepted_for_shadow">Accept page draft for shadow</option>
+          <option value="revise">Revise</option><option value="rejected">Reject</option>
+          <option value="exception">Exception</option>
+        </select>
+      </label>
+      <label>Reason codes <span>Comma-separated, normalized labels.</span>
+        <input name="reasonCodes">
+      </label>
+      <label>Reviewer note<textarea name="reviewerNote"></textarea></label>
+      <button type="submit">Record page-draft decision</button>
+    </form>
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+{% endblock %}
