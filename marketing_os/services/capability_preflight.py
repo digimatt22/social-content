@@ -27,7 +27,21 @@ PROFILES = {
         "postgresql": ("MARKETING_OS_DB_URL", "publishing_disabled"),
         "application_secret": ("MARKETING_OS_SECRET", "publishing_disabled"),
         "pinterest_api": ("PINTEREST_ACCESS_TOKEN", "shadow_only"),
+        "pinterest_account": ("PINTEREST_ACCOUNT_ID", "shadow_only"),
+        "pinterest_credential_reference": ("PINTEREST_CREDENTIAL_REFERENCE", "shadow_only"),
+        "pinterest_access_tier": ("PINTEREST_ACCESS_TIER", "shadow_only"),
+        "approved_boards": ("PINTEREST_APPROVED_BOARD_IDS", "shadow_only"),
+        "provider_contract": ("PINTEREST_PROVIDER_CONTRACT_VERSION", "shadow_only"),
         "alert_delivery": ("MARKETING_OS_ALERT_WEBHOOK_URL", "publishing_disabled"),
+        "alert_owner": ("MARKETING_OS_ALERT_OWNER", "publishing_disabled"),
+        "backup_destination": ("MARKETING_OS_BACKUP_DESTINATION", "publishing_disabled"),
+        "backup_key_custodian": ("MARKETING_OS_BACKUP_KEY_CUSTODIAN", "publishing_disabled"),
+        "backup_retention": ("MARKETING_OS_BACKUP_RETENTION_DAYS", "publishing_disabled"),
+        "backup_rpo": ("MARKETING_OS_BACKUP_RPO_HOURS", "publishing_disabled"),
+        "backup_rto": ("MARKETING_OS_BACKUP_RTO_HOURS", "publishing_disabled"),
+        "production_hostname": ("MARKETING_OS_PUBLIC_HOSTNAME", "publishing_disabled"),
+        "route_approval": ("MARKETING_OS_ROUTE_APPROVED", "publishing_disabled"),
+        "deployment_approval": ("MARKETING_OS_DEPLOYMENT_APPROVED", "publishing_disabled"),
         "cost_ceiling": ("MARKETING_OS_DAILY_COST_CENTS", "publishing_disabled"),
         "publish_authority": ("MARKETING_OS_PINTEREST_PUBLISH_ENABLED", "shadow_only"),
     },
@@ -41,9 +55,23 @@ def check_capabilities(profile: str, environment: dict[str, str] | None = None) 
     checks = []
     for capability, (variable, safe_mode) in PROFILES[profile].items():
         value = values.get(variable, "").strip()
-        available = bool(value) and not (
-            variable == "MARKETING_OS_PINTEREST_PUBLISH_ENABLED" and value.lower() not in {"1", "true", "yes"}
-        )
+        available = bool(value)
+        if variable == "MARKETING_OS_PINTEREST_PUBLISH_ENABLED":
+            available = value == "EXPLICITLY_ENABLED"
+        elif variable == "PINTEREST_ACCESS_TIER":
+            available = value.lower() == "standard"
+        elif variable == "MARKETING_OS_DAILY_COST_CENTS":
+            available = value.isdigit() and int(value) > 0
+        elif variable in {
+            "MARKETING_OS_BACKUP_RETENTION_DAYS",
+            "MARKETING_OS_BACKUP_RPO_HOURS",
+            "MARKETING_OS_BACKUP_RTO_HOURS",
+        }:
+            available = value.isdigit() and int(value) > 0
+        elif variable in {"MARKETING_OS_ROUTE_APPROVED", "MARKETING_OS_DEPLOYMENT_APPROVED"}:
+            available = value == "EXPLICITLY_APPROVED"
+        elif variable == "MARKETING_OS_DB_URL":
+            available = value.startswith(("postgresql://", "postgresql+psycopg://"))
         checks.append(CapabilityCheck(capability, available, True, safe_mode))
     return checks
 

@@ -65,6 +65,16 @@ approval.
 
 See `docs/architecture/pinterest-shadow-production-v1.md`.
 
+## Disabled Pinterest control plane
+
+Phase 4 begins with persisted connection metadata that contains no secret
+values, exact-scope expiring authority grants, semantic external idempotency,
+ambiguous-write quarantine, read-after-write reconciliation evidence, and
+append-only delivery snapshots. Only a deterministic fixture provider is
+installed. Production refuses that provider and has no live Pinterest adapter.
+
+See `docs/architecture/pinterest-controlled-publishing-v1.md`.
+
 ## Hosting
 
 Sheldon is the initial internal always-on target using rootless Docker. The web origin binds loopback only; PostgreSQL uses an internal network and persistent named volume. Caddy/Cloudflare routing and deployment are separate approval gates.

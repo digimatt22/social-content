@@ -64,3 +64,17 @@ Record results and pre-existing exceptions in the phase review. A separate dirty
 Phase 0 evidence is in `docs/reviews/phase0-validation.md`.
 Phase 2 evidence is in `docs/reviews/phase2-coverage-validation.md`.
 Phase 3 evidence is in `docs/reviews/phase3-shadow-validation.md`.
+
+## Phase 4 disabled Pinterest controls
+
+```sh
+.venv/bin/python -m unittest tests.test_phase4_pinterest_connector
+```
+
+This suite proves hard-off configuration, fixture-only expiring authority,
+semantic idempotency, committed ambiguous-write quarantine, read-only
+reconciliation, and append-only metric snapshots. It makes zero network or
+provider calls. Migration validation applies revision
+`0005_pinterest_control_plane`, downgrades to
+`0004_pinterest_shadow_production`, and reapplies head on SQLite and
+PostgreSQL.

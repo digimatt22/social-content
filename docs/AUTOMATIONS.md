@@ -82,6 +82,14 @@ semantics, qualification, and catch-up rules are in
 Shadow selection, provenance, QA, review, leases, and authority boundaries are
 in `docs/architecture/pinterest-shadow-production-v1.md`.
 
+Phase 4 registers `pinterest.publish` and `pinterest.reconcile` for disabled
+contract/recovery testing. Production refuses the fixture provider and no live
+adapter is installed. An ambiguous response commits `publish_unknown` before
+the worker quarantines its durable job; reconciliation is read-only and a
+replay cannot call Create Pin while the publication is ambiguous. Exact
+authority and state rules are in
+`docs/architecture/pinterest-controlled-publishing-v1.md`.
+
 ## Failure semantics
 
 - retryable/transient: bounded exponential backoff with deterministic jitter;

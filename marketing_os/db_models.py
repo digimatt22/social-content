@@ -999,6 +999,9 @@ class ShadowReviewDecisionRecord(Base):
     result: Mapped[str] = mapped_column(String(40), nullable=False)
     reason_codes_json: Mapped[str] = mapped_column(Text, nullable=False)
     reviewer_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reviewed_payload_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    reviewed_manifest_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    reviewed_request_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     decided_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
     __table_args__ = (
@@ -1043,4 +1046,244 @@ class ShadowDigestRecord(Base):
     __table_args__ = (
         UniqueConstraint("utc_week", "input_hash", name="uq_shadow_digest_week_input"),
         Index("ix_shadow_digests_week", "utc_week"),
+    )
+
+
+class PinterestConnectionRecord(Base):
+    __tablename__ = "pinterest_connections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_reference: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    credential_reference: Mapped[str] = mapped_column(String(240), default="", nullable=False)
+    access_tier: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    scopes_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    approved_board_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    connection_state: Mapped[str] = mapped_column(String(40), default="disabled", nullable=False)
+    provider_contract_version: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "access_tier IN ('unknown','trial','standard')",
+            name="ck_pinterest_connection_access_tier",
+        ),
+        CheckConstraint(
+            "connection_state IN ('disabled','fixture_only','verified','revoked','error')",
+            name="ck_pinterest_connection_state",
+        ),
+    )
+
+
+class PinterestAuthorityGrantRecord(Base):
+    __tablename__ = "pinterest_authority_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    policy_class: Mapped[str] = mapped_column(String(120), nullable=False)
+    principal_id: Mapped[int] = mapped_column(ForeignKey("principals.id"), nullable=False)
+    scope_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    principal: Mapped[PrincipalRecord] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('active','revoked','expired')",
+            name="ck_pinterest_authority_grant_state",
+        ),
+        Index(
+            "ix_pinterest_authority_grants_policy_expiry",
+            "policy_class",
+            "state",
+            "expires_at",
+        ),
+    )
+
+
+class PinterestMediaDeliveryRecord(Base):
+    __tablename__ = "pinterest_media_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    connection_id: Mapped[int] = mapped_column(ForeignKey("pinterest_connections.id"), nullable=False)
+    review_asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), nullable=False)
+    media_url: Mapped[str] = mapped_column(String(800), nullable=False)
+    content_checksum: Mapped[str] = mapped_column(String(128), nullable=False)
+    content_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    delivery_state: Mapped[str] = mapped_column(String(40), nullable=False)
+    verification_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    connection: Mapped[PinterestConnectionRecord] = relationship()
+    review_asset: Mapped[AssetRecord] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "review_asset_id",
+            "content_checksum",
+            "content_revision",
+            name="uq_pinterest_media_delivery_revision",
+        ),
+        CheckConstraint(
+            "delivery_state IN ('fixture_verified','verified','revoked','error')",
+            name="ck_pinterest_media_delivery_state",
+        ),
+        Index("ix_pinterest_media_delivery_state", "delivery_state", "verified_at"),
+    )
+
+
+class PinterestPublicationRecord(Base):
+    __tablename__ = "pinterest_publications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shadow_publication_id: Mapped[int] = mapped_column(
+        ForeignKey("shadow_publications.id"), unique=True, nullable=False
+    )
+    connection_id: Mapped[int] = mapped_column(ForeignKey("pinterest_connections.id"), nullable=False)
+    approval_decision_id: Mapped[int] = mapped_column(
+        ForeignKey("shadow_review_decisions.id"), nullable=False
+    )
+    media_delivery_id: Mapped[int] = mapped_column(
+        ForeignKey("pinterest_media_deliveries.id"), nullable=False
+    )
+    external_idempotency_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    board_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    external_pin_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    external_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), default="prepared", nullable=False)
+    provider_request_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    provider_response_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    last_error_code: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    shadow_publication: Mapped[ShadowPublicationRecord] = relationship()
+    connection: Mapped[PinterestConnectionRecord] = relationship()
+    approval_decision: Mapped[ShadowReviewDecisionRecord] = relationship()
+    media_delivery: Mapped[PinterestMediaDeliveryRecord] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_state IN "
+            "('prepared','submitted','published','publish_unknown','confirmed_absent',"
+            "'failed','unpublished')",
+            name="ck_pinterest_publication_lifecycle",
+        ),
+        Index("ix_pinterest_publications_state_updated", "lifecycle_state", "updated_at"),
+        Index("ix_pinterest_publications_external_pin", "external_pin_id"),
+        UniqueConstraint(
+            "connection_id",
+            "external_pin_id",
+            name="uq_pinterest_publication_connection_pin",
+        ),
+    )
+
+
+class PinterestPublishAttemptRecord(Base):
+    __tablename__ = "pinterest_publish_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pinterest_publication_id: Mapped[int] = mapped_column(
+        ForeignKey("pinterest_publications.id"), nullable=False
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_status: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    provider_response_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    error_code: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    claim_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    publication: Mapped[PinterestPublicationRecord] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pinterest_publication_id",
+            "attempt_number",
+            name="uq_pinterest_publish_attempt",
+        ),
+        CheckConstraint(
+            "state IN ('submitted','published','ambiguous','retryable_failure','failed')",
+            name="ck_pinterest_publish_attempt_state",
+        ),
+        CheckConstraint("attempt_number > 0", name="ck_pinterest_publish_attempt_positive"),
+    )
+
+
+class PinterestReconciliationRecord(Base):
+    __tablename__ = "pinterest_reconciliations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pinterest_publication_id: Mapped[int] = mapped_column(
+        ForeignKey("pinterest_publications.id"), nullable=False
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    result: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_response_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    publication: Mapped[PinterestPublicationRecord] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pinterest_publication_id",
+            "attempt_number",
+            name="uq_pinterest_reconciliation_attempt",
+        ),
+        CheckConstraint(
+            "result IN ('published','absent','still_unknown','provider_error')",
+            name="ck_pinterest_reconciliation_result",
+        ),
+        CheckConstraint("attempt_number > 0", name="ck_pinterest_reconciliation_attempt_positive"),
+    )
+
+
+class PinterestPerformanceSnapshotRecord(Base):
+    __tablename__ = "pinterest_performance_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pinterest_publication_id: Mapped[int] = mapped_column(
+        ForeignKey("pinterest_publications.id"), nullable=False
+    )
+    source_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    impressions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    saves: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pin_clicks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    outbound_clicks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_metrics_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    publication: Mapped[PinterestPublicationRecord] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pinterest_publication_id",
+            "window_start",
+            "window_end",
+            "source_revision",
+            name="uq_pinterest_snapshot_window_revision",
+        ),
+        CheckConstraint("window_end > window_start", name="ck_pinterest_snapshot_window"),
+        CheckConstraint(
+            "impressions >= 0 AND saves >= 0 AND pin_clicks >= 0 AND outbound_clicks >= 0",
+            name="ck_pinterest_snapshot_nonnegative",
+        ),
+        Index("ix_pinterest_snapshots_publication_window", "pinterest_publication_id", "window_end"),
     )

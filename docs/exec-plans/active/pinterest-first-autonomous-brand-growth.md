@@ -2,7 +2,7 @@
 
 ## Status
 
-- Status: in progress; Phases -1 through 2 completed, Phase 3 next, and live external capabilities remain gated by the capability matrix
+- Status: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and hosted/live activation remains gated by the capability matrix
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
 - PR: Not applicable to this planning pass because this repository has no `origin` remote configured. Configure a remote before implementation and use PR review.

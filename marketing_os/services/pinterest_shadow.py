@@ -882,10 +882,74 @@ def record_review_decision(
         result=result,
         reason_codes_json=canonical_json(normalized_reasons),
         reviewer_note=reviewer_note.strip(),
+        reviewed_payload_hash=publication.payload_hash if publication else "",
+        reviewed_manifest_hash=(
+            review_manifest_evidence_hash(session, manifest, review_asset_id)
+            if manifest is not None and review_asset_id is not None
+            else ""
+        ),
+        reviewed_request_hash=(
+            reviewed_publish_request_hash(session, publication, manifest, review_asset_id)
+            if publication is not None and manifest is not None and review_asset_id is not None
+            else ""
+        ),
     )
     session.add(decision)
     session.flush()
     return decision
+
+
+def review_manifest_evidence_hash(
+    session: Session,
+    manifest: ShadowCreativeManifestRecord,
+    review_asset_id: int,
+) -> str:
+    asset = session.get(AssetRecord, review_asset_id)
+    if asset is None or manifest.review_asset_id != asset.id:
+        raise ValueError("review manifest evidence requires its linked review asset")
+    return stable_hash(
+        {
+            "manifestId": manifest.id,
+            "publicationId": manifest.publication_id,
+            "optionNumber": manifest.option_number,
+            "reviewAssetId": asset.id,
+            "reviewAssetChecksum": asset.file_checksum,
+            "sourceChecksums": json.loads(manifest.source_checksums_json or "[]"),
+            "providerPath": manifest.provider_path,
+            "modelPreference": manifest.model_preference,
+            "prompt": manifest.prompt,
+            "negativePrompt": manifest.negative_prompt,
+            "dimensions": [manifest.width, manifest.height, manifest.crop_ratio],
+            "provenance": json.loads(manifest.provenance_json or "{}"),
+        }
+    )
+
+
+def reviewed_publish_request_hash(
+    session: Session,
+    publication: ShadowPublicationRecord,
+    manifest: ShadowCreativeManifestRecord,
+    review_asset_id: int,
+) -> str:
+    asset = session.get(AssetRecord, review_asset_id)
+    if asset is None or manifest.review_asset_id != asset.id:
+        raise ValueError("reviewed publish material requires its linked review asset")
+    return stable_hash(
+        {
+            "publicationId": publication.publication_id,
+            "payloadHash": publication.payload_hash,
+            "title": publication.title,
+            "description": publication.description,
+            "trackedDestinationUrl": publication.tracked_destination_url,
+            "boardRecommendation": publication.board_recommendation,
+            "manifestEvidenceHash": review_manifest_evidence_hash(
+                session, manifest, review_asset_id
+            ),
+            "reviewAssetId": asset.id,
+            "reviewAssetChecksum": asset.file_checksum,
+            "reviewAssetLocation": asset.source_path,
+        }
+    )
 
 
 def complete_review_session(
