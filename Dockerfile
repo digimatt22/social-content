@@ -9,6 +9,7 @@ WORKDIR /app
 COPY pyproject.toml alembic.ini ./
 COPY migrations ./migrations
 COPY marketing_os ./marketing_os
+COPY config ./config
 COPY docs/business ./docs/business
 RUN pip install --no-cache-dir .
 

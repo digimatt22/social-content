@@ -24,6 +24,7 @@ def emit_due_jobs(factory, now: datetime | None = None) -> int:
             locked = session.scalar(text("SELECT pg_try_advisory_xact_lock(:lock_id)"), {"lock_id": SCHEDULE_LOCK_ID})
             if not locked:
                 return 0
+        emitted = 0
         _, created = enqueue_job(
             session,
             job_type="system.noop",
@@ -31,7 +32,32 @@ def emit_due_jobs(factory, now: datetime | None = None) -> int:
             idempotency_key=f"system.noop:{slot.isoformat()}",
             correlation_id=f"scheduler:{slot.isoformat()}",
         )
-        return int(created)
+        emitted += int(created)
+        current_date = checked_at.date().isoformat()
+        if (checked_at.hour, checked_at.minute) >= (2, 10):
+            for job_type in ("catalog.reconcile", "editorial.reconcile"):
+                _, created = enqueue_job(
+                    session,
+                    job_type=job_type,
+                    payload={"utc_date": current_date},
+                    idempotency_key=f"{job_type}:{current_date}",
+                    correlation_id=f"daily:{current_date}",
+                )
+                emitted += int(created)
+        measurement_slot = checked_at.replace(
+            minute=(checked_at.minute // 15) * 15,
+            second=0,
+            microsecond=0,
+        )
+        _, created = enqueue_job(
+            session,
+            job_type="measurement.ingest",
+            payload={"scheduled_slot": measurement_slot.isoformat()},
+            idempotency_key=f"measurement.ingest:{measurement_slot.isoformat()}",
+            correlation_id=f"measurement:{measurement_slot.isoformat()}",
+        )
+        emitted += int(created)
+        return emitted
 
 
 def run_scheduler(*, once: bool = False, interval_seconds: float = 60.0) -> int:

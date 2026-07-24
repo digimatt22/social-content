@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Coverage exceptions · Marketing OS{% endblock %}
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Pinterest growth</p>
+      <h1>Coverage exceptions</h1>
+      <p>Only items needing attention appear here; routine reconciliation remains automatic.</p>
+    </div>
+    <a class="button secondary" href="/coverage">Back to coverage</a>
+  </header>
+
+  {% if not exceptions.count %}
+    <section class="panel empty-state" role="status">
+      <h2>No active exceptions</h2>
+      <p>Identity, readiness, freshness, and suppression checks are clear.</p>
+    </section>
+  {% else %}
+    <section class="panel">
+      <h2>Identity exceptions</h2>
+      {% if exceptions.identity %}
+        <ul>
+        {% for item in exceptions.identity %}
+          <li><strong>Product {{ item.productId }}</strong>: {{ item.reason }}</li>
+        {% endfor %}
+        </ul>
+      {% else %}<p>None.</p>{% endif %}
+    </section>
+    <section class="panel">
+      <h2>Website catalog identity exceptions</h2>
+      {% if exceptions.catalog %}
+        <ul>
+        {% for item in exceptions.catalog %}
+          <li><strong>Website product {{ item.sourceProductId }}</strong>: {{ item.reason }}</li>
+        {% endfor %}
+        </ul>
+      {% else %}<p>None.</p>{% endif %}
+    </section>
+    <section class="panel">
+      <h2>Coverage exceptions</h2>
+      {% if exceptions.coverage %}
+        <ul>
+        {% for item in exceptions.coverage %}
+          <li>
+            <strong>{{ item.product.name }} · {{ item.intent.query }}</strong>:
+            {{ item.suppressionReason or item.freshnessState }}
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}<p>None.</p>{% endif %}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

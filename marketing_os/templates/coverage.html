@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Coverage intelligence · Marketing OS{% endblock %}
+{% block content %}
+<main class="page-shell">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Pinterest growth</p>
+      <h1>Coverage intelligence</h1>
+      <p>Evidence-labeled gaps and next actions. Scores explain inputs; they do not publish anything.</p>
+    </div>
+    <a class="button secondary" href="/coverage/exceptions">View exceptions</a>
+  </header>
+
+  {% if not coverage.cells %}
+    <section class="panel empty-state" role="status">
+      <h2>No coverage cells yet</h2>
+      <p>The next complete catalog reconciliation will seed the reviewed cohort and materialize sparse coverage.</p>
+    </section>
+  {% else %}
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Product and intent</th>
+              <th>Coverage</th>
+              <th>Page action</th>
+              <th>Pin eligibility</th>
+              <th>Evidence and next action</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for cell in coverage.cells %}
+            <tr>
+              <td><strong>{{ cell.rank }}</strong></td>
+              <td>
+                <strong>{{ cell.product.name }}</strong><br>
+                <span>{{ cell.intent.query }}</span><br>
+                <small>{{ cell.intent.evidenceState }} · confidence {{ cell.intent.confidenceBps }}/10000</small>
+              </td>
+              <td>
+                <strong>{{ cell.coverageState }}</strong><br>
+                <small>{{ cell.freshnessState }} · {{ cell.format }}</small>
+              </td>
+              <td>
+                {% if cell.pageOpportunity %}
+                  <strong>{{ cell.pageOpportunity.score }}/10000</strong><br>
+                  <span>{{ cell.pageOpportunity.action }}</span><br>
+                  <small>{{ cell.pageOpportunity.explanation }}</small>
+                {% else %}<span>Not scored</span>{% endif %}
+              </td>
+              <td>
+                {% if cell.publicationOpportunity %}
+                  <strong>{{ "Eligible" if cell.publicationOpportunity.eligible else "Blocked" }}</strong><br>
+                  <span>{{ cell.publicationOpportunity.score }}/10000</span><br>
+                  <small>{{ cell.publicationOpportunity.eligibilityReason }}</small>
+                {% else %}<span>Not scored</span>{% endif %}
+              </td>
+              <td>
+                <strong>{{ cell.nextAction }}</strong><br>
+                <span>{{ cell.nextActionScore }}/10000</span><br>
+                <small>{{ cell.nextActionReason }}</small>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

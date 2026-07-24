@@ -39,7 +39,32 @@ never reads the website DynamoDB table directly.
 
 ## Schedules
 
-The durable scheduler process evaluates on a configurable polling interval. The Phase 0 built-in `system.noop` schedule proves leadership/idempotency only. Business cadences remain defined by later phase policy and must not be guessed.
+The durable scheduler process evaluates on a configurable polling interval.
+`system.noop` remains an hourly lease proof. Phase 2 adds:
+
+- `catalog.reconcile` and `editorial.reconcile` once per UTC date, first pass at
+  or after 02:10;
+- `measurement.ingest` every 15-minute UTC slot;
+- `coverage.materialize` as a change/outcome-triggered outbox job.
+
+Identity reconciliation also emits a deterministic repair materialization when
+a previously unresolved website product becomes mapped, including when the
+catalog and editorial content revisions are unchanged. Stored website product
+IDs allow authoritative page mappings to be reprojected without replaying the
+editorial source. A changed catalog job and repair job are deduplicated before
+enqueue. Identity loss uses the same repair path so existing publication
+opportunities cannot remain eligible after their mapping becomes unresolved.
+Repair keys include the product identity’s monotonic mapping revision, preventing
+later state transitions under an unchanged catalog revision from colliding with
+completed repair jobs.
+Measurement ingestion records 24-hour and 7-day diagnostic buckets plus the
+single 30-day scoring bucket.
+
+Catalog/editorial reads use the catalog credential; measurement reads use its
+separate credential. All four handlers are internal read/decision jobs and have
+no public Pinterest or website publish authority. Exact budgets, cursor
+semantics, qualification, and catch-up rules are in
+`docs/architecture/coverage-intelligence-v1.md`.
 
 ## Failure semantics
 

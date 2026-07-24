@@ -108,9 +108,9 @@ class Phase0FoundationTests(unittest.TestCase):
         engine = create_db_engine(self.root / "jobs.sqlite")
         init_db(engine)
         factory = session_factory(engine)
-        now = utc_now().replace(minute=12, second=0, microsecond=0)
-        self.assertEqual(1, emit_due_jobs(factory, now))
-        self.assertEqual(0, emit_due_jobs(factory, now + timedelta(minutes=20)))
+        now = utc_now().replace(hour=3, minute=12, second=0, microsecond=0)
+        self.assertEqual(4, emit_due_jobs(factory, now))
+        self.assertEqual(1, emit_due_jobs(factory, now + timedelta(minutes=20)))
         engine.dispose()
 
     def test_job_control_requires_active_admin(self) -> None:

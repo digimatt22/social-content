@@ -1,0 +1,104 @@
+{
+  "version": "coverage-v1",
+  "scoreScale": 10000,
+  "weights": {
+    "page": {
+      "businessRelevance": 2000,
+      "demandEvidence": 2500,
+      "seasonalUrgency": 1500,
+      "performancePrior": 1000,
+      "coverageGap": 2000,
+      "internalLinkValue": 1000
+    },
+    "publication": {
+      "businessRelevance": 2500,
+      "demandEvidence": 2500,
+      "seasonalUrgency": 1500,
+      "performancePrior": 1500,
+      "coverageGap": 2000
+    }
+  },
+  "defaults": {
+    "cohortBusinessRelevance": 8000,
+    "otherBusinessRelevance": 5000,
+    "hypothesisDemand": 2500,
+    "hypothesisConfidence": 2500,
+    "evergreenSeasonalUrgency": 5000,
+    "performancePrior": 5000,
+    "missingPageInternalLinkValue": 10000
+  },
+  "coverageGap": {
+    "missing": 10000,
+    "planned": 6500,
+    "produced": 3500,
+    "published": 0,
+    "stale": 7000,
+    "suppressed": 0
+  },
+  "penalties": {
+    "duplicateOrCovered": 4000,
+    "staleEvidence": 1000,
+    "insufficientEvidence": 1500
+  },
+  "performance": {
+    "qualifiedClickIncrement": 250,
+    "maximum": 10000,
+    "rollingWindowDays": 30,
+    "futureClockSkewSeconds": 300,
+    "qualifiedEventName": "etsy_outbound_click",
+    "requiredAttributionQuality": "utm_complete",
+    "requiresMappedProduct": true,
+    "requiresRecognizedLandingPath": true,
+    "requiresEtsyDestination": true,
+    "deduplication": "event_id",
+    "causalWithoutPublicationJoin": false,
+    "maySuppressInPhase2": false
+  },
+  "seasonal": {
+    "targetReadyLeadDays": 90,
+    "publishStartLeadDays": 60,
+    "urgencyBeforeReady": 2000,
+    "urgencyReadyWindow": 8000,
+    "urgencyPublishWindow": 10000,
+    "urgencyExpired": 0,
+    "timezone": "UTC"
+  },
+  "freshness": {
+    "observedEvidenceDays": 30,
+    "landingPageHours": 48
+  },
+  "limits": {
+    "catalogProducts": 500,
+    "catalogBytes": 5242880,
+    "measurementPageSize": 500,
+    "measurementPagesPerRun": 4,
+    "measurementEventsPerRun": 2000,
+    "cellsPerMaterializationJob": 250,
+    "transientAttempts": 3
+  },
+  "schedules": {
+    "catalogUtcHour": 2,
+    "catalogUtcMinute": 10,
+    "measurementIntervalMinutes": 15,
+    "catchUp": "current_utc_date_or_slot_only"
+  },
+  "tieBreakers": [
+    "score_desc",
+    "target_date_asc_null_last",
+    "product_id_asc",
+    "intent_key_asc"
+  ],
+  "suppressionRules": [
+    "product_identity_unresolved",
+    "product_retired",
+    "intent_inactive",
+    "destination_identity_ambiguous",
+    "season_expired",
+    "duplicate_dimensional_key"
+  ],
+  "review": {
+    "gate": "independent_phase2_strategy_automation_feedback_review",
+    "status": "passed",
+    "reviewedAt": "2026-07-24"
+  }
+}

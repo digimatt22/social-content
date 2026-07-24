@@ -44,6 +44,11 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
   repositories and adds canonical product routes, typed editorial drafts,
   dedicated portrait metadata images, and separately scoped agent v2 contracts
   without direct database coupling.
+- Phase 2 coverage intelligence work is on `codex/pinterest-growth-phase-2`.
+  It keeps Flask/PostgreSQL, adds the `0003_coverage_intelligence` schema,
+  complete catalog/editorial reads, durable measurement cursors, sparse
+  explainable opportunities, and authenticated Coverage/Exceptions surfaces.
+  It does not publish externally.
 
 ## Strategy source
 
@@ -69,3 +74,6 @@ Phase -1 evidence and decisions:
 - Apply the website growth-event Terraform table and configure/rotate distinct
   catalog-read, draft-write, and measurement-read production credentials before
   enabling the deployed Phase 1 receiver.
+- Deploy the Phase 2 website completeness/editorial-read contract and apply
+  Alembic revision `0003_coverage_intelligence` before enabling hosted Phase 2
+  schedules.

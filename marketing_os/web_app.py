@@ -116,6 +116,7 @@ from .services.creative_generation import review_creative_generation_job
 from .services.etsy_import import sync_etsy_read_only
 from .services.etsy_sales_csv import import_etsy_sales_csv
 from .services.local_assets import scan_asset_root
+from .coverage_web import coverage_blueprint
 
 
 LOCAL_ASSET_LIBRARY_ROOT = Path("assets")
@@ -151,6 +152,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     app.config["EXPORT_DIR"] = Path(os.environ.get("MARKETING_OS_EXPORT_DIR", "data/exports"))
     app.config["GENERATED_OUTPUT_ROOT"] = Path(os.environ.get("MARKETING_OS_GENERATED_OUTPUT_ROOT", LOCAL_GENERATED_OUTPUT_ROOT))
     app.config["PLANNING_UPLOAD_ROOT"] = Path(os.environ.get("MARKETING_OS_PLANNING_UPLOAD_ROOT", LOCAL_PLANNING_UPLOAD_ROOT))
+    app.register_blueprint(coverage_blueprint)
 
     @app.context_processor
     def inject_helpers() -> dict[str, object]:

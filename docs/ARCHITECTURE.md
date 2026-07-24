@@ -40,6 +40,19 @@ See `docs/architecture/growth-measurement-contract.md`.
 
 The public hub route and v2 draft/read contracts are defined in `docs/architecture/website-hub-v2-contract.md`.
 
+## Coverage intelligence
+
+Phase 2 stores complete catalog checkpoints, typed landing-page readiness,
+sparse coverage cells, separate page/publication opportunities, append-only
+decision runs, measurement cursors, and observational coverage outcomes.
+Snapshot/change/job and cursor/outcome/rescore writes use one PostgreSQL
+transaction and source advisory lock. Incomplete snapshots cannot retire
+products or advance authority. Coverage state describes website destination
+readiness, not Pinterest publication; eligible Pin work remains a distinct
+ranked publication opportunity.
+
+See `docs/architecture/coverage-intelligence-v1.md`.
+
 ## Hosting
 
 Sheldon is the initial internal always-on target using rootless Docker. The web origin binds loopback only; PostgreSQL uses an internal network and persistent named volume. Caddy/Cloudflare routing and deployment are separate approval gates.

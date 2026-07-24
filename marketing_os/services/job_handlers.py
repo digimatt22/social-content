@@ -37,6 +37,17 @@ class HandlerRegistry:
 
 
 def default_registry() -> HandlerRegistry:
+    from ..jobs.coverage_intelligence import (
+        catalog_reconcile_handler,
+        coverage_materialize_handler,
+        editorial_reconcile_handler,
+        measurement_ingest_handler,
+    )
+
     registry = HandlerRegistry()
     registry.register("system.noop", 1, lambda payload: {"echo": payload})
+    registry.register("catalog.reconcile", 1, catalog_reconcile_handler)
+    registry.register("editorial.reconcile", 1, editorial_reconcile_handler)
+    registry.register("coverage.materialize", 1, coverage_materialize_handler)
+    registry.register("measurement.ingest", 1, measurement_ingest_handler)
     return registry

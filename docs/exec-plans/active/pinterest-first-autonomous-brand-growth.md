@@ -2,7 +2,7 @@
 
 ## Status
 
-- Status: in progress; Phases -1 through 1 completed, Phase 2 next, and live external capabilities remain gated by the capability matrix
+- Status: in progress; Phases -1 through 2 completed, Phase 3 next, and live external capabilities remain gated by the capability matrix
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
 - PR: Not applicable to this planning pass because this repository has no `origin` remote configured. Configure a remote before implementation and use PR review.
@@ -835,13 +835,23 @@ These block Phase 1+, not Phase -1 discovery:
   streamed payload limits, replay protection, bounded quotas, least-privilege
   credentials, strict serialization, and Marketing OS validation passed with no
   implementation blockers; 2026-07-24.
+- Phase 2 completed: complete paginated website catalog and typed editorial
+  reads; versioned coverage policy/taxonomy; PostgreSQL coverage, opportunity,
+  decision, checkpoint, and outcome records; atomic catalog/outbox and
+  measurement/cursor flows; identity transition repair; exact seasonal gates;
+  ranked Coverage/Exceptions read surfaces; and 24-hour, 7-day, and 30-day
+  observational feedback. Final independent review `PASS` at 9.5/10 for
+  strategy, automation/idempotency, and feedback with no P0/P1 blockers;
+  2026-07-24.
 
 ## Closeout
 
 - Final planning status: implementation in progress.
-- Phases -1 through 1 are complete; Phase 2 coverage intelligence and catalog
-  monitoring is next.
+- Phases -1 through 2 are complete; Phase 3 Pinterest production in shadow mode
+  is next.
 - Phase 0 website changes were committed separately as `fb92e37` on `codex/pinterest-growth-phase-0`.
 - Phase 1 website changes were committed separately as `3166790` on
   `codex/pinterest-growth-phase-1`.
+- Phase 2 uses separate scoped website and Marketing OS commits on
+  `codex/pinterest-growth-phase-2`.
 - lifeOS context was unavailable and did not inform the plan; no durable lifeOS update was identified.

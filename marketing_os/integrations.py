@@ -166,6 +166,9 @@ class MattMadeMeWebsiteAdapter(Protocol):
     ) -> dict[str, object]:
         ...
 
+    def list_editorial_v2(self) -> dict[str, object]:
+        ...
+
     def list_growth_events_v2(
         self,
         after: str | None = None,
@@ -269,6 +272,8 @@ class MattMadeMeAgentApiAdapter:
         products = payload.get("products")
         if (
             payload.get("contractVersion") != "v2"
+            or payload.get("complete") is not True
+            or payload.get("productCount") != len(products or [])
             or not isinstance(revision, str)
             or len(revision) != 64
             or not isinstance(products, list)
@@ -276,6 +281,22 @@ class MattMadeMeAgentApiAdapter:
         ):
             raise ValueError("MattMadeMe product response does not satisfy the v2 contract.")
         self._last_product_revision = revision
+        return payload
+
+    def list_editorial_v2(self) -> dict[str, object]:
+        payload = self._request("GET", "/api/agent/v2/editorial", api_key=self.config.api_key)
+        revision = payload.get("revision")
+        pages = payload.get("pages")
+        if (
+            payload.get("contractVersion") != "v2"
+            or payload.get("complete") is not True
+            or not isinstance(pages, list)
+            or payload.get("pageCount") != len(pages)
+            or not isinstance(revision, str)
+            or len(revision) != 64
+            or not all(_valid_editorial_page(page) for page in pages)
+        ):
+            raise ValueError("MattMadeMe editorial response does not satisfy the v2 contract.")
         return payload
 
     @property
@@ -542,4 +563,42 @@ def _valid_growth_event(event: object) -> bool:
         isinstance(product_id, int)
         and not isinstance(product_id, bool)
         and product_id > 0
+    )
+
+
+def _valid_editorial_page(page: object) -> bool:
+    if not isinstance(page, dict):
+        return False
+    allowed = {
+        "id",
+        "pageType",
+        "canonicalPath",
+        "canonicalUrl",
+        "status",
+        "productIds",
+        "intentKeys",
+        "ready",
+        "readinessReason",
+        "publishedAt",
+        "revision",
+    }
+    if set(page) - allowed:
+        return False
+    return (
+        isinstance(page.get("id"), str)
+        and bool(str(page["id"]).strip())
+        and page.get("pageType") in {"product", "collection", "guide", "article", "story"}
+        and isinstance(page.get("canonicalPath"), str)
+        and str(page["canonicalPath"]).startswith("/")
+        and isinstance(page.get("canonicalUrl"), str)
+        and str(page["canonicalUrl"]).startswith(("https://", "http://"))
+        and page.get("status") in {"draft", "published", "retired"}
+        and isinstance(page.get("productIds"), list)
+        and all(isinstance(item, int) and item > 0 for item in page["productIds"])
+        and _string_list(page.get("intentKeys"))
+        and isinstance(page.get("ready"), bool)
+        and isinstance(page.get("readinessReason"), str)
+        and (page.get("publishedAt") is None or isinstance(page.get("publishedAt"), str))
+        and isinstance(page.get("revision"), str)
+        and len(str(page["revision"])) == 64
     )

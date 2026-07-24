@@ -134,24 +134,28 @@ def reconcile_product_identities(
     }
     exceptions: list[IdentityException] = []
     mapped = 0
+    newly_mapped_product_ids: list[int] = []
+    transitioned_product_ids: list[int] = []
     products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.id)))
     for product in products:
         listing_id = product.external_id if product.external_source == "etsy" else etsy_listing_id(product.canonical_url)
         website = by_etsy.get(listing_id)
         identity = session.scalar(
-            select(ProductIdentityRecord).where(ProductIdentityRecord.product_id == product.id)
+            select(ProductIdentityRecord)
+            .where(ProductIdentityRecord.product_id == product.id)
+            .with_for_update()
         )
         if identity is None:
             identity = ProductIdentityRecord(product_id=product.id)
             session.add(identity)
+        previous_mapping_state = identity.mapping_state
+        previous_website_id = identity.website_id
         identity.etsy_listing_id = listing_id or None
         identity.checked_at = utc_now()
         if not listing_id:
-            identity.website_id = None
             identity.mapping_state = "exception"
             identity.exception_reason = "missing_etsy_listing_id"
         elif website is None:
-            identity.website_id = None
             identity.mapping_state = "exception"
             identity.exception_reason = "no_website_product_with_matching_etsy_listing"
         else:
@@ -160,6 +164,17 @@ def reconcile_product_identities(
             identity.mapping_state = "mapped"
             identity.exception_reason = ""
             mapped += 1
+            if (
+                previous_mapping_state != "mapped"
+                or previous_website_id != identity.website_id
+            ):
+                newly_mapped_product_ids.append(product.id)
+        if (
+            previous_mapping_state != identity.mapping_state
+            or previous_website_id != identity.website_id
+        ):
+            identity.mapping_revision = int(identity.mapping_revision or 0) + 1
+            transitioned_product_ids.append(product.id)
         if identity.mapping_state != "mapped":
             exceptions.append(IdentityException(product.id, product.name, identity.exception_reason))
     session.flush()
@@ -167,5 +182,7 @@ def reconcile_product_identities(
         "marketing_products": len(products),
         "website_products": len(website_products),
         "mapped": mapped,
+        "newly_mapped_product_ids": sorted(newly_mapped_product_ids),
+        "transitioned_product_ids": sorted(transitioned_product_ids),
         "exceptions": [asdict(item) for item in exceptions],
     }

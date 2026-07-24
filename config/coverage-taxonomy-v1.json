@@ -1,0 +1,82 @@
+{
+  "version": "taxonomy-v1",
+  "locale": "en-US",
+  "reviewBasis": "Phase 1 approved Everyday Heroes cohort and page types",
+  "products": [
+    {"websiteId": "1770148417697", "name": "Mailman Duck", "active": true},
+    {"websiteId": "1770148911584", "name": "Mailwoman Duck", "active": true},
+    {"websiteId": "36", "name": "EMT Duck", "active": true},
+    {"websiteId": "1770148069202", "name": "Firefighter Duck", "active": true},
+    {"websiteId": "9", "name": "911 Dispatcher Duck", "active": true},
+    {"websiteId": "15", "name": "Police Duck", "active": true}
+  ],
+  "intents": [
+    {
+      "key": "mail-carrier-gifts",
+      "query": "mail carrier gifts",
+      "audience": "mail carriers and gift buyers",
+      "occasion": "appreciation gifting",
+      "season": "evergreen",
+      "eventDate": null,
+      "evidenceState": "hypothesis",
+      "confidenceBps": 2500,
+      "evidenceReferences": ["phase1:approved-positioning-hypothesis"],
+      "websiteProductIds": ["1770148417697", "1770148911584"]
+    },
+    {
+      "key": "first-responder-gifts",
+      "query": "first responder gifts",
+      "audience": "first responders and gift buyers",
+      "occasion": "appreciation gifting",
+      "season": "evergreen",
+      "eventDate": null,
+      "evidenceState": "hypothesis",
+      "confidenceBps": 2500,
+      "evidenceReferences": ["phase1:approved-positioning-hypothesis"],
+      "websiteProductIds": ["36", "1770148069202", "9", "15"]
+    },
+    {
+      "key": "everyday-heroes-gifts",
+      "query": "everyday heroes gifts",
+      "audience": "profession gift buyers",
+      "occasion": "recognition and appreciation",
+      "season": "evergreen",
+      "eventDate": null,
+      "evidenceState": "hypothesis",
+      "confidenceBps": 2500,
+      "evidenceReferences": ["phase1:approved-positioning-hypothesis"],
+      "websiteProductIds": ["1770148417697", "1770148911584", "36", "1770148069202", "9", "15"]
+    }
+  ],
+  "landingPageSeeds": [
+    {
+      "websiteId": "collection:everyday-heroes",
+      "pageType": "collection",
+      "canonicalPath": "/collections/everyday-heroes",
+      "intentKeys": ["everyday-heroes-gifts"],
+      "websiteProductIds": ["1770148417697", "1770148911584", "36", "1770148069202", "9", "15"],
+      "readiness": "seed_only"
+    },
+    {
+      "websiteId": "guide:mail-carrier-gifts",
+      "pageType": "guide",
+      "canonicalPath": "/guides/mail-carrier-gifts",
+      "intentKeys": ["mail-carrier-gifts"],
+      "websiteProductIds": ["1770148417697", "1770148911584"],
+      "readiness": "seed_only"
+    },
+    {
+      "websiteId": "guide:first-responder-gifts",
+      "pageType": "guide",
+      "canonicalPath": "/guides/first-responder-gifts",
+      "intentKeys": ["first-responder-gifts"],
+      "websiteProductIds": ["36", "1770148069202", "9", "15"],
+      "readiness": "seed_only"
+    }
+  ],
+  "review": {
+    "gate": "independent_phase2_strategy_automation_feedback_review",
+    "status": "passed",
+    "reviewedAt": "2026-07-24"
+  }
+}

@@ -30,6 +30,8 @@ class Phase1WebsiteContractTests(unittest.TestCase):
             {
                 "contractVersion": "v2",
                 "revision": "a" * 64,
+                "complete": True,
+                "productCount": 1,
                 "products": [
                     {
                         "id": 9,
@@ -89,6 +91,8 @@ class Phase1WebsiteContractTests(unittest.TestCase):
                 {
                     "contractVersion": "v2",
                     "revision": "b" * 64,
+                    "complete": True,
+                    "productCount": 1,
                     "products": [
                         {
                             "id": 9,
@@ -108,6 +112,8 @@ class Phase1WebsiteContractTests(unittest.TestCase):
                 {
                     "contractVersion": "v2",
                     "revision": "c" * 64,
+                    "complete": True,
+                    "productCount": 1,
                     "products": [{"id": "bad"}],
                 },
             ]
@@ -146,6 +152,8 @@ class Phase1WebsiteContractTests(unittest.TestCase):
                     {
                         "contractVersion": "v2",
                         "revision": "e" * 64,
+                        "complete": True,
+                        "productCount": 1,
                         "products": [{**valid_product, field: value}],
                     }
                 )
@@ -176,6 +184,36 @@ class Phase1WebsiteContractTests(unittest.TestCase):
         self.assertEqual("guide", payload["contentType"])
         self.assertEqual("/api/agent/v2/editorial-drafts", adapter.calls[0][1])
         self.assertEqual("draft-test", adapter.calls[0][4])
+
+    def test_editorial_read_contract_uses_catalog_credential_and_complete_snapshot(self) -> None:
+        adapter = RecordingWebsiteAdapter()
+        adapter.responses.append(
+            {
+                "contractVersion": "v2",
+                "complete": True,
+                "pageCount": 1,
+                "revision": "f" * 64,
+                "pages": [
+                    {
+                        "id": "guide:mail-carrier-gifts",
+                        "pageType": "guide",
+                        "canonicalPath": "/guides/mail-carrier-gifts",
+                        "canonicalUrl": "https://example.test/guides/mail-carrier-gifts",
+                        "status": "published",
+                        "productIds": [9],
+                        "intentKeys": ["mail-carrier-gifts"],
+                        "ready": True,
+                        "readinessReason": "verified",
+                        "publishedAt": None,
+                        "revision": "e" * 64,
+                    }
+                ],
+            }
+        )
+        payload = adapter.list_editorial_v2()
+        self.assertEqual(1, payload["pageCount"])
+        self.assertEqual(("GET", "/api/agent/v2/editorial"), adapter.calls[0][:2])
+        self.assertEqual("read-test", adapter.calls[0][4])
 
     def test_growth_event_contract_uses_measurement_credential(self) -> None:
         adapter = RecordingWebsiteAdapter()

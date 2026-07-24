@@ -550,6 +550,7 @@ class ProductIdentityRecord(Base):
     website_slug: Mapped[str] = mapped_column(String(220), default="", nullable=False)
     etsy_listing_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     mapping_state: Mapped[str] = mapped_column(String(40), default="unresolved", nullable=False)
+    mapping_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     exception_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
     checked_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
@@ -605,4 +606,224 @@ class GrowthEventRecord(Base):
     __table_args__ = (
         Index("ix_growth_events_type_source_time", "event_type", "source_timestamp"),
         Index("ix_growth_events_campaign_content", "campaign_id", "content_id"),
+    )
+
+
+class SearchIntentRecord(Base):
+    __tablename__ = "search_intents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    intent_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    normalized_query: Mapped[str] = mapped_column(String(260), nullable=False)
+    audience: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    occasion: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    locale: Mapped[str] = mapped_column(String(40), default="en-US", nullable=False)
+    season_key: Mapped[str] = mapped_column(String(120), default="evergreen", nullable=False)
+    event_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    evidence_state: Mapped[str] = mapped_column(String(40), default="hypothesis", nullable=False)
+    confidence_bps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    evidence_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    revision_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        Index("ix_search_intents_state_season", "lifecycle_state", "season_key"),
+        Index("ix_search_intents_query_locale", "normalized_query", "locale"),
+    )
+
+
+class LandingPageRecord(Base):
+    __tablename__ = "landing_pages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    website_id: Mapped[str] = mapped_column(String(180), unique=True, nullable=False)
+    page_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    canonical_path: Mapped[str] = mapped_column(String(400), unique=True, nullable=False)
+    canonical_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    website_revision: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    website_product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    product_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    intent_keys_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), default="draft", nullable=False)
+    readiness_state: Mapped[str] = mapped_column(String(40), default="not_ready", nullable=False)
+    readiness_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (Index("ix_landing_pages_type_readiness", "page_type", "readiness_state"),)
+
+
+class CatalogChangeRecord(Base):
+    __tablename__ = "catalog_changes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    source_product_id: Mapped[str] = mapped_column(String(180), nullable=False)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    change_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    before_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    after_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    deduplication_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_catalog_changes_source_revision", "source_name", "source_revision"),
+        Index("ix_catalog_changes_product_time", "product_id", "detected_at"),
+    )
+
+
+class CatalogSnapshotRecord(Base):
+    __tablename__ = "catalog_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    completeness_state: Mapped[str] = mapped_column(String(40), nullable=False)
+    product_hashes_json: Mapped[str] = mapped_column(Text, nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class CoverageCellRecord(Base):
+    __tablename__ = "coverage_cells"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dimensional_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    search_intent_id: Mapped[int] = mapped_column(ForeignKey("search_intents.id"), nullable=False)
+    season_key: Mapped[str] = mapped_column(String(120), default="evergreen", nullable=False)
+    content_format: Mapped[str] = mapped_column(String(80), nullable=False)
+    landing_page_id: Mapped[int | None] = mapped_column(ForeignKey("landing_pages.id"), nullable=True)
+    channel: Mapped[str] = mapped_column(String(80), default="pinterest", nullable=False)
+    coverage_state: Mapped[str] = mapped_column(String(40), default="missing", nullable=False)
+    freshness_state: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    suppression_state: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    suppression_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    explanation_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    last_observed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    product: Mapped[ProductRecord] = relationship()
+    search_intent: Mapped[SearchIntentRecord] = relationship()
+    landing_page: Mapped[LandingPageRecord | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_coverage_cells_product_state", "product_id", "coverage_state"),
+        Index("ix_coverage_cells_intent_channel", "search_intent_id", "channel"),
+        Index("ix_coverage_cells_exception", "suppression_state", "freshness_state"),
+    )
+
+
+class PageOpportunityRecord(Base):
+    __tablename__ = "page_opportunities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    coverage_cell_id: Mapped[int] = mapped_column(ForeignKey("coverage_cells.id"), unique=True, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    score_components_json: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    target_ready_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), default="ranked", nullable=False)
+    scored_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    coverage_cell: Mapped[CoverageCellRecord] = relationship()
+
+    __table_args__ = (Index("ix_page_opportunities_rank", "lifecycle_state", "score"),)
+
+
+class PublicationOpportunityRecord(Base):
+    __tablename__ = "publication_opportunities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    coverage_cell_id: Mapped[int] = mapped_column(ForeignKey("coverage_cells.id"), unique=True, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    score_components_json: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    eligible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    eligibility_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    publish_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lifecycle_state: Mapped[str] = mapped_column(String(40), default="ranked", nullable=False)
+    scored_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    coverage_cell: Mapped[CoverageCellRecord] = relationship()
+
+    __table_args__ = (
+        Index("ix_publication_opportunities_rank", "eligible", "lifecycle_state", "score"),
+    )
+
+
+class DecisionRunRecord(Base):
+    __tablename__ = "decision_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    run_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    input_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    score_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    considered_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    selected_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    suppressed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    explanation_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (Index("ix_decision_runs_type_time", "run_type", "created_at"),)
+
+
+class MeasurementCursorRecord(Base):
+    __tablename__ = "measurement_cursors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    opaque_cursor: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    last_event_key: Mapped[str] = mapped_column(String(240), default="", nullable=False)
+    last_source_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingested_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    checkpointed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class CoverageOutcomeRecord(Base):
+    __tablename__ = "coverage_outcomes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    outcome_key: Mapped[str] = mapped_column(String(240), unique=True, nullable=False)
+    coverage_cell_id: Mapped[int | None] = mapped_column(ForeignKey("coverage_cells.id"), nullable=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    landing_page_id: Mapped[int | None] = mapped_column(ForeignKey("landing_pages.id"), nullable=True)
+    metric_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    maturity_window: Mapped[str] = mapped_column(String(40), nullable=False)
+    observed_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    attribution_quality: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    inference_kind: Mapped[str] = mapped_column(String(40), default="observational", nullable=False)
+    period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(160), nullable=False)
+    explanation_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    coverage_cell: Mapped[CoverageCellRecord | None] = relationship()
+    product: Mapped[ProductRecord | None] = relationship()
+    landing_page: Mapped[LandingPageRecord | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_coverage_outcomes_product_metric", "product_id", "metric_name", "period_end"),
+        Index("ix_coverage_outcomes_cell_metric", "coverage_cell_id", "metric_name", "period_end"),
     )
