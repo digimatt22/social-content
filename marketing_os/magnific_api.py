@@ -23,7 +23,10 @@ from typing import Any
 from .config import load_local_env
 
 NANO_BANANA_PRO_FLASH_PATH = "/v1/ai/text-to-image/nano-banana-pro-flash"
+UPLOAD_REQUEST_URL_PATH = "/v1/ai/uploads/request-url"
+UPLOADS_LIST_PATH = "/v1/ai/uploads"
 DEFAULT_BASE_URL = "https://api.magnific.com"
+SUPPORTED_UPLOAD_IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/webp"})
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,16 @@ class MagnificTaskResult:
     @property
     def in_progress(self) -> bool:
         return self.status.upper() in {"CREATED", "IN_PROGRESS"}
+
+
+@dataclass(frozen=True)
+class MagnificUploadedFile:
+    """Result of staging a local file via Magnific Upload Files API."""
+
+    file_id: str
+    asset_url: str
+    content_type: str = "image/jpeg"
+    asset_url_expires_in: int | None = None
 
 
 class MagnificApiError(RuntimeError):
@@ -154,6 +167,110 @@ class MagnificClient:
                 retryable=True,
             )
         return latest
+
+    def request_upload_urls(self, content_types: list[str]) -> list[dict[str, Any]]:
+        """POST /v1/ai/uploads/request-url — get short-lived PUT targets + asset_urls."""
+        self.require_configured()
+        if not content_types:
+            raise MagnificApiError("content_types is required for upload request.", retryable=False)
+        if len(content_types) > 14:
+            raise MagnificApiError("Magnific upload request-url accepts at most 14 files.", retryable=False)
+        body = {"files": [{"content_type": item} for item in content_types]}
+        payload = self._request("POST", UPLOAD_REQUEST_URL_PATH, body=body)
+        files = payload.get("files")
+        if not isinstance(files, list) or not files:
+            raise MagnificApiError("Magnific upload request-url returned no files.", retryable=True)
+        return [item for item in files if isinstance(item, dict)]
+
+    def put_upload_bytes(self, upload_url: str, headers: dict[str, str], data: bytes) -> None:
+        """PUT raw bytes to a Magnific pre-signed upload_url (no API key)."""
+        if not (upload_url or "").strip().startswith(("http://", "https://")):
+            raise MagnificApiError("upload_url must be http(s).", retryable=False)
+        request_headers = {str(key): str(value) for key, value in (headers or {}).items()}
+        request = urllib.request.Request(
+            upload_url.strip(),
+            data=data,
+            headers=request_headers,
+            method="PUT",
+        )
+        try:
+            with self._opener(request, timeout=120) as response:
+                response.read()
+        except urllib.error.HTTPError as exc:
+            detail = _safe_error_body(exc)
+            raise MagnificApiError(
+                f"Magnific upload PUT failed (HTTP {exc.code}){detail}.",
+                status_code=exc.code,
+                retryable=exc.code in {408, 425, 429, 500, 502, 503, 504},
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise MagnificApiError(f"Magnific upload PUT transport error: {exc.reason}", retryable=True) from exc
+
+    def list_uploads(self) -> list[dict[str, Any]]:
+        """GET /v1/ai/uploads — list staged uploads with freshly signed asset_urls."""
+        self.require_configured()
+        payload = self._request("GET", UPLOADS_LIST_PATH)
+        files = payload.get("files")
+        if files is None:
+            return []
+        if not isinstance(files, list):
+            raise MagnificApiError("Magnific uploads list returned unexpected JSON shape.", retryable=True)
+        return [item for item in files if isinstance(item, dict)]
+
+    def refresh_upload_asset_url(self, file_id: str) -> str:
+        """Return a freshly signed asset_url for a previously staged file_id."""
+        wanted = (file_id or "").strip()
+        if not wanted:
+            raise MagnificApiError("file_id is required to refresh an upload URL.", retryable=False)
+        for item in self.list_uploads():
+            if str(item.get("file_id") or "").strip() != wanted:
+                continue
+            asset_url = str(item.get("asset_url") or "").strip()
+            if asset_url.startswith("https://"):
+                return asset_url
+            raise MagnificApiError(
+                f"Magnific upload {wanted} listed without an https asset_url.",
+                retryable=True,
+            )
+        raise MagnificApiError(
+            f"Magnific upload {wanted} was not found (expired or deleted).",
+            retryable=False,
+        )
+
+    def upload_local_image(self, path: str | Path, *, content_type: str | None = None) -> MagnificUploadedFile:
+        """Stage a local image via Magnific Upload Files API and return file_id + asset_url."""
+        file_path = Path(path).expanduser()
+        if not file_path.is_file():
+            raise MagnificApiError(f"Local reference file not found: {file_path}", retryable=False)
+        mime = (content_type or "").strip() or guess_mime_type(file_path.name)
+        if mime == "image/jpg":
+            mime = "image/jpeg"
+        if mime not in SUPPORTED_UPLOAD_IMAGE_TYPES:
+            raise MagnificApiError(
+                f"Unsupported reference image type for Magnific upload: {mime} "
+                f"(supported: {', '.join(sorted(SUPPORTED_UPLOAD_IMAGE_TYPES))}).",
+                retryable=False,
+            )
+        slots = self.request_upload_urls([mime])
+        slot = slots[0]
+        upload_url = str(slot.get("upload_url") or "").strip()
+        asset_url = str(slot.get("asset_url") or "").strip()
+        file_id = str(slot.get("file_id") or "").strip()
+        raw_headers = slot.get("headers") if isinstance(slot.get("headers"), dict) else {}
+        headers = {str(k): str(v) for k, v in raw_headers.items()}
+        if not upload_url or not asset_url or not file_id:
+            raise MagnificApiError("Magnific upload request-url missing upload_url/asset_url/file_id.", retryable=True)
+        if "Content-Type" not in headers and "content-type" not in {k.lower() for k in headers}:
+            headers["Content-Type"] = mime
+        self.put_upload_bytes(upload_url, headers, file_path.read_bytes())
+        expires = slot.get("asset_url_expires_in")
+        expires_int = int(expires) if isinstance(expires, int) else None
+        return MagnificUploadedFile(
+            file_id=file_id,
+            asset_url=asset_url,
+            content_type=mime,
+            asset_url_expires_in=expires_int,
+        )
 
     def download_to_path(self, url: str, destination: str | Path) -> Path:
         if not url.strip().startswith(("http://", "https://")):

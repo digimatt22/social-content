@@ -3,9 +3,9 @@
 ## Status
 - Status: in progress
 - Owner: Matthew / Codex
-- Branch: codex/make-ux
-- PR: https://github.com/digimatt22/social-content/pull/13
-- Last updated: 2026-09-25 (make UX in progress)
+- Branch: codex/local-refs-magnific
+- PR: TBD
+- Last updated: 2026-09-25 (local refs → Magnific-reachable)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
@@ -57,10 +57,10 @@ Old plan kept and marked parked for primary focus:
 - `docs/exec-plans/active/pinterest-first-autonomous-brand-growth.md`
 
 ## Build order
-1. **Done:** Magnific API drain (live on Sheldon). **In flight:** per-platform aspect ratios.
+1. **Done:** Magnific API drain (live on Sheldon). Per-platform aspect ratios (#11).
 2. **Done:** Findability — Gallery filters + agent asset list APIs (PR #12).
-3. **In progress (this PR):** Make UX — multi-platform queue progress on Products/Art Studio; Gallery needs-review social grouping.
-4. **Local refs:** make local files Magnific-reachable (https/upload).
+3. **Done:** Make UX — multi-platform queue progress on Products/Art Studio; Gallery needs-review social grouping (#13).
+4. **In progress (this PR):** Local refs → Magnific-reachable (Upload Files API staging).
 5. **Nav focus:** image-asset primary; park coverage/shadow behind more.
 6. **Later:** background Etsy sync; video on same pattern; Magnific webhook verify.
 
@@ -73,12 +73,12 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Pinterest growth plan is **not** the primary active goal for day-to-day product work.
 
 ## Work State
-- Planned: local refs, nav focus, later items above.
-- In progress: make UX (multi-platform progress + needs-review clarity).
-- Completed earlier: strategy lock; per-platform aspect ratios (#11); findability filters + agent list API (#12).
+- Planned: nav focus, later items above.
+- In progress: local refs → Magnific-reachable (this PR).
+- Completed earlier: strategy lock; Magnific REST drain; per-platform aspect ratios (#11); findability (#12); make UX (#13).
 - Blocked: none.
-- Needs human validation: after queueing multi-platform jobs on Products, confirm progress strip + Gallery needs-review banner.
-- Ready for review: make UX PR #13.
+- Needs human validation: queue a social-image job with a local-only reference on Sheldon; confirm Magnific receives a staged https `asset_url` and generation completes.
+- Ready for review: this PR (local refs staging).
 - Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`).
 
 ## Decisions
@@ -88,13 +88,13 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Production hostname: `mmm.digicolony.net`.
 
 ## Implementation
-Docs-only in this change:
-- NEW `docs/exec-plans/active/asset-workshop.md`
-- UPDATE `docs/PROJECT_CONTEXT.md` strategy + Magnific capability line
-- Park note on pinterest-first plan header
-- Light README Current Scope pointer
+Local-ref staging (this PR):
+- `MagnificClient.upload_local_image` / `request_upload_urls` / `refresh_upload_asset_url` in `marketing_os/magnific_api.py`
+- Drain handler stages local-only refs before nano-banana create; Etsy https path unchanged
+- Idempotency via `SyncMetadata` `magnific_upload_asset_<asset_id>` (`file_id` + sha256 checksum)
+- Docs: this plan + `docs/operating-guides/magnific-mcp-creative-assets.md`
 
-No code, deploy, aspect-ratio, or nav-hide work in this PR.
+Out of scope: nav hide, video, deploy, Brand Lab publish, Etsy sync changes.
 
 ## Validation
 - Docs-only; `scripts/check-current-state.sh --remote` before PR.
@@ -114,9 +114,9 @@ No code, deploy, aspect-ratio, or nav-hide work in this PR.
 
 ## Open questions
 - (Resolved) Agent list filters: `GET /api/assets` query params + optional `GET /api/products/<id>/assets`.
-- Preferred path for local-ref Magnific reachability (upload vs temporary https).
+- (Resolved) Local-ref Magnific reachability: Magnific Upload Files API (`POST /v1/ai/uploads/request-url` → PUT → `asset_url`). Persist `file_id`+checksum in `SyncMetadata` (`magnific_upload_asset_<id>`); refresh via `GET /v1/ai/uploads` on retry. Etsy https refs unchanged.
 - When (if ever) to resume Pinterest growth as a primary track after asset-workshop loops are solid.
 
 ## Closeout
 - Final status: TBD until merge.
-- Follow-up: local refs → nav focus → later items (separate PRs).
+- Follow-up: nav focus → later items (separate PRs).

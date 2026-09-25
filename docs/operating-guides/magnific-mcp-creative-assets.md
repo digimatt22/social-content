@@ -160,7 +160,7 @@ After generation, wait for completion, download the generated file under `output
 
 ## REST API Fallback
 
-Marketing OS worker drain (social images only): when `MAGNIFIC_API_KEY` is set, `marketing-os-worker` handles durable job type `art_studio.social_image.generate` by calling `POST /v1/ai/text-to-image/nano-banana-pro-flash`, polling `GET .../nano-banana-pro-flash/{task-id}`, downloading the first generated URL into the job `output_dir`, and registering the candidate via `register_social_image_job_output` (`provider=magnific_api`). Aspect ratio comes from CreativeGenerationJobRecord metadata (`platform` / `aspect_ratio`, default `ig_feed` → `1:1`); UI platform chips on Products / Art Studio set this map (Pinterest is frame-only, no pin publish). Reference images must be publicly reachable `https://` URLs (`canonical_url` / `source_path`, typically Etsy remotes). Local-only files are skipped with a clear non-retryable error — Magnific upload REST is not wired in this path. If the API key is empty, enqueue stays a manual Magnific handoff and the worker handler no-ops. `MAGNIFIC_WEBHOOK_SECRET` is allowlisted for a future webhook verification follow-up; this path polls instead of verifying webhooks. Video generation remains out of scope.
+Marketing OS worker drain (social images only): when `MAGNIFIC_API_KEY` is set, `marketing-os-worker` handles durable job type `art_studio.social_image.generate` by calling `POST /v1/ai/text-to-image/nano-banana-pro-flash`, polling `GET .../nano-banana-pro-flash/{task-id}`, downloading the first generated URL into the job `output_dir`, and registering the candidate via `register_social_image_job_output` (`provider=magnific_api`). Aspect ratio comes from CreativeGenerationJobRecord metadata (`platform` / `aspect_ratio`, default `ig_feed` → `1:1`); UI platform chips on Products / Art Studio set this map (Pinterest is frame-only, no pin publish). Reference images must be Magnific-reachable `https://` URLs. Etsy remotes (`canonical_url` / `source_path` already https) are passed through unchanged. Local-only files are staged via Magnific Upload Files API (`POST /v1/ai/uploads/request-url` → PUT bytes → use returned `asset_url` as the reference). Staging is idempotent where practical: `SyncMetadata` rows named `magnific_upload_asset_<asset_id>` store `file_id` + sha256 checksum; retries with the same checksum refresh `asset_url` via `GET /v1/ai/uploads` instead of re-uploading. Upload failures surface a clear error (non-retryable for client 4xx; retryable transport/5xx may requeue). If the API key is empty, enqueue stays a manual Magnific handoff and the worker handler no-ops. `MAGNIFIC_WEBHOOK_SECRET` is allowlisted for a future webhook verification follow-up; this path polls instead of verifying webhooks. Video generation remains out of scope.
 
 
 If MCP is unavailable, the REST API can be used with an API key:
@@ -190,7 +190,7 @@ curl --request POST \
   }'
 ```
 
-REST reference images must be publicly accessible URLs or GCS paths. Local product files would need to be uploaded somewhere accessible first. MCP upload tools may be easier for assistant workflows.
+REST reference images must be publicly accessible URLs (or Magnific Upload Files `asset_url`s). The worker stages local product files via `POST /v1/ai/uploads/request-url` automatically. Interactive assistants can still use MCP `creations_request_upload` / `creations_finalize_upload` when working outside the worker drain.
 
 ## Suggested Marketing OS Integration Later
 
