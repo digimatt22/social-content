@@ -335,9 +335,15 @@
       .product-social-studio { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
       .product-social-studio h4 { margin: 2px 0 4px; }
       .product-social-studio p { margin: 0 0 8px; }
-      .product-social-action { display: flex; align-items: end; gap: 8px; }
+      .product-social-action { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
       .product-social-action label { width: 82px; margin: 0; }
       .product-social-action input { min-height: 38px; }
+      .product-social-platforms { flex: 1 1 100%; margin: 0; padding: 0; border: 0; }
+      .product-social-platforms legend { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+      .platform-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+      .platform-chip { display: inline-flex; align-items: center; gap: 4px; width: auto; margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: white; font-size: 12px; cursor: pointer; }
+      .platform-chip:has(input:checked) { border-color: #0b5f59; background: var(--accent-soft); }
+      .platform-chip input { width: auto; min-height: 0; margin: 0; }
       .product-social-jobs { margin-top: 10px; }
       .product-social-job-list { display: grid; gap: 8px; margin-top: 8px; }
       .product-social-job { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -546,6 +552,7 @@
         .product-social-studio { grid-template-columns: 1fr; align-items: stretch; }
         .product-social-action { display: grid; }
         .product-social-action label { width: 100%; }
+        .product-social-platforms { width: 100%; }
         .product-source-footer { display: grid; }
         .product-review-disclosure summary { grid-template-columns: 1fr auto; }
         .product-review-kicker { grid-column: 1 / -1; justify-self: start; text-align: left; }

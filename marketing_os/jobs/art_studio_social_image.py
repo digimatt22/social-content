@@ -18,7 +18,12 @@ from ..magnific_api import (
     https_asset_url,
     magnific_api_configured,
 )
-from ..services.art_studio import SOCIAL_JOB_FORMAT, register_social_image_job_output, slugify
+from ..services.art_studio import (
+    SOCIAL_JOB_FORMAT,
+    register_social_image_job_output,
+    slugify,
+    social_image_aspect_ratio_from_job,
+)
 from ..services.job_handlers import NonRetryableJobError
 
 
@@ -75,6 +80,8 @@ def art_studio_social_image_generate_handler(payload: dict[str, Any]) -> dict[st
             metadata = _json_dict(job.response_metadata_json)
             product_name = str(metadata.get("product_name") or "").strip() or "product"
             option_number = int(metadata.get("option_number") or 1)
+            platform_key = str(metadata.get("platform") or "").strip()
+            aspect_ratio = social_image_aspect_ratio_from_job(job)
             output_dir = Path(
                 str(metadata.get("output_dir") or f"outputs/graphics/social-worthy/{slugify(product_name)}")
             )
@@ -91,17 +98,21 @@ def art_studio_social_image_generate_handler(payload: dict[str, Any]) -> dict[st
                 "endpoint": "nano-banana-pro-flash",
                 "reference_count": len(reference_images),
                 "reference_urls": [item.image for item in reference_images],
+                "aspect_ratio": aspect_ratio,
+                "platform": platform_key,
             }
             job.response_metadata_json = json.dumps(metadata, indent=2)
             session.flush()
             prompt_text = prompt
             job_id = job.id
+            aspect_ratio_for_api = aspect_ratio
+            platform_key_for_output = platform_key
 
         try:
             created = client.create_nano_banana_pro_flash(
                 prompt=prompt_text,
                 reference_images=reference_images,
-                aspect_ratio="1:1",
+                aspect_ratio=aspect_ratio_for_api,
                 resolution="2K",
             )
         except MagnificApiError as exc:
@@ -143,7 +154,8 @@ def art_studio_social_image_generate_handler(payload: dict[str, Any]) -> dict[st
         suffix = Path(urllib_path_name(output_url)).suffix.lower() or ".png"
         if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
             suffix = ".png"
-        output_path = output_dir / f"option-{option_number}{suffix}"
+        frame_slug = platform_key_for_output or aspect_ratio_for_api.replace(":", "x")
+        output_path = output_dir / f"option-{option_number}-{frame_slug}{suffix}"
 
         try:
             client.download_to_path(output_url, output_path)

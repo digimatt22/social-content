@@ -19,8 +19,11 @@ from marketing_os.magnific_api import (
     magnific_api_configured,
 )
 from marketing_os.services.art_studio import (
+    SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS,
     art_studio_provider_status_label,
     enqueue_social_image_generation,
+    resolve_social_image_frame,
+    social_image_platform_options,
 )
 from marketing_os.services.job_handlers import NonRetryableJobError, default_registry
 from marketing_os.web_app import create_app
@@ -370,6 +373,158 @@ class ArtStudioMagnificApiDrainTests(unittest.TestCase):
                     handler.function({"creativeJobId": creative_job_id})
                 self.assertIn("https", str(ctx.exception).lower())
                 self.assertIn("local-only", str(ctx.exception).lower())
+
+
+class SocialImagePlatformAspectTests(unittest.TestCase):
+    def test_platform_aspect_map_covers_requested_ratios(self) -> None:
+        expected = {
+            "ig_feed": "1:1",
+            "fb_feed": "1:1",
+            "ig_portrait": "4:5",
+            "fb_portrait": "4:5",
+            "stories": "9:16",
+            "reels": "9:16",
+            "tiktok": "9:16",
+            "x": "16:9",
+            "landscape_link": "16:9",
+            "pinterest": "2:3",
+        }
+        self.assertEqual(SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS, expected)
+        self.assertEqual(resolve_social_image_frame(), ("ig_feed", "1:1"))
+        self.assertEqual(resolve_social_image_frame("stories"), ("stories", "9:16"))
+        self.assertEqual(resolve_social_image_frame(aspect_ratio="2:3"), ("", "2:3"))
+        labels = [option["label"] for option in social_image_platform_options()]
+        self.assertTrue(any("IG Feed (1:1)" == label for label in labels))
+        self.assertTrue(any("Pinterest (2:3)" == label for label in labels))
+
+    def test_enqueue_stores_platform_and_aspect_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "aspect-meta.sqlite"
+            source_path = tmp_path / "source.png"
+            source_path.write_bytes(TINY_PNG)
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            with patch.dict("os.environ", {"MAGNIFIC_API_KEY": ""}, clear=False):
+                with session_scope(app.config["SESSION_FACTORY"]) as session:
+                    product = ProductRecord(name="Aspect Duck")
+                    session.add(product)
+                    session.flush()
+                    source = AssetRecord(
+                        product_id=product.id,
+                        name="Aspect source",
+                        asset_type="source photo",
+                        source_path=source_path.as_posix(),
+                        preview_path=source_path.as_posix(),
+                        readiness_state="ready",
+                        review_state="approved",
+                        default_reference=1,
+                    )
+                    session.add(source)
+                    session.flush()
+                    default_job = enqueue_social_image_generation(session, product.id, source.id)
+                    stories_job = enqueue_social_image_generation(
+                        session, product.id, source.id, platform="stories", option_number=2
+                    )
+                    default_meta = json.loads(default_job.response_metadata_json)
+                    stories_meta = json.loads(stories_job.response_metadata_json)
+                    self.assertEqual(default_meta["platform"], "ig_feed")
+                    self.assertEqual(default_meta["aspect_ratio"], "1:1")
+                    self.assertEqual(default_job.requested_dimensions, "1:1 IG Feed")
+                    self.assertIn("1:1 square social image (IG Feed)", default_job.prompt)
+                    self.assertEqual(stories_meta["platform"], "stories")
+                    self.assertEqual(stories_meta["aspect_ratio"], "9:16")
+                    self.assertEqual(stories_job.requested_dimensions, "9:16 Stories")
+                    self.assertIn("9:16 vertical stories/reels social image (Stories)", stories_job.prompt)
+                    self.assertNotEqual(default_job.id, stories_job.id)
+
+    def test_handler_passes_stored_aspect_ratio_to_magnific(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "aspect-drain.sqlite"
+            output_dir = tmp_path / "outputs" / "graphics" / "social-worthy" / "aspect-duck"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            posted: dict[str, object] = {}
+
+            with patch.dict(
+                "os.environ",
+                {"MAGNIFIC_API_KEY": "test-key-not-real", "MARKETING_OS_DB_PATH": str(db_path)},
+                clear=False,
+            ):
+                with session_scope(app.config["SESSION_FACTORY"]) as session:
+                    product = ProductRecord(name="Aspect Drain Duck")
+                    session.add(product)
+                    session.flush()
+                    source = AssetRecord(
+                        product_id=product.id,
+                        name="Aspect drain source",
+                        asset_type="Etsy product photo",
+                        source_path="https://i.etsystatic.com/aspect.jpg",
+                        preview_path="https://i.etsystatic.com/aspect.jpg",
+                        canonical_url="https://i.etsystatic.com/aspect.jpg",
+                        mime_type="image/jpeg",
+                        readiness_state="ready",
+                        review_state="approved",
+                        default_reference=1,
+                        file_exists=0,
+                    )
+                    session.add(source)
+                    session.flush()
+                    job = enqueue_social_image_generation(
+                        session, product.id, source.id, platform="stories"
+                    )
+                    metadata = json.loads(job.response_metadata_json)
+                    metadata["output_dir"] = output_dir.as_posix()
+                    job.response_metadata_json = json.dumps(metadata)
+                    session.flush()
+                    creative_job_id = job.id
+
+                def fake_urlopen(request: Request, timeout: float = 0):
+                    method = request.get_method()
+                    url = request.full_url
+                    if method == "POST" and url.endswith("/nano-banana-pro-flash"):
+                        body = json.loads(request.data.decode("utf-8"))
+                        posted["aspect_ratio"] = body["aspect_ratio"]
+                        return _FakeResponse(
+                            json.dumps(
+                                {
+                                    "data": {
+                                        "task_id": "aspect-task",
+                                        "status": "COMPLETED",
+                                        "generated": ["https://cdn.example/aspect-out.png"],
+                                    }
+                                }
+                            ).encode()
+                        )
+                    if method == "GET" and url == "https://cdn.example/aspect-out.png":
+                        return _FakeResponse(TINY_PNG)
+                    raise AssertionError(f"unexpected {method} {url}")
+
+                with patch("marketing_os.magnific_api.urllib.request.urlopen", fake_urlopen), patch(
+                    "marketing_os.jobs.art_studio_social_image.MagnificClient"
+                ) as client_cls:
+                    from marketing_os.magnific_api import MagnificApiConfig, MagnificClient
+
+                    client_cls.side_effect = lambda *a, **k: MagnificClient(
+                        MagnificApiConfig(api_key="test-key-not-real"),
+                        opener=fake_urlopen,
+                    )
+                    handler = default_registry().resolve("art_studio.social_image.generate", 1)
+                    assert handler is not None
+                    result = handler.function(
+                        {
+                            "creativeJobId": creative_job_id,
+                            "pollSeconds": 0.01,
+                            "timeoutSeconds": 2.0,
+                        }
+                    )
+
+                self.assertEqual(posted["aspect_ratio"], "9:16")
+                self.assertEqual(result["providerJobId"], "aspect-task")
+                self.assertTrue(Path(result["outputPath"]).is_file())
+                self.assertIn("stories", Path(result["outputPath"]).name)
+
 
 
 if __name__ == "__main__":

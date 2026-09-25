@@ -26,6 +26,41 @@ VIDEO_ENDING_CARD_ROLE = "video ending card"
 VIDEO_ASSET_TYPE = "generated product video"
 VIDEO_ASSET_ROLE = "social video option"
 SOCIAL_JOB_FORMAT = "art_studio_social_image"
+DEFAULT_SOCIAL_IMAGE_PLATFORM = "ig_feed"
+DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO = "1:1"
+# Canonical platform -> aspect for Art Studio / Products social-image generation.
+# Pinterest is generator frame only; Brand Lab owns pin posting (no Pinterest publish).
+SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS: dict[str, str] = {
+    "ig_feed": "1:1",
+    "fb_feed": "1:1",
+    "ig_portrait": "4:5",
+    "fb_portrait": "4:5",
+    "stories": "9:16",
+    "reels": "9:16",
+    "tiktok": "9:16",
+    "x": "16:9",
+    "landscape_link": "16:9",
+    "pinterest": "2:3",
+}
+SOCIAL_IMAGE_PLATFORM_LABELS: dict[str, str] = {
+    "ig_feed": "IG Feed",
+    "fb_feed": "FB Feed",
+    "ig_portrait": "IG Portrait",
+    "fb_portrait": "FB Portrait",
+    "stories": "Stories",
+    "reels": "Reels",
+    "tiktok": "TikTok",
+    "x": "X",
+    "landscape_link": "Landscape link",
+    "pinterest": "Pinterest",
+}
+SOCIAL_IMAGE_ASPECT_FORMAT_BLURBS: dict[str, str] = {
+    "1:1": "1:1 square social image",
+    "4:5": "4:5 portrait social image",
+    "9:16": "9:16 vertical stories/reels social image",
+    "16:9": "16:9 landscape social image",
+    "2:3": "2:3 Pinterest pin social image",
+}
 VIDEO_REQUEST_FORMAT = "art_studio_product_video_request"
 VIDEO_ART_BOARD_JOB_FORMAT = "art_studio_video_art_board"
 VIDEO_JOB_FORMAT = "art_studio_product_video"
@@ -495,21 +530,102 @@ def art_studio_video_requests(session: Session, limit: int = 50) -> list[ArtStud
     return rows
 
 
+
+def normalize_social_image_platform(platform: str | None) -> str:
+    key = (platform or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "instagram_feed": "ig_feed",
+        "instagram": "ig_feed",
+        "facebook_feed": "fb_feed",
+        "facebook": "fb_feed",
+        "instagram_portrait": "ig_portrait",
+        "facebook_portrait": "fb_portrait",
+        "story": "stories",
+        "reel": "reels",
+        "tik_tok": "tiktok",
+        "tiktok_style": "tiktok",
+        "twitter": "x",
+        "twitter_x": "x",
+        "landscape": "landscape_link",
+        "link_preview": "landscape_link",
+        "pin": "pinterest",
+    }
+    return aliases.get(key, key)
+
+
+def social_image_platform_label(platform: str | None) -> str:
+    key = normalize_social_image_platform(platform)
+    if key in SOCIAL_IMAGE_PLATFORM_LABELS:
+        return SOCIAL_IMAGE_PLATFORM_LABELS[key]
+    return (platform or "").strip() or "Social"
+
+
+def social_image_platform_options() -> list[dict[str, str]]:
+    return [
+        {
+            "key": key,
+            "label": f"{SOCIAL_IMAGE_PLATFORM_LABELS[key]} ({ratio})",
+            "aspect_ratio": ratio,
+            "name": SOCIAL_IMAGE_PLATFORM_LABELS[key],
+        }
+        for key, ratio in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS.items()
+    ]
+
+
+def resolve_social_image_frame(
+    platform: str | None = None,
+    aspect_ratio: str | None = None,
+) -> tuple[str, str]:
+    """Return (platform_key, aspect_ratio). Defaults to ig_feed / 1:1 when unspecified."""
+    platform_key = normalize_social_image_platform(platform)
+    ratio = (aspect_ratio or "").strip()
+    if platform_key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS:
+        return platform_key, ratio or SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS[platform_key]
+    if ratio:
+        return platform_key, ratio
+    return DEFAULT_SOCIAL_IMAGE_PLATFORM, DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO
+
+
+def social_image_format_blurb(aspect_ratio: str, platform: str = "") -> str:
+    ratio = (aspect_ratio or DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO).strip() or DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO
+    blurb = SOCIAL_IMAGE_ASPECT_FORMAT_BLURBS.get(ratio, f"{ratio} social image")
+    label = social_image_platform_label(platform) if platform else ""
+    if label and label != "Social":
+        return f"{blurb} ({label})"
+    return blurb
+
+
+def social_image_aspect_ratio_from_job(job: CreativeGenerationJobRecord) -> str:
+    metadata = _json_dict(job.response_metadata_json)
+    ratio = str(metadata.get("aspect_ratio") or "").strip()
+    if ratio:
+        return ratio
+    dims = (job.requested_dimensions or "").strip()
+    if dims:
+        token = dims.split()[0]
+        if ":" in token:
+            return token
+    return DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO
+
+
 def social_image_handoff(
     product: ProductRecord,
     references: list[AssetRecord],
     output_dir: str | Path,
     option_number: int | None = None,
+    aspect_ratio: str = DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO,
+    platform: str = "",
 ) -> str:
     roles = _reference_roles(references)
     reference_lines = "\n".join(f"- {role}: {asset.source_path}" for role, asset in roles) or "- Add approved product references before generation."
     scene_direction = social_image_scene_direction(product)
     scene_variation = social_image_scene_variation(option_number or 1)
     context_note = _product_context_note(product)
+    format_blurb = social_image_format_blurb(aspect_ratio, platform)
     return (
         "Create a Social Worthy product image for MattMadeMe.\n\n"
         f"Product: {product.name}\n"
-        "Format: 1:1 square social image, realistic photographic scene, no text overlay.\n"
+        f"Format: {format_blurb}, realistic photographic scene, no text overlay.\n"
         "Product theme context:\n"
         f"{context_note}\n\n"
         "Scene direction:\n"
@@ -956,14 +1072,29 @@ def enqueue_social_image_generation(
     source_asset_id: int,
     option_number: int = 1,
     reference_asset_ids: list[int] | None = None,
+    platform: str | None = None,
+    aspect_ratio: str | None = None,
 ) -> CreativeGenerationJobRecord:
     refresh_asset_file_state(session)
     product = _product_or_raise(session, product_id)
     source = _source_or_raise(session, source_asset_id, product_id)
     references = _references_or_raise(session, reference_asset_ids or [source_asset_id], product.id)
+    platform_key, ratio = resolve_social_image_frame(platform=platform, aspect_ratio=aspect_ratio)
+    platform_label = social_image_platform_label(platform_key)
     output_dir = f"outputs/graphics/social-worthy/{slugify(product.name)}"
-    prompt = social_image_handoff(product, references, output_dir, option_number=option_number)
-    metadata_match = {"reference_asset_ids": [asset.id for asset in references]}
+    prompt = social_image_handoff(
+        product,
+        references,
+        output_dir,
+        option_number=option_number,
+        aspect_ratio=ratio,
+        platform=platform_key,
+    )
+    metadata_match = {
+        "reference_asset_ids": [asset.id for asset in references],
+        "platform": platform_key,
+        "aspect_ratio": ratio,
+    }
     existing = _queued_job(session, source.id, SOCIAL_JOB_FORMAT, option_number, metadata_match=metadata_match)
     api_ready = magnific_api_configured()
     if existing is not None:
@@ -986,7 +1117,7 @@ def enqueue_social_image_generation(
         provider=provider,
         model_name=model_name,
         prompt=prompt,
-        requested_dimensions="1:1 social image",
+        requested_dimensions=f"{ratio} {platform_label}",
         provider_status="queued",
         response_metadata_json=json.dumps(
             {
@@ -994,6 +1125,9 @@ def enqueue_social_image_generation(
                 "product_id": product.id,
                 "product_name": product.name,
                 "option_number": option_number,
+                "platform": platform_key,
+                "platform_label": platform_label,
+                "aspect_ratio": ratio,
                 "reference_asset_ids": [asset.id for asset in references],
                 "output_dir": output_dir,
                 "asset_type": SOCIAL_IMAGE_ASSET_TYPE,
