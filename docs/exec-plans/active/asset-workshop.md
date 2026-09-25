@@ -4,7 +4,7 @@
 - Status: ready for review
 - Owner: Matthew / Codex
 - Branch: codex/nav-focus
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/15
 - Last updated: 2026-09-25 (nav focus — Coverage/Shadow demoted from primary chrome)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
