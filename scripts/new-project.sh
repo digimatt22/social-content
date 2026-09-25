@@ -126,8 +126,8 @@ else
   echo "New project harness created at $target_abs"
   echo "Next: from that folder, run project intake and update README.md plus docs/PROJECT_CONTEXT.md."
   if [[ -n "$project_name" ]]; then
-    echo "Suggested prompt: Use lifeOS project_harness context for \"$project_name\", then run project intake. If lifeOS does not know it, infer details from this repo, propose project registration for review, and record any CTX key in docs/PROJECT_CONTEXT.md."
+    echo "Suggested prompt: Run project intake for \"$project_name\". Infer details from this repo and update README.md plus docs/PROJECT_CONTEXT.md."
   else
-    echo "Suggested prompt: Use lifeOS project_harness context, then run project intake. If lifeOS does not know it, infer details from this repo, propose project registration for review, and record any CTX key in docs/PROJECT_CONTEXT.md."
+    echo "Suggested prompt: Run project intake. Infer details from this repo and update README.md plus docs/PROJECT_CONTEXT.md."
   fi
 fi

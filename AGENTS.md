@@ -16,12 +16,11 @@ This repository is a lightweight development harness for AI-assisted project wor
 11. [docs/WORK_STATE.md](docs/WORK_STATE.md)
 12. [docs/VALIDATION.md](docs/VALIDATION.md)
 13. [docs/BOOTSTRAP_CHECKLIST.md](docs/BOOTSTRAP_CHECKLIST.md)
-14. [docs/LIFEOS_INTEGRATION.md](docs/LIFEOS_INTEGRATION.md)
-15. [docs/PROJECT_INTAKE_WORKFLOW.md](docs/PROJECT_INTAKE_WORKFLOW.md)
-16. [docs/PROJECT_OVERRIDES.md](docs/PROJECT_OVERRIDES.md)
-17. [docs/INBOX.md](docs/INBOX.md)
-18. [docs/REPO_MAP.md](docs/REPO_MAP.md)
-19. [docs/HARNESS_SYNC.md](docs/HARNESS_SYNC.md)
+14. [docs/PROJECT_INTAKE_WORKFLOW.md](docs/PROJECT_INTAKE_WORKFLOW.md)
+15. [docs/PROJECT_OVERRIDES.md](docs/PROJECT_OVERRIDES.md)
+16. [docs/INBOX.md](docs/INBOX.md)
+17. [docs/REPO_MAP.md](docs/REPO_MAP.md)
+18. [docs/HARNESS_SYNC.md](docs/HARNESS_SYNC.md)
 
 ## Repo Purpose
 - Provide a reusable starter layout for AI agent development projects.
@@ -39,8 +38,6 @@ This repository is a lightweight development harness for AI-assisted project wor
 - When changing behavior, update affected operational docs in the same change.
 - Keep work synchronized with the configured remote unless the repo intentionally has no remote yet.
 - Before starting or resuming work, run `scripts/check-current-state.sh` when available.
-- When lifeOS MCP is available, load `project_harness` context, check whether the project is known, and propose registration for missing projects instead of asking Matthew to manually set them up. Treat lifeOS as private context, review queue, and outcome-level status, not as the project implementation log.
-- If lifeOS context informed business strategy and Matthew later corrects durable positioning, goals, ICP, preferences, or decision criteria, propose a reviewed update with `lifeos.propose_context_update` before closeout.
 
 ## Definition Of Done
 A change is not complete until all of the following are true:
@@ -50,7 +47,6 @@ A change is not complete until all of the following are true:
 - Work state is current in the active execution plan or relevant tracking doc.
 - Validation has been performed to the extent the repo allows.
 - Human-only validation steps are clearly assigned with expected evidence.
-- If lifeOS context informed the work, check whether the turn produced new durable context and either propose a lifeOS update or explicitly state none was found.
 - Changes are ready for review through a pull request, or the reason PR review is not applicable is documented.
 - Open questions or risks are called out explicitly.
 
@@ -77,7 +73,6 @@ Follow the process in [docs/WORKFLOW.md](docs/WORKFLOW.md):
 - Work-state protocol: [docs/WORK_STATE.md](docs/WORK_STATE.md)
 - Validation protocol: [docs/VALIDATION.md](docs/VALIDATION.md)
 - Bootstrap checklist: [docs/BOOTSTRAP_CHECKLIST.md](docs/BOOTSTRAP_CHECKLIST.md)
-- lifeOS global context integration: [docs/LIFEOS_INTEGRATION.md](docs/LIFEOS_INTEGRATION.md)
 - Project intake workflow: [docs/PROJECT_INTAKE_WORKFLOW.md](docs/PROJECT_INTAKE_WORKFLOW.md)
 - Project overrides: [docs/PROJECT_OVERRIDES.md](docs/PROJECT_OVERRIDES.md)
 - Supplemental context inbox: [docs/INBOX.md](docs/INBOX.md)

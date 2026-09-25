@@ -18,9 +18,6 @@ Use this sequence for any change in a repo that starts from this starter pack:
 - Confirm whether the task touches runtime behavior, documentation only, operations, or release process.
 - Check for an active execution plan that already covers the work.
 - For newly copied projects, use `docs/BOOTSTRAP_CHECKLIST.md` to replace starter assumptions.
-- When lifeOS MCP is available, read `docs/LIFEOS_INTEGRATION.md`, call `lifeos.use(project_harness)`, and check whether the project is known with `lifeos.find_project`.
-- Use the smallest useful lifeOS context. Use `lifeos.list_context`, `lifeos.read_context`, or `lifeos.search_context` only when the task needs context beyond the `project_harness` bundle.
-- If lifeOS does not know the project, propose registration before routine work using `lifeos.propose_project_registration` and record the returned `CTX-*` key in `docs/PROJECT_CONTEXT.md`.
 - If project-specific context is missing, run `docs/PROJECT_INTAKE_WORKFLOW.md` before implementation.
 - Check `docs/INBOX.md` and `Inbox/README.md` when the user has provided supplemental context.
 - When pulling GitHub issues into work, use `docs/GITHUB_ISSUE_WORKFLOW.md`; do not treat issue reports as confirmed until triaged.
@@ -54,9 +51,6 @@ Use this sequence for any change in a repo that starts from this starter pack:
 - If code behavior changes, update the matching docs in the same change.
 - Keep reusable guidance in templates and `docs/`, not in chat.
 - Treat inbox items marked `read-only` as reference material, not editable source.
-- Treat lifeOS as global context and status, not as a place for implementation logs.
-- Use `lifeos.propose_context_update` only for stable personal or cross-project context that belongs in lifeOS after review; keep project-specific implementation facts in this repo.
-- If lifeOS context informed strategy and Matthew later clarifies durable positioning, goals, ICP, preferences, or decision criteria, propose that correction back to lifeOS with `lifeos.propose_context_update`.
 - Update the active execution plan as work moves from planned to in progress, blocked, validation, or ready for review.
 - Commit coherent checkpoints once the change is working and validation evidence is available.
 - Push the branch to the remote regularly for durable work state.
@@ -97,10 +91,6 @@ Use this sequence for any change in a repo that starts from this starter pack:
 - Move completed plans from `docs/exec-plans/active/` to `docs/exec-plans/completed/`.
 - Record abandoned or superseded plans with the reason before moving or deleting them.
 - Confirm local and remote branches are in the expected state after merge.
-- Send only standup-worthy lifeOS status updates with `lifeos.remember`; the update should answer "so that what?" and affect Matthew's planning.
-- If lifeOS context informed the work, check whether the turn produced new durable context. Propose a reviewed lifeOS update when it did, or explicitly state that none was found.
-- Do not send raw commits, command outputs, file lists, tiny UI tweaks, or local debugging details to lifeOS unless they changed project direction.
-- Use lifeOS review tools such as `lifeos.list_pending_reviews`, `lifeos.review_digest`, `lifeos.mark_context_update_proposal`, or `lifeos.mark_status_update` only when the task is explicitly about pending review items or Matthew gives an exact approve, deny, include, dismiss, applied, or pending instruction.
 - Use `docs/REPOSITORY_HEALTH.md` before treating a copied harness as ready for routine shared work.
 - Leave no unresolved work state only in chat.
 

@@ -308,5 +308,4 @@ elif [[ "$changed" -eq 0 && "${previous_version:-}" == "${source_version:-}" && 
 else
   echo "Harness install/update complete at $target_abs"
   echo "Next: run project intake if this is a new project, or review the harness sync diff before committing."
-  echo "For new projects, use lifeOS project_harness context, propose registration if missing, and record any CTX review key in docs/PROJECT_CONTEXT.md."
 fi

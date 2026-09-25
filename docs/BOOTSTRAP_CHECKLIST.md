@@ -31,9 +31,7 @@ scripts/new-project.sh --init-git /path/to/new-project
 - [ ] `docs/AUTOMATIONS.md` lists local commands, CI checks, jobs, scheduled tasks, deployments, and manual operations.
 - [ ] `docs/VALIDATION.md` lists the checks required for documentation, behavior, UI, data, and production-facing changes.
 - [ ] `docs/PROJECT_INTAKE_WORKFLOW.md` has been run or explicitly deferred.
-- [ ] lifeOS registration state is recorded in `docs/PROJECT_CONTEXT.md` as `Known`, `Proposed`, `Skipped`, or `Unknown`.
-- [ ] If lifeOS MCP was available and the project was not known, a `lifeos.propose_project_registration` proposal was submitted for review and the returned `CTX-*` key was recorded.
-- [ ] Any planning-relevant `STATUS-*` key from `lifeos.remember` or `lifeos.submit_status_update` is recorded only when follow-up depends on it.
+- lifeOS / LifeOS integration is removed from this project; do not register with lifeOS or record CTX/STATUS keys here. Durable knowledge stays in `docs/`.
 - [ ] `docs/PROJECT_OVERRIDES.md` exists and records local harness deviations or explicitly says none.
 - [ ] `docs/REPO_MAP.md` identifies high-value files, source layout, commands, risky areas, and known gaps.
 - [ ] `docs/INBOX.md` and `Inbox/README.md` exist if supplemental repo-tracked context will be used.

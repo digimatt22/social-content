@@ -83,4 +83,3 @@ Out of scope:
 - Final status: completed.
 - Remote review is unavailable because the repo has no `origin`.
 - Phase 0 may begin.
-- No lifeOS context was available; no durable lifeOS update was identified.

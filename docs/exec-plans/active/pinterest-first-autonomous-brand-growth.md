@@ -860,4 +860,3 @@ These block Phase 1+, not Phase -1 discovery:
   `codex/marketing-os-sheldon-deployment`; live provisioning, migration,
   backup/restore, administrator handoff, route activation, and public Pinterest
   authority remain separately gated.
-- lifeOS context was unavailable and did not inform the plan; no durable lifeOS update was identified.
