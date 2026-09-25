@@ -466,7 +466,11 @@
       setStatus(form, "Saving");
       const response = await fetch(form.dataset.apiUrl, {
         method: "POST",
-        headers: { "Accept": "application/json", "Content-Type": "application/json" },
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken(form),
+        },
         body: JSON.stringify({ tag }),
       });
       if (!response.ok) {
@@ -516,6 +520,10 @@
       });
     });
 
+    function csrfToken(form) {
+      return form.querySelector('input[name="_csrf_token"]')?.value || "";
+    }
+
     function referenceAssetIds(form) {
       return Array.from(form.querySelectorAll("[data-reference-checkbox]:checked")).map((input) => Number.parseInt(input.value, 10)).filter(Number.isFinite);
     }
@@ -563,7 +571,11 @@
       try {
         const response = await fetch(form.dataset.apiUrl, {
           method: "POST",
-          headers: { "Accept": "application/json", "Content-Type": "application/json" },
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken(form),
+          },
           body: JSON.stringify({ asset_ids: referenceAssetIds(form) }),
         });
         const payload = await response.json().catch(() => ({}));
