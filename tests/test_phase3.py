@@ -89,6 +89,7 @@ from marketing_os.services.content_briefs import (
     register_uploaded_image_option,
 )
 from marketing_os.services.art_studio import (
+    serialize_art_studio_job,
     DEFAULT_VIDEO_NEGATIVE_PROMPT,
     approve_video_request_for_generation,
     art_studio_queue,
@@ -926,7 +927,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"reference-toggle", products_page.data)
             self.assertIn(b"Toggle default reference image", products_page.data)
             self.assertIn(b"Edit image details in Gallery", products_page.data)
-            self.assertIn(b"Generate social images", products_page.data)
+            self.assertIn(b"Queue Magnific handoff", products_page.data)
             self.assertIn(b"Uses the default reference images selected above", products_page.data)
             self.assertIn(b"data-product-social-studio", products_page.data)
             self.assertIn(b"data-social-reference-count", products_page.data)
@@ -4652,6 +4653,44 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn("$social-media-art-director", queue[0].image_handoff)
             self.assertIn("video_plan", queue[0].video_handoff)
 
+    def test_art_studio_provider_status_label_is_honest_for_queued_jobs(self) -> None:
+        from marketing_os.services.art_studio import art_studio_provider_status_label
+
+        self.assertEqual(art_studio_provider_status_label("queued"), "waiting on Magnific")
+        self.assertEqual(art_studio_provider_status_label("generated"), "imported")
+        self.assertEqual(art_studio_provider_status_label("canceled"), "canceled")
+
+    def test_enqueue_social_image_review_notes_describe_magnific_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-studio-notes.sqlite"
+            source_path = tmp_path / "source.png"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Notes Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Notes source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                job = enqueue_social_image_generation(session, product.id, source.id)
+                self.assertEqual(job.provider_status, "queued")
+                self.assertIn("not drained by marketing-os-worker", job.review_notes)
+                self.assertIn("attach/import", job.review_notes.lower())
+                payload = serialize_art_studio_job(job)
+                self.assertEqual(payload["provider_status_label"], "waiting on Magnific")
+
     def test_art_studio_generation_jobs_queue_and_attach_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -4694,8 +4733,12 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             page = client.get("/products")
             self.assertEqual(page.status_code, 200)
             self.assertIn(f"Job #{job_id}".encode(), page.data)
-            self.assertIn(b"Social image jobs", page.data)
+            self.assertIn(b"Social image handoffs", page.data)
+            self.assertIn(b"waiting on Magnific", page.data)
+            self.assertIn(b"Done path today", page.data)
+            self.assertIn(b"Attach generated result", page.data)
             self.assertIn(b"Generation request", page.data)
+            self.assertIn(b"Handoff queued", page.data)
 
             manifest_path.write_text(
                 json.dumps(
@@ -5611,8 +5654,8 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            self.assertIn(b"Queued 3 Social Worthy image jobs for Social Duck.", response.data)
-            self.assertIn(b"Social image jobs", response.data)
+            self.assertIn(b"Handoff queued for Magnific: 3 Social Worthy image jobs for Social Duck.", response.data)
+            self.assertIn(b"Social image handoffs", response.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 jobs = list(session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.id)))

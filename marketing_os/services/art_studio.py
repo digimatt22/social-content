@@ -856,7 +856,7 @@ def create_video_request(
         target_format=VIDEO_REQUEST_FORMAT,
         provider="art_studio",
         model_name="queued_video_workflow",
-        prompt="Queued for agent-run video planning. Awaiting video-content-planner, social-media-art-director, and video-editor workflow registration.",
+        prompt="Handoff queued for agent-run video planning. Waiting on video-content-planner, social-media-art-director, and video-editor registration (not a marketing-os-worker job).",
         requested_dimensions=f"{aspect_ratio} {duration_seconds}s {resolution}",
         provider_status="queued",
         response_metadata_json=json.dumps(
@@ -885,7 +885,7 @@ def create_video_request(
             indent=2,
         ),
         review_state="needs_review",
-        review_notes="Video request queued. Agent automation should register the planner brief before any scene-card generation starts.",
+        review_notes="Video request handoff queued — waiting on Magnific / agent (not drained by marketing-os-worker yet). Register the planner brief before scene-card generation starts.",
     )
     session.add(request_job)
     session.flush()
@@ -987,7 +987,7 @@ def enqueue_social_image_generation(
             indent=2,
         ),
         review_state="needs_review",
-        review_notes="Queued by Art Studio. Generate with Magnific MCP and attach the completed file to this pending record.",
+        review_notes="Handoff queued — waiting on Magnific (not drained by marketing-os-worker yet). Generate in Magnific, then attach/import the file to complete.",
     )
     session.add(job)
     session.flush()
@@ -1072,7 +1072,7 @@ def enqueue_video_art_board_generation(
             indent=2,
         ),
         review_state="needs_review",
-        review_notes="Queued by Art Studio. Generate this scene card first; use it as the start frame for the video style test.",
+        review_notes="Handoff queued — waiting on Magnific for this scene card (not drained by marketing-os-worker yet). Generate externally, then import/attach to complete; use as the start frame for the video style test.",
     )
     session.add(job)
     session.flush()
@@ -1201,7 +1201,7 @@ def enqueue_video_generation(
             indent=2,
         ),
         review_state="needs_review",
-        review_notes="Queued by Art Studio. Call Magnific video_plan before video_generate, use opening/ending cards as first/last frames, and attach the completed file to this pending record.",
+        review_notes="Handoff queued — waiting on Magnific video generation (not drained by marketing-os-worker yet). Use opening/ending cards as first/last frames, then attach/import the file to complete.",
     )
     session.add(job)
     session.flush()
@@ -1673,6 +1673,25 @@ def reusable_art_studio_asset_query():
     )
 
 
+def art_studio_provider_status_label(provider_status: str | None) -> str:
+    """Operator-facing label for Art Studio provider_status values.
+
+    Queued social/video jobs are Magnific handoffs today; marketing-os-worker
+    does not drain them yet (REST API drain is the intended next step).
+    """
+    status = (provider_status or "").strip()
+    labels = {
+        "queued": "waiting on Magnific",
+        "generated": "imported",
+        "canceled": "canceled",
+        "planned": "planner brief ready",
+        "video_queued": "video handoff queued",
+    }
+    if status in labels:
+        return labels[status]
+    return status.replace("_", " ") if status else "unknown"
+
+
 def serialize_art_studio_job(job: CreativeGenerationJobRecord) -> dict[str, object]:
     return {
         "id": job.id,
@@ -1684,6 +1703,7 @@ def serialize_art_studio_job(job: CreativeGenerationJobRecord) -> dict[str, obje
         "prompt": job.prompt,
         "requested_dimensions": job.requested_dimensions,
         "provider_status": job.provider_status,
+        "provider_status_label": art_studio_provider_status_label(job.provider_status),
         "provider_job_id": job.provider_job_id,
         "output_url": job.output_url,
         "output_path": job.output_path,
@@ -1964,14 +1984,14 @@ def _video_request_status(
     if video_job is not None and video_job.candidate_asset_id is not None:
         return "complete", "Complete"
     if video_job is not None:
-        return "video_queued", "Video queued"
+        return "video_queued", "Video handoff queued"
     metadata = _json_dict(request_job.response_metadata_json)
     ending_required = bool(metadata.get("ending_card_required"))
     if _job_has_candidate(opening_job) and (not ending_required or _job_has_candidate(ending_job)):
         return "ready_for_approval", "Ready for video approval"
     if opening_job is not None or ending_job is not None:
-        return "cards_in_progress", "Scene card in progress"
-    return "queued", "Queued"
+        return "cards_in_progress", "Waiting on Magnific scene card"
+    return "queued", "Handoff queued"
 
 
 def _job_has_candidate(job: CreativeGenerationJobRecord | None) -> bool:

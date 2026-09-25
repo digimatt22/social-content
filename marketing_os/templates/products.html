@@ -172,13 +172,13 @@
       <section class="product-social-studio" aria-labelledby="social-images-{{ product.id }}" data-product-social-studio>
         <div>
           <div class="eyebrow">Social Images</div>
-          <h4 id="social-images-{{ product.id }}">Generate from tagged references</h4>
-          <p class="subtle">Uses the default reference images selected above. Generated files stay in review until product accuracy is approved.</p>
+          <h4 id="social-images-{{ product.id }}">Queue Magnific handoffs from tagged references</h4>
+          <p class="subtle">Queue creates a pending Magnific handoff — marketing-os-worker does not drain these jobs yet. Generate in Magnific, then attach/import the file below (Art Studio import) to complete. Files stay in review until product accuracy is approved.</p>
           <div class="meta">
             <span class="pill {{ 'complete' if social_item and social_item.default_reference_count else 'blocked' }}" data-social-reference-count>{{ social_item.default_reference_count if social_item else 0 }} default refs</span>
             {% if social_item %}
               <span class="pill">{{ social_item.approved_generated_social_count }}/{{ social_item.generated_social_count }} approved generated</span>
-              {% if social_item.social_jobs %}<span class="pill ready">{{ social_item.social_jobs|length }} queued/generated job{{ '' if social_item.social_jobs|length == 1 else 's' }}</span>{% endif %}
+              {% if social_item.social_jobs %}<span class="pill ready">{{ social_item.social_jobs|length }} Magnific handoff{{ '' if social_item.social_jobs|length == 1 else 's' }}</span>{% endif %}
             {% endif %}
           </div>
         </div>
@@ -188,20 +188,21 @@
             <input name="option_number" type="number" min="1" max="8" value="3">
           </label>
           <button type="submit" data-social-generate-button {{ 'disabled' if not social_item or not social_item.default_reference_count else '' }}>
-            Generate social images
+            Queue Magnific handoff
           </button>
         </form>
       </section>
 
       {% if social_item and social_item.social_jobs %}
-        <details class="generation-details product-social-jobs">
-          <summary>Social image jobs</summary>
+        <details class="generation-details product-social-jobs" open>
+          <summary>Social image handoffs</summary>
+          <p class="subtle">Done path today: 1) queue pending handoff → 2) generate in Magnific → 3) attach/import the file here to complete.</p>
           <div class="product-social-job-list">
             {% for job in social_item.social_jobs %}
               <div class="product-social-job">
                 <div class="meta">
                   <span class="pill">Job #{{ job.id }}</span>
-                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ job.provider_status }}</span>
+                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(job.provider_status) }}</span>
                   <span class="pill">{{ job.model_name }}</span>
                 </div>
                 {% if job.candidate_asset %}
@@ -211,10 +212,34 @@
                     <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Review in Gallery</a>
                   </div>
                 {% else %}
+                  {% if job.review_notes %}<p class="subtle">{{ job.review_notes }}</p>{% endif %}
                   <details class="generation-details">
                     <summary>Generation request</summary>
                     <textarea readonly>{{ job.prompt }}</textarea>
                   </details>
+                  <form method="post" action="{{ url_for('art_studio_import_social_image') }}">
+                    <input type="hidden" name="job_id" value="{{ job.id }}">
+                    <div class="brief-field-grid two-up">
+                      <label>Generated file path
+                        <input name="output_path" placeholder="{{ social_item.output_dir }}/option-1.png" required>
+                      </label>
+                      <label>Title
+                        <input name="title" value="{{ product.name }} social image">
+                      </label>
+                    </div>
+                    <div class="brief-field-grid two-up">
+                      <label>Magnific job/creation
+                        <input name="provider_job_id" placeholder="Optional">
+                      </label>
+                      <label>Output URL
+                        <input name="output_url" placeholder="Optional">
+                      </label>
+                    </div>
+                    <label>Review notes
+                      <textarea name="notes" placeholder="What to check before approval"></textarea>
+                    </label>
+                    <button type="submit">Attach generated result</button>
+                  </form>
                 {% endif %}
               </div>
             {% endfor %}
