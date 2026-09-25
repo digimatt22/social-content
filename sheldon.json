@@ -47,7 +47,12 @@
           "MARKETING_OS_ENV",
           "MARKETING_OS_TRUSTED_HOSTS",
           "MARKETING_OS_PROXY_HOPS",
-          "MARKETING_OS_BOOTSTRAP_DATA"
+          "MARKETING_OS_BOOTSTRAP_DATA",
+          "ETSY_KEYSTRING",
+          "ETSY_SHARED_SECRET",
+          "ETSY_SHOP_ID",
+          "ETSY_SHOP_NAME",
+          "MARKETING_AGENT_API_KEY"
         ],
         "build": []
       }
@@ -78,7 +83,12 @@
       "secrets": {
         "runtime": [
           "MARKETING_OS_DB_URL",
-          "MARKETING_OS_ENV"
+          "MARKETING_OS_ENV",
+          "ETSY_KEYSTRING",
+          "ETSY_SHARED_SECRET",
+          "ETSY_SHOP_ID",
+          "ETSY_SHOP_NAME",
+          "MARKETING_AGENT_API_KEY"
         ],
         "build": []
       }
@@ -162,7 +172,12 @@
       "MARKETING_OS_ENV",
       "MARKETING_OS_TRUSTED_HOSTS",
       "MARKETING_OS_PROXY_HOPS",
-      "MARKETING_OS_BOOTSTRAP_DATA"
+      "MARKETING_OS_BOOTSTRAP_DATA",
+      "ETSY_KEYSTRING",
+      "ETSY_SHARED_SECRET",
+      "ETSY_SHOP_ID",
+      "ETSY_SHOP_NAME",
+      "MARKETING_AGENT_API_KEY"
     ],
     "build": []
   },
