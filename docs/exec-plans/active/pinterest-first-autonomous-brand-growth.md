@@ -5,7 +5,7 @@
 - Status: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and the hosted Marketing OS release contract is under exact-release validation
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
-- PR: Not applicable to this planning pass because this repository has no `origin` remote configured. Configure a remote before implementation and use PR review.
+- PR: Planning artifact on `main`; implementation work uses `codex/` branches and PRs into `main` on `https://github.com/digimatt22/social-content.git`.
 - Last updated: 2026-07-24
 - Planning framework: Digi-CTO plugin `0.3.0`
 
@@ -479,7 +479,7 @@ Validation:
 Implementation:
 
 - Update `docs/PROJECT_CONTEXT.md`, `docs/ARCHITECTURE.md`, `docs/AUTOMATIONS.md`, `docs/VALIDATION.md`, and `docs/REPO_MAP.md` to match the actual Marketing OS.
-- Configure an `origin` remote and create implementation branches/PRs.
+- Use configured `origin` `https://github.com/digimatt22/social-content.git`; create implementation branches/PRs into `main`.
 - Add reviewed PostgreSQL configuration and schema migrations while preserving a local SQLite development/fixture path.
 - Add the idempotent SQLite → PostgreSQL dry-run/migrate/verify/rollback workflow and record the production authority cutover rule.
 - Add durable job, worker, scheduler, lease, heartbeat, retry, quarantine, dead-letter, replay, and graceful-shutdown foundations.
@@ -814,7 +814,7 @@ These block Phase 1+, not Phase -1 discovery:
 
 ## Planning-Pass Validation Log
 
-- `scripts/check-current-state.sh` — reported no `origin` remote; 2026-07-24.
+- `scripts/check-current-state.sh` — reported no `origin` remote; 2026-07-24. (Superseded: `origin` is now `https://github.com/digimatt22/social-content.git`; default PR base `main`.)
 - `python -m unittest tests.test_skills` — 2 script-level tests passed; this is not full seven-skill/provider validation; 2026-07-24.
 - `codex plugin list` — Digi-CTO `0.3.0` installed/enabled; repository skills are locally discoverable; 2026-07-24.
 - Read-only review of Marketing OS features, service boundaries, jobs, database records, automation guides, and current reviews; 2026-07-24.
