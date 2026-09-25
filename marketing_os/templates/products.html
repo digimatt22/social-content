@@ -172,8 +172,14 @@
       <section class="product-social-studio" aria-labelledby="social-images-{{ product.id }}" data-product-social-studio>
         <div>
           <div class="eyebrow">Social Images</div>
-          <h4 id="social-images-{{ product.id }}">Queue Magnific handoffs from tagged references</h4>
-          <p class="subtle">Queue creates a pending Magnific handoff — marketing-os-worker does not drain these jobs yet. Generate in Magnific, then attach/import the file below (Art Studio import) to complete. Files stay in review until product accuracy is approved.</p>
+          <h4 id="social-images-{{ product.id }}">{% if magnific_api_configured %}Queue Magnific API generation from tagged references{% else %}Queue Magnific handoffs from tagged references{% endif %}</h4>
+          <p class="subtle">
+            {% if magnific_api_configured %}
+              When MAGNIFIC_API_KEY is configured, marketing-os-worker drains social-image jobs via Magnific REST. Attach/import below remains available as a fallback. Files stay in review until product accuracy is approved.
+            {% else %}
+              Queue creates a pending Magnific handoff — marketing-os-worker does not drain these jobs until MAGNIFIC_API_KEY is configured. Generate in Magnific, then attach/import the file below (Art Studio import) to complete. Files stay in review until product accuracy is approved.
+            {% endif %}
+          </p>
           <div class="meta">
             <span class="pill {{ 'complete' if social_item and social_item.default_reference_count else 'blocked' }}" data-social-reference-count>{{ social_item.default_reference_count if social_item else 0 }} default refs</span>
             {% if social_item %}
@@ -188,15 +194,21 @@
             <input name="option_number" type="number" min="1" max="8" value="3">
           </label>
           <button type="submit" data-social-generate-button {{ 'disabled' if not social_item or not social_item.default_reference_count else '' }}>
-            Queue Magnific handoff
+            {% if magnific_api_configured %}Queue Magnific API job{% else %}Queue Magnific handoff{% endif %}
           </button>
         </form>
       </section>
 
       {% if social_item and social_item.social_jobs %}
         <details class="generation-details product-social-jobs" open>
-          <summary>Social image handoffs</summary>
-          <p class="subtle">Done path today: 1) queue pending handoff → 2) generate in Magnific → 3) attach/import the file here to complete.</p>
+          <summary>Social image {% if magnific_api_configured %}jobs{% else %}handoffs{% endif %}</summary>
+          <p class="subtle">
+            {% if magnific_api_configured %}
+              Done path: 1) queue → 2) worker generates via Magnific API → 3) review candidate (attach/import still works as fallback).
+            {% else %}
+              Done path today: 1) queue pending handoff → 2) generate in Magnific → 3) attach/import the file here to complete.
+            {% endif %}
+          </p>
           <div class="product-social-job-list">
             {% for job in social_item.social_jobs %}
               <div class="product-social-job">

@@ -88,6 +88,8 @@ semantics, qualification, and catch-up rules are in
 Shadow selection, provenance, QA, review, leases, and authority boundaries are
 in `docs/architecture/pinterest-shadow-production-v1.md`.
 
+Art Studio social-image drain registers `art_studio.social_image.generate` when `MAGNIFIC_API_KEY` is configured. The handler claims queued `CreativeGenerationJobRecord` rows (`target_format=art_studio_social_image`, provider `magnific_mcp` or `magnific_api`), calls Magnific REST Nano Banana Pro Flash, downloads the output, and registers a needs-review candidate. Empty API key skips/no-ops; video jobs are not drained. `MAGNIFIC_WEBHOOK_SECRET` is reserved for later webhook verification.
+
 Phase 4 registers `pinterest.publish` and `pinterest.reconcile` for disabled
 contract/recovery testing. Production refuses the fixture provider and no live
 adapter is installed. An ambiguous response commits `publish_unknown` before

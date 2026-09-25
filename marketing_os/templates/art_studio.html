@@ -13,7 +13,13 @@
     <div class="brief-title">
       <div class="eyebrow">Magnific-ready bench</div>
       <h3>Make product-safe video assets before a post needs them.</h3>
-      <p>Art Studio queues Magnific handoffs — marketing-os-worker does not drain them yet. Generate externally, then import/attach here. Manual Magnific import still works, and every video asset stays in review until product accuracy is approved.</p>
+      <p>
+        {% if magnific_api_configured %}
+          Social images on Products drain via marketing-os-worker Magnific API when queued. Video Studio still uses Magnific handoffs — generate externally, then import/attach here. Manual Magnific import remains available, and every video asset stays in review until product accuracy is approved.
+        {% else %}
+          Art Studio queues Magnific handoffs — marketing-os-worker does not drain video (or social images until MAGNIFIC_API_KEY is set). Generate externally, then import/attach here. Manual Magnific import still works, and every video asset stays in review until product accuracy is approved.
+        {% endif %}
+      </p>
     </div>
     <div class="brief-stats">
       <div class="stat-tile"><strong>{{ stats.products }}</strong><span>video-ready products</span></div>
