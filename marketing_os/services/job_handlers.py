@@ -47,6 +47,7 @@ def default_registry() -> HandlerRegistry:
         shadow_digest_handler,
         shadow_generate_handler,
     )
+    from ..jobs.art_studio_social_image import art_studio_social_image_generate_handler
     from ..jobs.pinterest_control import (
         pinterest_publish_handler,
         pinterest_reconcile_handler,
@@ -62,4 +63,5 @@ def default_registry() -> HandlerRegistry:
     registry.register("shadow.digest", 1, shadow_digest_handler)
     registry.register("pinterest.publish", 1, pinterest_publish_handler)
     registry.register("pinterest.reconcile", 1, pinterest_reconcile_handler)
+    registry.register("art_studio.social_image.generate", 1, art_studio_social_image_generate_handler)
     return registry

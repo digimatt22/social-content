@@ -52,7 +52,8 @@
           "ETSY_SHARED_SECRET",
           "ETSY_SHOP_ID",
           "ETSY_SHOP_NAME",
-          "MARKETING_AGENT_API_KEY"
+          "MARKETING_AGENT_API_KEY",
+          "MAGNIFIC_API_KEY"
         ],
         "build": []
       }
@@ -88,7 +89,9 @@
           "ETSY_SHARED_SECRET",
           "ETSY_SHOP_ID",
           "ETSY_SHOP_NAME",
-          "MARKETING_AGENT_API_KEY"
+          "MARKETING_AGENT_API_KEY",
+          "MAGNIFIC_API_KEY",
+          "MAGNIFIC_WEBHOOK_SECRET"
         ],
         "build": []
       }
@@ -177,7 +180,9 @@
       "ETSY_SHARED_SECRET",
       "ETSY_SHOP_ID",
       "ETSY_SHOP_NAME",
-      "MARKETING_AGENT_API_KEY"
+      "MARKETING_AGENT_API_KEY",
+      "MAGNIFIC_API_KEY",
+      "MAGNIFIC_WEBHOOK_SECRET"
     ],
     "build": []
   },

@@ -45,6 +45,7 @@ from .phase3 import (
 )
 from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
 from .services.maintenance import purge_rejected_and_canceled_items
+from .magnific_api import magnific_api_configured
 from .services.art_studio import (
     approve_video_request_for_generation,
     art_studio_provider_status_label,
@@ -188,6 +189,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "statuses": TASK_STATUSES,
             "roles": ROLE_OPTIONS,
             "art_studio_provider_status_label": art_studio_provider_status_label,
+            "magnific_api_configured": magnific_api_configured(),
         }
 
     @app.get("/health")
@@ -1072,7 +1074,17 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             option_number = int(request.form.get("option_number", "1") or 1)
             with session_scope(factory) as session:
                 job = enqueue_social_image_generation(session, product_id, source_asset_id, option_number=option_number)
-                flash(f"Handoff queued for Magnific: Social Worthy image job #{job.id}. Generate in Magnific, then attach/import the file to complete.")
+                flash(
+                    (
+                        f"Queued Social Worthy image job #{job.id} for marketing-os-worker Magnific API drain. "
+                        "Attach/import remains available as a fallback."
+                    )
+                    if magnific_api_configured()
+                    else (
+                        f"Handoff queued for Magnific: Social Worthy image job #{job.id}. "
+                        "Generate in Magnific, then attach/import the file to complete."
+                    )
+                )
         except ValueError as exc:
             flash(str(exc))
         return redirect(url_for("art_studio", tab="social-images"))
@@ -1347,7 +1359,16 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     )
                     for option_number in range(1, option_count + 1)
                 ]
-                flash(f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name}. Generate in Magnific, then attach/import each file to complete.")
+                if magnific_api_configured():
+                    flash(
+                        f"Queued {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name} "
+                        "for marketing-os-worker Magnific API drain. Attach/import remains available as a fallback."
+                    )
+                else:
+                    flash(
+                        f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} "
+                        f"for {product.name}. Generate in Magnific, then attach/import each file to complete."
+                    )
         except ValueError as exc:
             flash(str(exc))
         return redirect(return_to)

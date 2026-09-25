@@ -9,8 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db_models import AssetRecord, CreativeGenerationJobRecord, ProductRecord, ProductSalesRecord
+from ..magnific_api import magnific_api_configured
 from ..phase3 import json_list
 from ..phase4 import refresh_asset_file_state
+from .durable_jobs import enqueue_job
 
 
 SOURCE_ASSET_TYPES = {"source photo", "Etsy product photo", "edited photo", "external listing image"}
@@ -963,13 +965,26 @@ def enqueue_social_image_generation(
     prompt = social_image_handoff(product, references, output_dir, option_number=option_number)
     metadata_match = {"reference_asset_ids": [asset.id for asset in references]}
     existing = _queued_job(session, source.id, SOCIAL_JOB_FORMAT, option_number, metadata_match=metadata_match)
+    api_ready = magnific_api_configured()
     if existing is not None:
+        _ensure_social_image_automation_job(session, existing, api_ready=api_ready)
         return existing
+    provider = "magnific_api" if api_ready else "magnific_mcp"
+    model_name = "Nano Banana Pro Flash" if api_ready else "Google Nano Banana 2"
+    review_notes = (
+        "Queued for marketing-os-worker Magnific API drain. "
+        "Attach/import remains available as a fallback."
+        if api_ready
+        else (
+            "Handoff queued — waiting on Magnific (not drained by marketing-os-worker yet). "
+            "Generate in Magnific, then attach/import the file to complete."
+        )
+    )
     job = CreativeGenerationJobRecord(
         source_asset_id=source.id,
         target_format=SOCIAL_JOB_FORMAT,
-        provider="magnific_mcp",
-        model_name="Google Nano Banana 2",
+        provider=provider,
+        model_name=model_name,
         prompt=prompt,
         requested_dimensions="1:1 social image",
         provider_status="queued",
@@ -983,15 +998,39 @@ def enqueue_social_image_generation(
                 "output_dir": output_dir,
                 "asset_type": SOCIAL_IMAGE_ASSET_TYPE,
                 "asset_role": SOCIAL_IMAGE_ROLE,
+                "magnific_api_drain": api_ready,
             },
             indent=2,
         ),
         review_state="needs_review",
-        review_notes="Handoff queued — waiting on Magnific (not drained by marketing-os-worker yet). Generate in Magnific, then attach/import the file to complete.",
+        review_notes=review_notes,
     )
     session.add(job)
     session.flush()
+    _ensure_social_image_automation_job(session, job, api_ready=api_ready)
     return job
+
+
+def _ensure_social_image_automation_job(
+    session: Session,
+    job: CreativeGenerationJobRecord,
+    *,
+    api_ready: bool,
+) -> None:
+    """Enqueue durable drain job when MAGNIFIC_API_KEY is configured; no-op otherwise."""
+    if not api_ready:
+        return
+    if job.provider_status not in {"queued", "generating"}:
+        return
+    enqueue_job(
+        session,
+        job_type="art_studio.social_image.generate",
+        payload={"creativeJobId": job.id},
+        idempotency_key=f"art_studio.social_image.generate:{job.id}",
+        correlation_id=f"art_studio.social_image:{job.id}",
+        max_attempts=3,
+        priority=80,
+    )
 
 
 def enqueue_video_art_board_generation(
@@ -1676,12 +1715,13 @@ def reusable_art_studio_asset_query():
 def art_studio_provider_status_label(provider_status: str | None) -> str:
     """Operator-facing label for Art Studio provider_status values.
 
-    Queued social/video jobs are Magnific handoffs today; marketing-os-worker
-    does not drain them yet (REST API drain is the intended next step).
+    Social-image jobs drain via Magnific REST when MAGNIFIC_API_KEY is set;
+    otherwise they remain Magnific handoffs (attach/import). Video stays handoff-only.
     """
     status = (provider_status or "").strip()
     labels = {
         "queued": "waiting on Magnific",
+        "generating": "generating via Magnific API",
         "generated": "imported",
         "canceled": "canceled",
         "planned": "planner brief ready",
