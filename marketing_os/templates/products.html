@@ -190,6 +190,17 @@
         </div>
         <form method="post" action="{{ url_for('product_queue_social_images', product_id=product.id) }}" class="product-social-action">
           <input type="hidden" name="return_to" value="{{ url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id) }}">
+          <fieldset class="product-social-platforms">
+            <legend>Platforms</legend>
+            <div class="platform-chip-row">
+              {% for option in social_image_platform_options %}
+                <label class="platform-chip">
+                  <input type="checkbox" name="platform" value="{{ option.key }}" {{ 'checked' if option.key == default_social_image_platform else '' }}>
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
           <label>Options
             <input name="option_number" type="number" min="1" max="8" value="3">
           </label>
@@ -215,6 +226,7 @@
                 <div class="meta">
                   <span class="pill">Job #{{ job.id }}</span>
                   <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(job.provider_status) }}</span>
+                  <span class="pill">{{ job.requested_dimensions or '1:1 IG Feed' }}</span>
                   <span class="pill">{{ job.model_name }}</span>
                 </div>
                 {% if job.candidate_asset %}

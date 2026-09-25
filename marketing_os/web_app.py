@@ -54,6 +54,10 @@ from .services.art_studio import (
     cancel_video_request,
     create_video_request,
     enqueue_social_image_generation,
+    social_image_platform_options,
+    DEFAULT_SOCIAL_IMAGE_PLATFORM,
+    normalize_social_image_platform,
+    SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS,
     enqueue_video_art_board_generation,
     enqueue_video_generation,
     enqueue_video_storyboard_generation,
@@ -190,6 +194,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "roles": ROLE_OPTIONS,
             "art_studio_provider_status_label": art_studio_provider_status_label,
             "magnific_api_configured": magnific_api_configured(),
+            "social_image_platform_options": social_image_platform_options(),
+            "default_social_image_platform": DEFAULT_SOCIAL_IMAGE_PLATFORM,
         }
 
     @app.get("/health")
@@ -1072,17 +1078,38 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             product_id = int(request.form.get("product_id", ""))
             source_asset_id = int(request.form.get("source_asset_id", ""))
             option_number = int(request.form.get("option_number", "1") or 1)
+            platforms = [
+                normalize_social_image_platform(value)
+                for value in request.form.getlist("platform")
+                if str(value).strip()
+            ]
+            platforms = [key for key in platforms if key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS]
+            if not platforms:
+                platforms = [DEFAULT_SOCIAL_IMAGE_PLATFORM]
             with session_scope(factory) as session:
-                job = enqueue_social_image_generation(session, product_id, source_asset_id, option_number=option_number)
+                jobs = [
+                    enqueue_social_image_generation(
+                        session,
+                        product_id,
+                        source_asset_id,
+                        option_number=option_number,
+                        platform=platform,
+                    )
+                    for platform in platforms
+                ]
+                job = jobs[0]
+                labels = ", ".join(platforms)
                 flash(
                     (
-                        f"Queued Social Worthy image job #{job.id} for marketing-os-worker Magnific API drain. "
+                        f"Queued {len(jobs)} Social Worthy image job{'s' if len(jobs) != 1 else ''} "
+                        f"(#{', #'.join(str(j.id) for j in jobs)}; {labels}) for marketing-os-worker Magnific API drain. "
                         "Attach/import remains available as a fallback."
                     )
                     if magnific_api_configured()
                     else (
-                        f"Handoff queued for Magnific: Social Worthy image job #{job.id}. "
-                        "Generate in Magnific, then attach/import the file to complete."
+                        f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'s' if len(jobs) != 1 else ''} "
+                        f"(#{', #'.join(str(j.id) for j in jobs)}; {labels}). "
+                        "Generate in Magnific, then attach/import each file to complete."
                     )
                 )
         except ValueError as exc:
@@ -1349,6 +1376,14 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     return redirect(return_to)
                 reference_ids = [reference.id for reference in references[:4]]
                 primary_reference_id = reference_ids[0]
+                platforms = [
+                    normalize_social_image_platform(value)
+                    for value in request.form.getlist("platform")
+                    if str(value).strip()
+                ]
+                platforms = [key for key in platforms if key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS]
+                if not platforms:
+                    platforms = [DEFAULT_SOCIAL_IMAGE_PLATFORM]
                 jobs = [
                     enqueue_social_image_generation(
                         session,
@@ -1356,7 +1391,9 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                         primary_reference_id,
                         option_number=option_number,
                         reference_asset_ids=reference_ids,
+                        platform=platform,
                     )
+                    for platform in platforms
                     for option_number in range(1, option_count + 1)
                 ]
                 if magnific_api_configured():
