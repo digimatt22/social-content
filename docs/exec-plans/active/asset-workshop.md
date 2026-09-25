@@ -4,7 +4,7 @@
 - Status: in progress
 - Owner: Matthew / Codex
 - Branch: codex/local-refs-magnific
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/14
 - Last updated: 2026-09-25 (local refs → Magnific-reachable)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
