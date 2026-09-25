@@ -622,7 +622,15 @@ class PinterestShadowTests(unittest.TestCase):
         registry = default_registry()
         self.assertIsNotNone(registry.resolve("shadow.generate", 1))
         self.assertIsNotNone(registry.resolve("shadow.digest", 1))
-        emitted = emit_due_jobs(self.factory, datetime(2026, 7, 27, 10, 15, 0))
+        with patch.dict(
+            os.environ,
+            {
+                "MARKETING_AGENT_READ_API_KEY": "test-read-key",
+                "MARKETING_AGENT_MEASUREMENT_API_KEY": "test-measurement-key",
+            },
+            clear=False,
+        ):
+            emitted = emit_due_jobs(self.factory, datetime(2026, 7, 27, 10, 15, 0))
         self.assertGreaterEqual(emitted, 6)
         with self.factory() as session:
             types = set(session.scalars(select(AutomationJobRecord.job_type)))

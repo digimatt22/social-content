@@ -48,8 +48,9 @@ The durable scheduler process evaluates on a configurable polling interval.
 `system.noop` remains an hourly lease proof. Phase 2 adds:
 
 - `catalog.reconcile` and `editorial.reconcile` once per UTC date, first pass at
-  or after 02:10;
-- `measurement.ingest` every 15-minute UTC slot;
+  or after 02:10, skipped when `WebsiteConfig.api_key` is unset;
+- `measurement.ingest` every 15-minute UTC slot, skipped when
+  `WebsiteConfig.measurement_api_key` is unset;
 - `coverage.materialize` as a change/outcome-triggered outbox job.
 
 Phase 3 adds:
