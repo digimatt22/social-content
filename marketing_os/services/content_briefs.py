@@ -1243,7 +1243,13 @@ def _best_task_asset(session: Session, product: ProductRecord | None) -> AssetRe
         select(AssetRecord)
         .where(AssetRecord.product_id == product.id)
         .where(AssetRecord.review_state.in_(["approved", "complete", "needs review", "unreviewed"]))
-        .order_by(AssetRecord.file_exists.desc(), AssetRecord.review_state, AssetRecord.id)
+        .order_by(
+            (AssetRecord.review_state == "approved").desc(),
+            (AssetRecord.asset_role == "social worthy image").desc(),
+            AssetRecord.file_exists.desc(),
+            AssetRecord.review_state,
+            AssetRecord.id,
+        )
     )
 
 

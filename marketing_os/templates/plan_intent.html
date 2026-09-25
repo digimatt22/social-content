@@ -685,6 +685,7 @@
       const updatedCard = doc.getElementById(card.id);
       if (!updatedCard) throw new Error("Updated planning card was not found.");
       card.replaceWith(updatedCard);
+      if (typeof refreshIcons === "function") refreshIcons();
     } catch (error) {
       console.error(error);
       form.submit();

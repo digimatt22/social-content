@@ -62,8 +62,8 @@ Avoid one-note palette drift. New screens should not become all teal, all cream,
 ## Navigation
 
 - The sidebar is compact and persistent.
-- Brand lockup stays at the top with a small `M` mark and product name.
-- The former Growth Assistant promo card was removed to reclaim vertical space.
+- Brand lockup stays at the top with the MattMadeMe logo and the current product name.
+- The former sidebar promo card was removed to reclaim vertical space.
 - Active navigation uses a quiet translucent background and gold dot.
 - More tools stay collapsed unless the active page is inside that group.
 

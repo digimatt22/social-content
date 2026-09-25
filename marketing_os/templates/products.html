@@ -70,6 +70,7 @@
     {% set reviews = reviews_by_product.get(product.id, []) %}
     {% set review_count = review_counts_by_product.get(product.id, 0) %}
     {% set product_tags = json_list(product.use_cases_json) %}
+    {% set social_item = social_queue_by_product.get(product.id) %}
     <article class="panel" id="product-{{ product.id }}">
       <div class="planned-header">
         <div>
@@ -128,11 +129,20 @@
                   <label class="reference-toggle" title="{{ 'Hidden images cannot be selected as references' if asset.hidden_from_generation else 'Toggle default reference image' }}">
                     <input type="checkbox" name="asset_ids" value="{{ asset.id }}" data-reference-checkbox {{ 'checked' if asset.default_reference else '' }} {{ 'disabled' if asset.hidden_from_generation else '' }}>
                     <span class="reference-toggle-icon" aria-hidden="true">
-                      <i class="reference-icon-off" data-lucide="circle" aria-hidden="true"></i>
-                      <i class="reference-icon-on" data-lucide="check" aria-hidden="true"></i>
+                      <i class="reference-icon-off" data-lucide="image" aria-hidden="true"></i>
+                      <i class="reference-icon-on" data-lucide="badge-check" aria-hidden="true"></i>
                     </span>
                     <span class="sr-only">{{ 'Hidden image' if asset.hidden_from_generation else 'Toggle default reference image' }}</span>
                   </label>
+                  <a
+                    class="button secondary icon-button"
+                    href="{{ url_for('assets', open_asset=asset.id, show_hidden=1 if asset.hidden_from_generation else none, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id), _anchor='asset-' ~ asset.id) }}"
+                    aria-label="Edit image details in Gallery"
+                    title="Edit image details in Gallery"
+                  >
+                      <i data-lucide="pencil" aria-hidden="true"></i>
+                      <span class="sr-only">Edit image details in Gallery</span>
+                  </a>
                   <button
                     class="{{ 'secondary' if asset.hidden_from_generation else 'warn' }} icon-button"
                     type="submit"
@@ -157,6 +167,59 @@
         </form>
       {% else %}
         <div class="empty-state">No images are linked to this product yet. Sync Etsy or upload a source photo before asking for image work.</div>
+      {% endif %}
+
+      <section class="product-social-studio" aria-labelledby="social-images-{{ product.id }}" data-product-social-studio>
+        <div>
+          <div class="eyebrow">Social Images</div>
+          <h4 id="social-images-{{ product.id }}">Generate from tagged references</h4>
+          <p class="subtle">Uses the default reference images selected above. Generated files stay in review until product accuracy is approved.</p>
+          <div class="meta">
+            <span class="pill {{ 'complete' if social_item and social_item.default_reference_count else 'blocked' }}" data-social-reference-count>{{ social_item.default_reference_count if social_item else 0 }} default refs</span>
+            {% if social_item %}
+              <span class="pill">{{ social_item.approved_generated_social_count }}/{{ social_item.generated_social_count }} approved generated</span>
+              {% if social_item.social_jobs %}<span class="pill ready">{{ social_item.social_jobs|length }} queued/generated job{{ '' if social_item.social_jobs|length == 1 else 's' }}</span>{% endif %}
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('product_queue_social_images', product_id=product.id) }}" class="product-social-action">
+          <input type="hidden" name="return_to" value="{{ url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id) }}">
+          <label>Options
+            <input name="option_number" type="number" min="1" max="8" value="3">
+          </label>
+          <button type="submit" data-social-generate-button {{ 'disabled' if not social_item or not social_item.default_reference_count else '' }}>
+            Generate social images
+          </button>
+        </form>
+      </section>
+
+      {% if social_item and social_item.social_jobs %}
+        <details class="generation-details product-social-jobs">
+          <summary>Social image jobs</summary>
+          <div class="product-social-job-list">
+            {% for job in social_item.social_jobs %}
+              <div class="product-social-job">
+                <div class="meta">
+                  <span class="pill">Job #{{ job.id }}</span>
+                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ job.provider_status }}</span>
+                  <span class="pill">{{ job.model_name }}</span>
+                </div>
+                {% if job.candidate_asset %}
+                  <strong>{{ job.candidate_asset.name }}</strong>
+                  <div class="meta">
+                    <span class="pill {{ 'complete' if job.candidate_asset.review_state == 'approved' else 'blocked' }}">{{ job.candidate_asset.review_state }}</span>
+                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Review in Gallery</a>
+                  </div>
+                {% else %}
+                  <details class="generation-details">
+                    <summary>Generation request</summary>
+                    <textarea readonly>{{ job.prompt }}</textarea>
+                  </details>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </details>
       {% endif %}
 
       {% if product.sales_momentum_note %}
@@ -400,6 +463,23 @@
       });
     }
 
+    function syncSocialGenerationState(form, selectedIds) {
+      const productCard = form.closest(".panel");
+      const studio = productCard?.querySelector("[data-product-social-studio]");
+      if (!studio) return;
+      const count = selectedIds.length;
+      const countPill = studio.querySelector("[data-social-reference-count]");
+      const generateButton = studio.querySelector("[data-social-generate-button]");
+      if (countPill) {
+        countPill.textContent = `${count} default ref${count === 1 ? "" : "s"}`;
+        countPill.classList.toggle("complete", count > 0);
+        countPill.classList.toggle("blocked", count === 0);
+      }
+      if (generateButton) {
+        generateButton.disabled = count === 0;
+      }
+    }
+
     async function saveReferences(form, changedInput) {
       const previousChecked = changedInput.checked;
       const toggle = changedInput.closest(".reference-toggle");
@@ -414,11 +494,14 @@
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "Could not save default references.");
-        syncReferencePills(form, payload.asset_ids || referenceAssetIds(form));
+        const selectedIds = payload.asset_ids || referenceAssetIds(form);
+        syncReferencePills(form, selectedIds);
+        syncSocialGenerationState(form, selectedIds);
         setReferenceStatus(form, "Saved");
       } catch (error) {
         changedInput.checked = !previousChecked;
         toggle?.classList.add("error");
+        syncSocialGenerationState(form, referenceAssetIds(form));
         setReferenceStatus(form, error.message || "Could not save");
       } finally {
         toggle?.classList.remove("saving");

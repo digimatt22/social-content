@@ -12,6 +12,10 @@ cd "$ROOT_DIR"
 
 {
   echo "== $(date '+%Y-%m-%d %H:%M:%S %z') codex content automation prepare start =="
+  echo "== $(date '+%Y-%m-%d %H:%M:%S %z') clearing stale content automation exports =="
+  find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 \
+    \( -name 'planned-item-*' -o -name 'video-request-*' -o -name 'art-studio-social-images' -o -name '*.json' -o -name '.DS_Store' \) \
+    -exec rm -rf {} +
   python -m marketing_os.jobs.content_automation \
     --limit "$LIMIT" \
     --days-ahead "$DAYS_AHEAD" \

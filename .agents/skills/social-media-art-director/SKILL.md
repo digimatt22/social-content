@@ -89,6 +89,22 @@ Use the available image generation tool directly only when Magnific cannot be us
 
 If the user supplied or selected a reference image and asked for product-preserving work, use the image editing path with actual attached reference files rather than describing changes as text.
 
+## Video Art Boards
+
+When the request is for an Art Studio video scene card, treat the still as the start frame for Veo or Magnific video generation, not as a standalone social image.
+
+- Use the Video Content Planner's selected effect style and card briefs.
+- Opening card: create the finished scene immediately; do not make a plain product-card opening or listing-photo background.
+- Ending card: do not create one by default. If the planner specifically asks for it, use the generated opening card as the scene and composition reference whenever available, then change only what the selected effect requires.
+- For focus pull, change only the focus plane.
+- For living painting, change only ambient light, micro highlights, shadows, or environmental texture.
+- For time-freeze timelapse, change time-of-day, shadows, condensation, background activity blur, or atmosphere while the product and staging stay locked.
+- For bullet time, shift the camera position only a small 15-25 degree orbit around the unchanged static product.
+- For vertigo/dolly zoom, keep the product the same on-screen size and placement while changing background perspective/compression.
+- For hyperlapse sweep, move the camera viewpoint along one plausible path or arc while keeping the product grounded and unchanged.
+- Never bake in a specific staging surface such as a table unless the strategist selected that scene. Use neutral language like staging surface, display plane, shelf, roadside surface, counter, or environment floor as appropriate.
+- Preserve the exact duck silhouette, colors, accessories, print layer texture, facial details, proportions, material, and scale. Do not add yellow pieces, extra parts, new props attached to the duck, duplicates, text, logos, or watermarks.
+
 ## References
 
 - Read `references/prompt-format.md` for the shared prompt format.

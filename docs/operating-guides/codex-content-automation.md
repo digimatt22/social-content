@@ -1,6 +1,6 @@
 # Codex Content Automation Setup
 
-Use this guide to create the scheduled Codex App automation that processes Marketing OS Planning requests.
+Use this guide to create the scheduled Codex App automations that process Marketing OS Planning requests.
 
 ## What The Automation Does
 
@@ -10,9 +10,9 @@ The scheduled run should:
 - export `copy-workflow.json` for each social item so Codex can see the required social skills and review sequence
 - write or refresh copy only through the agent-run social media strategy -> writing -> challenge flow
 - register agent-written copy as a Planning review candidate
-- export social-media-art-director requests for each item still waiting on images
+- export social-media-art-director requests for each item still waiting on images and for queued Product Social Images
 - use the `social-media-art-director` skill and Magnific MCP as the primary image path to create 2-3 real image files
-- register generated image files as Planning image options
+- register generated image files as Planning image options or Product Social Images outputs
 - leave all copy and images in human review
 
 It must not approve copy, approve images, create posting tasks, or publish anywhere.
@@ -63,6 +63,19 @@ Copy workflow requests are written under:
 
 ```text
 data/exports/content-automation/planned-item-<id>/copy-workflow.json
+```
+
+Queued Product Social Images jobs are written under:
+
+```text
+data/exports/content-automation/art-studio-social-images/social-image-jobs.json
+```
+
+After Codex generates Product Social Images, register them with a manifest:
+
+```bash
+python -m marketing_os.jobs.register_art_studio_outputs \
+  --manifest data/exports/content-automation/art-studio-social-images/register-social-images.json
 ```
 
 After Codex generates image files, register them with a manifest:
@@ -143,15 +156,15 @@ The registration manifest shape is:
 }
 ```
 
-## Codex App Automation
+## Codex App Automations
 
-Create a standalone weekly Codex app automation for:
+Create standalone Codex app automations for:
 
 ```text
 /Users/matt/Documents/marketing-os
 ```
 
-Recommended schedule:
+Content automation schedule:
 
 ```cron
 0 20 * * 0
@@ -159,15 +172,29 @@ Recommended schedule:
 
 This is Sunday at 8:00 PM local machine time. If the runner uses UTC, convert this schedule before saving it.
 
+Video automation schedule:
+
+```cron
+30 7 * * *
+```
+
+This is daily at 7:30 AM local machine time. It is intentionally separated from the content-production automation so the two runs do not overlap.
+
 Run it in the local project checkout, not a worktree. Use workspace-write permissions so Codex can update SQLite runtime data, logs, exports, and the repo-local ignored asset/output folders.
 
-Use the shared automation prompt:
+Use the content automation prompt:
 
 ```text
 docs/operating-guides/codex-weekly-automation-prompt.md
 ```
 
-The prompt is repeated below for Codex app setup:
+Use the video automation prompt:
+
+```text
+docs/operating-guides/codex-video-automation-prompt.md
+```
+
+The content prompt is repeated below for Codex app setup:
 
 ```text
 Run the weekly Marketing OS social planner and content production for /Users/matt/Documents/marketing-os.
@@ -224,13 +251,21 @@ If no pending requests exist, report that nothing needed generation.
 
 ## Manual Codex App Setup
 
-If the automation must be created manually in the Codex App, use the prompt in:
+If the content automation must be created manually in the Codex App, use the prompt in:
 
 ```text
 docs/operating-guides/codex-weekly-automation-prompt.md
 ```
 
 Create it as a standalone project automation for `/Users/matt/Documents/marketing-os`, scheduled for Sunday at 8:00 PM local time, running in the local project checkout with workspace-write permissions.
+
+If the video automation must be created manually in the Codex App, use the prompt in:
+
+```text
+docs/operating-guides/codex-video-automation-prompt.md
+```
+
+Create it as a standalone project automation for `/Users/matt/Documents/marketing-os`, scheduled for daily 7:30 AM local time, running in the local project checkout with workspace-write permissions.
 
 ## Etsy Sales CSV
 

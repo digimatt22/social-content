@@ -2,6 +2,8 @@
 
 Use the web console when the weekly plan needs to be executed by someone who does not want to work from Terminal or Markdown files.
 
+Run it with `python run_local.py` and open `http://127.0.0.1:3001` on the same machine. The default development port is `3001` so this app can coexist with other local dev servers.
+
 ## Daily Workflow
 
 1. Open the local web app.
@@ -127,6 +129,16 @@ The current workflow is:
 7. Keep generated options attached to the planned post until Matt reviews the final choice.
 
 Generated assets should not be used in normal tasks until approved. When reviewing generated creative, compare the source and generated previews side by side. Approve only if product shape, colors, printed details, and proportions match the source, no new markings/logos/text/packaging were invented, the composition fits the target format, and the local output file is usable.
+
+## Product Social Images
+
+Use Products as the starting point for Social Images. Select the default reference images on a product, then use `Generate social images` from that product card. The job uses the product's tagged default references and queues one review-gated Social Worthy image job per default reference.
+
+Generated Social Images stay in review until a human approves product accuracy. Use Gallery to review generated files before they become reusable task assets.
+
+## Video Studio
+
+Use Video Studio for product-safe video requests, opening scene cards, and approved video generation. Social image generation belongs on Products; Video Studio should stay focused on motion workflows.
 
 ## Metrics Due
 

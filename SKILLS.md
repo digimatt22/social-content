@@ -19,6 +19,8 @@ The per-skill `SKILL.md` file is the canonical trigger and workflow document. Th
 - `social-media-copywriter`: Writes platform-native social posts, captions, hooks, and CTA variants with angle-first drafting, MattMadeMe social context, and engagement/follower/shop-click variants.
 - `social-media-copy-chief`: Challenges social drafts before human review, checking hook strength, angle, CTA, source discipline, platform fit, and MattMadeMe voice.
 - `social-media-art-director`: Prepares social creative concepts, image prompts, and Magnific/Freepik handoffs for product-preserving Facebook/Instagram/Pinterest visuals.
+- `video-content-planner`: Plans conservative, product-safe short-form video concepts, motion rules, references, and model paths for MattMadeMe products.
+- `video-editor`: Prepares Magnific video handoffs/import metadata and enforces review-safe product video motion QA.
 
 ## Current Context
 

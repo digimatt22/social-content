@@ -82,6 +82,8 @@ Run the local web console:
 python run_local.py
 ```
 
+The default development port is `3001` so Marketing OS can run alongside other local dev servers. Override it with `--port` or `MARKETING_OS_PORT` only when needed.
+
 Startup does not seed sample products, plans, or tasks by default. To explicitly bootstrap business docs into a fresh local database for demo or fixture work, run:
 
 ```bash
@@ -91,10 +93,10 @@ python run_local.py --bootstrap-data
 On the same machine, open:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:3001
 ```
 
-On another trusted device on the same network, open `http://<this-computer-ip>:8000`.
+On another trusted device on the same network, open `http://<this-computer-ip>:3001`.
 
 To bind to localhost only, override the host:
 

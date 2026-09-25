@@ -683,6 +683,28 @@ def hidden_asset_group_count(session: Session) -> int:
     return len(hidden_groups)
 
 
+def product_image_assets(assets: list[AssetRecord]) -> list[AssetRecord]:
+    local_source_asset_ids = {
+        asset.source_asset_id
+        for asset in assets
+        if asset.file_exists and asset.source_asset_id is not None
+    }
+    local_remote_values = {
+        value
+        for asset in assets
+        if asset.file_exists
+        for value in _remote_asset_identity_values(asset)
+    }
+    filtered_assets: list[AssetRecord] = []
+    for asset in assets:
+        if not asset.file_exists and asset.id in local_source_asset_ids:
+            continue
+        if not asset.file_exists and local_remote_values.intersection(_remote_asset_identity_values(asset)):
+            continue
+        filtered_assets.append(asset)
+    return filtered_assets
+
+
 def task_asset_options(session: Session, task: TaskRecord) -> list[AssetOption]:
     refresh_asset_file_state(session)
     product = session.scalar(select(ProductRecord).where(ProductRecord.name == task.product_name)) if task.product_name else None
@@ -1478,6 +1500,15 @@ def _normalized_asset_identity_value(value: str | None) -> str:
     if not value:
         return ""
     return value.strip()
+
+
+def _remote_asset_identity_values(asset: AssetRecord) -> set[str]:
+    return {
+        normalized
+        for value in (asset.canonical_url, asset.source_path, asset.preview_path)
+        if (normalized := _normalized_asset_identity_value(value))
+        and normalized.startswith(("http://", "https://", "file://"))
+    }
 
 
 def _representative_assets(assets: list[AssetRecord], include_hidden: bool) -> list[AssetRecord]:

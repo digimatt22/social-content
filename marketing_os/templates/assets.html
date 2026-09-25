@@ -66,6 +66,10 @@
 
 {{ gallery_controls() }}
 
+{% if open_asset_id %}
+  <span hidden data-auto-open-drawer="#asset-drawer-{{ open_asset_id }}"></span>
+{% endif %}
+
 <section class="gallery-grid">
   <form class="gallery-card add-photo-card" method="post" action="{{ url_for('upload_source_asset') }}" enctype="multipart/form-data">
     <label class="add-photo-placeholder" data-photo-dropzone>
@@ -97,7 +101,10 @@
     {% set related_products = related_assets | map(attribute='product') | select | map(attribute='name') | unique | list %}
     <article class="gallery-card" id="asset-{{ asset.id }}" role="button" tabindex="0" data-open-drawer="#asset-drawer-{{ asset.id }}" aria-label="Open details for {{ asset.name }}">
       {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
-      {% if asset.file_exists %}
+      {% set is_video = asset.mime_type.startswith('video/') or asset.asset_type == 'generated product video' %}
+      {% if asset.file_exists and is_video %}
+        <video class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" muted preload="metadata"></video>
+      {% elif asset.file_exists %}
         <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
       {% elif remote_preview %}
         <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
@@ -135,6 +142,7 @@
   {% set related_assets = model.related_assets %}
   {% set related_products = related_assets | map(attribute='product') | select | map(attribute='name') | unique | list %}
   {% set remote_preview = (not asset.file_exists) and (asset.preview_path.startswith('http') or asset.source_path.startswith('http')) %}
+  {% set is_video = asset.mime_type.startswith('video/') or asset.asset_type == 'generated product video' %}
   <aside class="drawer-panel" id="asset-drawer-{{ asset.id }}" aria-label="Asset details">
     <div class="drawer-header">
       <div>
@@ -149,6 +157,9 @@
         </p>
       </div>
       <div class="drawer-header-actions">
+        {% if return_to %}
+          <a class="button secondary" href="{{ return_to }}">Back to products</a>
+        {% endif %}
         <form method="post" action="{{ url_for('asset_visibility', asset_id=asset.id) }}" data-preserve-scroll>
           <input type="hidden" name="hidden" value="{{ '0' if asset.hidden_from_generation else '1' }}">
           <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden or asset.hidden_from_generation else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
@@ -187,7 +198,10 @@
       </div>
     </div>
 
-    {% if asset.file_exists %}
+    {% if asset.file_exists and is_video %}
+      <video class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" controls preload="metadata"></video>
+      {% if asset.preview_path and asset.preview_path != asset.source_path %}<p class="subtle">Poster: {{ asset.preview_path }}</p>{% endif %}
+    {% elif asset.file_exists %}
       <img class="asset-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
     {% elif remote_preview %}
       <img class="asset-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
@@ -215,7 +229,7 @@
     <section class="panel">
       <h3>Photo Details</h3>
       <form method="post" action="{{ url_for('asset_product_link', asset_id=asset.id) }}">
-        <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
+        <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, open_asset=asset.id, return_to=return_to if return_to else none, _anchor='asset-' ~ asset.id) }}">
         <label>Name
           <input name="name" value="{{ asset.name }}" required>
         </label>

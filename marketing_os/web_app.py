@@ -18,6 +18,7 @@ from .config import load_local_env
 from .db import DEFAULT_DB_PATH, create_db_engine, init_db, session_factory, session_scope
 from .db_models import (
     AssetRecord,
+    CreativeGenerationJobRecord,
     EtsyReviewRecord,
     GeneratedContentCandidateRecord,
     MetricRecord,
@@ -43,6 +44,26 @@ from .phase3 import (
     update_task_status,
 )
 from .services.insights import build_learning_summary, outcome_tags, serialize_learning_summary
+from .services.maintenance import purge_rejected_and_canceled_items
+from .services.art_studio import (
+    approve_video_request_for_generation,
+    art_studio_queue,
+    art_studio_video_requests,
+    cancel_video_request,
+    create_video_request,
+    enqueue_social_image_generation,
+    enqueue_video_art_board_generation,
+    enqueue_video_generation,
+    enqueue_video_storyboard_generation,
+    register_social_image_job_output,
+    register_social_image_output,
+    register_video_art_board_job_output,
+    register_video_job_output,
+    register_video_output,
+    serialize_art_studio_job,
+    validate_video_motion_prompt,
+    video_template_options,
+)
 from .services.phase5_readiness import (
     build_phase5_approval_packet,
     build_phase5_readiness,
@@ -79,6 +100,7 @@ from .phase4 import (
     serialize_today_view,
     serialize_week_agenda,
     hidden_asset_group_count,
+    product_image_assets,
     task_view,
     task_asset_options,
     today_view,
@@ -500,13 +522,26 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             guides_model = posting_guides(session)
             return render_template("guides.html", active="guides", guides=guides_model)
 
-    def _asset_management_context(session, include_hidden: bool = False, page: int = 1, selected_tag: str = "") -> dict[str, object]:
+    def _asset_management_context(
+        session,
+        include_hidden: bool = False,
+        page: int = 1,
+        selected_tag: str = "",
+        open_asset_id: int | None = None,
+        return_to: str = "",
+    ) -> dict[str, object]:
         page = max(page, 1)
         tag_options = asset_tag_options(session, include_hidden=include_hidden)
         selected_tag = selected_tag.strip()
         if selected_tag and selected_tag.lower() not in {tag.lower() for tag in tag_options}:
             selected_tag = ""
         total_assets = asset_inventory_count(session, include_hidden=include_hidden, tag=selected_tag)
+        if open_asset_id is not None:
+            all_assets = asset_inventory(session, include_hidden=include_hidden, tag=selected_tag)
+            for index, model in enumerate(all_assets):
+                if model.asset.id == open_asset_id:
+                    page = (index // ASSETS_PAGE_SIZE) + 1
+                    break
         pagination = _pagination(page, total_assets, ASSETS_PAGE_SIZE)
         return {
             "active": "assets",
@@ -525,6 +560,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "total_asset_count": total_assets,
             "hidden_asset_count": hidden_asset_group_count(session),
             "products": list(session.scalars(select(ProductRecord).order_by(ProductRecord.name))),
+            "open_asset_id": open_asset_id,
+            "return_to": _safe_return_url(return_to, "products_admin") if return_to else "",
         }
 
     @app.get("/creative-assets")
@@ -532,8 +569,20 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         show_hidden = request.args.get("show_hidden") == "1"
         page = _page_arg(request.args.get("page"))
         selected_tag = request.args.get("tag", "")
+        open_asset_id = _int_or_none(request.args.get("open_asset"))
+        return_to = request.args.get("return_to", "")
         with session_scope(factory) as session:
-            return render_template("assets.html", **_asset_management_context(session, include_hidden=show_hidden, page=page, selected_tag=selected_tag))
+            return render_template(
+                "assets.html",
+                **_asset_management_context(
+                    session,
+                    include_hidden=show_hidden,
+                    page=page,
+                    selected_tag=selected_tag,
+                    open_asset_id=open_asset_id,
+                    return_to=return_to,
+                ),
+            )
 
     @app.get("/planning")
     def planning() -> str:
@@ -915,8 +964,271 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         show_hidden = request.args.get("show_hidden") == "1"
         page = _page_arg(request.args.get("page"))
         selected_tag = request.args.get("tag", "")
+        open_asset_id = _int_or_none(request.args.get("open_asset"))
+        return_to = request.args.get("return_to", "")
         with session_scope(factory) as session:
-            return render_template("assets.html", **_asset_management_context(session, include_hidden=show_hidden, page=page, selected_tag=selected_tag))
+            return render_template(
+                "assets.html",
+                **_asset_management_context(
+                    session,
+                    include_hidden=show_hidden,
+                    page=page,
+                    selected_tag=selected_tag,
+                    open_asset_id=open_asset_id,
+                    return_to=return_to,
+                ),
+            )
+
+    @app.get("/art-studio")
+    def art_studio() -> str:
+        selected_tab = request.args.get("tab", "video")
+        if selected_tab == "video-pilot":
+            selected_tab = "video"
+        if selected_tab == "social-images":
+            return redirect(url_for("products_admin"))
+        if selected_tab != "video":
+            selected_tab = "video"
+        with session_scope(factory) as session:
+            queue = art_studio_queue(session, limit=30)
+            video_product_options = art_studio_queue(session, limit=1000)
+            video_products = sorted(
+                [item for item in video_product_options if item.reference_assets],
+                key=lambda item: item.product.name.lower(),
+            )
+            video_requests = art_studio_video_requests(session)
+            stats = {
+                "products": len(video_products),
+                "ready_for_images": sum(1 for item in video_products if item.approved_reference_count),
+                "video": sum(1 for item in queue if item.approved_reference_count),
+                "needs_reference_review": sum(1 for item in queue if not item.approved_reference_count),
+            }
+            return render_template(
+                "art_studio.html",
+                active="art_studio",
+                selected_tab=selected_tab,
+                queue=queue,
+                video_products=video_products,
+                video_template_options=video_template_options(),
+                video_requests=video_requests,
+                stats=stats,
+            )
+
+    @app.get("/api/art-studio/jobs")
+    def api_art_studio_jobs():
+        status = request.args.get("status", "queued")
+        with session_scope(factory) as session:
+            queue = art_studio_queue(session, limit=500)
+            jobs = [
+                job
+                for item in queue
+                for job in [*item.social_jobs, *item.art_board_jobs, *item.video_jobs]
+                if status == "all" or job.provider_status == status
+            ]
+            return jsonify({"jobs": [serialize_art_studio_job(job) for job in jobs], "count": len(jobs)})
+
+    @app.post("/art-studio/social-image/import")
+    def art_studio_import_social_image() -> str:
+        try:
+            job_id = _int_or_none(request.form.get("job_id"))
+            with session_scope(factory) as session:
+                if job_id is None:
+                    product_id = int(request.form.get("product_id", ""))
+                    source_asset_id = int(request.form.get("source_asset_id", ""))
+                    asset = register_social_image_output(
+                        session,
+                        product_id=product_id,
+                        source_asset_id=source_asset_id,
+                        output_path=request.form.get("output_path", "").strip(),
+                        title=request.form.get("title", "").strip(),
+                        prompt=request.form.get("prompt", "").strip(),
+                        provider=request.form.get("provider", "magnific_mcp").strip() or "magnific_mcp",
+                        model_name=request.form.get("model_name", "").strip(),
+                        provider_job_id=request.form.get("provider_job_id", "").strip(),
+                        notes=request.form.get("notes", "").strip(),
+                    )
+                else:
+                    job = register_social_image_job_output(
+                        session,
+                        job_id=job_id,
+                        output_path=request.form.get("output_path", "").strip(),
+                        title=request.form.get("title", "").strip(),
+                        provider_job_id=request.form.get("provider_job_id", "").strip(),
+                        output_url=request.form.get("output_url", "").strip(),
+                        notes=request.form.get("notes", "").strip(),
+                    )
+                    asset = job.candidate_asset
+                flash(f"Imported Social Worthy image for review: {asset.name}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="social-images"))
+
+    @app.post("/art-studio/social-image/queue")
+    def art_studio_queue_social_image() -> str:
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            source_asset_id = int(request.form.get("source_asset_id", ""))
+            option_number = int(request.form.get("option_number", "1") or 1)
+            with session_scope(factory) as session:
+                job = enqueue_social_image_generation(session, product_id, source_asset_id, option_number=option_number)
+                flash(f"Queued Social Worthy image job #{job.id}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="social-images"))
+
+    @app.post("/art-studio/video/import")
+    def art_studio_import_video() -> str:
+        prompt = request.form.get("prompt", "").strip()
+        try:
+            job_id = _int_or_none(request.form.get("job_id"))
+            if job_id is None:
+                guardrail = validate_video_motion_prompt(prompt)
+                if not guardrail["passed"]:
+                    flash("Video prompt violates Art Studio motion guardrails: " + ", ".join(guardrail["disallowed_motion_terms"]))
+                    return redirect(url_for("art_studio", tab="video"))
+            with session_scope(factory) as session:
+                if job_id is None:
+                    product_id = int(request.form.get("product_id", ""))
+                    source_asset_id = int(request.form.get("source_asset_id", ""))
+                    asset = register_video_output(
+                        session,
+                        product_id=product_id,
+                        source_asset_id=source_asset_id,
+                        video_path=request.form.get("video_path", "").strip(),
+                        title=request.form.get("title", "").strip(),
+                        prompt=prompt,
+                        poster_path=request.form.get("poster_path", "").strip() or None,
+                        provider=request.form.get("provider", "magnific_mcp").strip() or "magnific_mcp",
+                        model_name=request.form.get("model_name", "kling-25").strip()
+                        or "kling-25",
+                        provider_job_id=request.form.get("provider_job_id", "").strip(),
+                        duration_seconds=int(request.form.get("duration_seconds", "8") or 8),
+                        aspect_ratio=request.form.get("aspect_ratio", "9:16").strip() or "9:16",
+                        resolution=request.form.get("resolution", "1080p").strip() or "1080p",
+                        notes=request.form.get("notes", "").strip(),
+                    )
+                else:
+                    job = register_video_job_output(
+                        session,
+                        job_id=job_id,
+                        video_path=request.form.get("video_path", "").strip(),
+                        title=request.form.get("title", "").strip(),
+                        poster_path=request.form.get("poster_path", "").strip() or None,
+                        provider_job_id=request.form.get("provider_job_id", "").strip(),
+                        output_url=request.form.get("output_url", "").strip(),
+                        notes=request.form.get("notes", "").strip(),
+                    )
+                    asset = job.candidate_asset
+                flash(f"Imported product video for review: {asset.name}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/art-board/queue")
+    def art_studio_queue_video_art_board() -> str:
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            source_asset_id = int(request.form.get("source_asset_id", ""))
+            option_number = int(request.form.get("option_number", "1") or 1)
+            with session_scope(factory) as session:
+                job = enqueue_video_art_board_generation(
+                    session,
+                    product_id,
+                    source_asset_id,
+                    scene=request.form.get("scene", "festive picnic setup").strip() or "festive picnic setup",
+                    aspect_ratio=request.form.get("aspect_ratio", "9:16").strip() or "9:16",
+                    option_number=option_number,
+                )
+                flash(f"Queued video art board job #{job.id}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/storyboard/queue")
+    def art_studio_queue_video_storyboard() -> str:
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            reference_ids = [int(value) for value in request.form.getlist("reference_asset_ids") if value.strip()]
+            if not reference_ids:
+                source_asset_id = int(request.form.get("source_asset_id", ""))
+                reference_ids = [source_asset_id]
+            option_number = int(request.form.get("option_number", "1") or 1)
+            with session_scope(factory) as session:
+                request_job = create_video_request(
+                    session,
+                    product_id,
+                    reference_ids,
+                    duration_seconds=min(12, max(5, int(request.form.get("duration_seconds", "8") or 8))),
+                    aspect_ratio=request.form.get("aspect_ratio", "9:16").strip() or "9:16",
+                    resolution="1080p",
+                    scene_guidance=request.form.get("scene_guidance", "").strip(),
+                    template_slug=request.form.get("video_template", "focus_pull").strip() or "focus_pull",
+                    voice_script=request.form.get("voice_script", "").strip(),
+                    voice_tone=request.form.get("voice_tone", "").strip(),
+                )
+                flash(f"Created video request #{request_job.id}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/request/<int:request_job_id>/approve")
+    def art_studio_approve_video_request(request_job_id: int) -> str:
+        try:
+            with session_scope(factory) as session:
+                job = approve_video_request_for_generation(session, request_job_id)
+                flash(f"Approved video request. Queued video job #{job.id}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/request/<int:request_job_id>/cancel")
+    def art_studio_cancel_video_request(request_job_id: int) -> str:
+        try:
+            with session_scope(factory) as session:
+                cancel_video_request(session, request_job_id)
+                flash("Canceled video request.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/art-board/import")
+    def art_studio_import_video_art_board() -> str:
+        try:
+            job_id = int(request.form.get("job_id", ""))
+            with session_scope(factory) as session:
+                job = register_video_art_board_job_output(
+                    session,
+                    job_id=job_id,
+                    output_path=request.form.get("output_path", "").strip(),
+                    title=request.form.get("title", "").strip(),
+                    provider_job_id=request.form.get("provider_job_id", "").strip(),
+                    output_url=request.form.get("output_url", "").strip(),
+                    notes=request.form.get("notes", "").strip(),
+                )
+                flash(f"Imported video art board for review: {job.candidate_asset.name}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
+
+    @app.post("/art-studio/video/queue")
+    def art_studio_queue_video() -> str:
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            source_asset_id = int(request.form.get("source_asset_id", ""))
+            end_asset_id = _int_or_none(request.form.get("end_asset_id"))
+            with session_scope(factory) as session:
+                job = enqueue_video_generation(
+                    session,
+                    product_id,
+                    source_asset_id,
+                    end_asset_id=end_asset_id,
+                    duration_seconds=int(request.form.get("duration_seconds", "8") or 8),
+                    aspect_ratio=request.form.get("aspect_ratio", "9:16").strip() or "9:16",
+                    resolution=request.form.get("resolution", "1080p").strip() or "1080p",
+                )
+                flash(f"Queued product video job #{job.id}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(url_for("art_studio", tab="video"))
 
     @app.get("/products")
     def products_admin() -> str:
@@ -941,6 +1253,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             references_by_product: dict[int, list[ProductExternalReference]] = {product.id: [] for product in products}
             reviews_by_product: dict[int, list[dict[str, object]]] = {product.id: [] for product in products}
             review_counts_by_product: dict[int, int] = {product.id: 0 for product in products}
+            social_queue_by_product = {item.product.id: item for item in art_studio_queue(session, limit=1000)}
             hidden_asset_count = hidden_asset_group_count(session)
             if product_ids:
                 asset_query = select(AssetRecord).where(AssetRecord.product_id.in_(product_ids)).order_by(AssetRecord.product_id, AssetRecord.id)
@@ -969,6 +1282,10 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 for asset in assets:
                     if asset.product_id is not None:
                         assets_by_product.setdefault(asset.product_id, []).append(asset)
+                assets_by_product = {
+                    product_id: product_image_assets(product_assets)
+                    for product_id, product_assets in assets_by_product.items()
+                }
                 for reference in references:
                     references_by_product.setdefault(reference.product_id, []).append(reference)
                 for product_id, count in review_counts:
@@ -992,7 +1309,46 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 references_by_product=references_by_product,
                 reviews_by_product=reviews_by_product,
                 review_counts_by_product=review_counts_by_product,
+                social_queue_by_product=social_queue_by_product,
             )
+
+    @app.post("/products/<int:product_id>/social-images/queue")
+    def product_queue_social_images(product_id: int) -> str:
+        return_to = request.form.get("return_to") or url_for("products_admin", _anchor=f"product-{product_id}")
+        option_count = max(1, min(8, int(request.form.get("option_number", "3") or 3)))
+        try:
+            with session_scope(factory) as session:
+                product = session.get(ProductRecord, product_id)
+                if product is None:
+                    abort(404)
+                references = list(
+                    session.scalars(
+                        select(AssetRecord)
+                        .where(AssetRecord.product_id == product_id)
+                        .where(AssetRecord.default_reference == 1)
+                        .where(AssetRecord.hidden_from_generation == 0)
+                        .order_by(AssetRecord.id)
+                    )
+                )
+                if not references:
+                    flash("Choose at least one default reference image before generating social images.")
+                    return redirect(return_to)
+                reference_ids = [reference.id for reference in references[:4]]
+                primary_reference_id = reference_ids[0]
+                jobs = [
+                    enqueue_social_image_generation(
+                        session,
+                        product_id,
+                        primary_reference_id,
+                        option_number=option_number,
+                        reference_asset_ids=reference_ids,
+                    )
+                    for option_number in range(1, option_count + 1)
+                ]
+                flash(f"Queued {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name}.")
+        except ValueError as exc:
+            flash(str(exc))
+        return redirect(return_to)
 
     @app.post("/products/<int:product_id>/tags")
     def update_product_tags(product_id: int) -> str:
@@ -1104,6 +1460,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         return_to = request.form.get("return_to") or url_for("assets", _anchor=f"asset-{asset_id}")
         name = request.form.get("name", "").strip()
         product_id_text = request.form.get("product_id", "").strip()
+        product_name = request.form.get("product_name", "").strip()
         try:
             product_id = int(product_id_text) if product_id_text else None
         except ValueError:
@@ -1117,6 +1474,22 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             if asset is None:
                 flash("Asset not found.")
                 return redirect(return_to)
+            if product_name:
+                matches = list(
+                    session.scalars(
+                        select(ProductRecord)
+                        .where(func.lower(ProductRecord.name).contains(product_name.lower()))
+                        .order_by(ProductRecord.name)
+                        .limit(2)
+                    )
+                )
+                if not matches:
+                    flash("Product not found.")
+                    return redirect(return_to)
+                if len(matches) > 1:
+                    flash("Multiple products match that name. Use a more specific product name.")
+                    return redirect(return_to)
+                product_id = matches[0].id
             if product_id is not None and session.get(ProductRecord, product_id) is None:
                 flash("Product not found.")
                 return redirect(return_to)
@@ -1312,6 +1685,42 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def settings() -> str:
         with session_scope(factory) as session:
             products = list(session.scalars(select(ProductRecord).order_by(ProductRecord.name)))
+            cleanup_counts = {
+                "rejected_candidates": session.scalar(
+                    select(func.count()).select_from(GeneratedContentCandidateRecord).where(GeneratedContentCandidateRecord.review_state == "rejected")
+                )
+                or 0,
+                "rejected_generated_assets": session.scalar(
+                    select(func.count())
+                    .select_from(AssetRecord)
+                    .where(
+                        AssetRecord.review_state == "rejected",
+                        (
+                            AssetRecord.asset_type.like("generated %")
+                            | (AssetRecord.asset_type == "user uploaded post image")
+                            | AssetRecord.asset_role.in_(
+                                [
+                                    "post image option",
+                                    "social worthy image",
+                                    "social video option",
+                                    "video opening card",
+                                    "video ending card",
+                                ]
+                            )
+                        ),
+                    )
+                )
+                or 0,
+                "canceled_or_rejected_jobs": session.scalar(
+                    select(func.count())
+                    .select_from(CreativeGenerationJobRecord)
+                    .where(
+                        (CreativeGenerationJobRecord.review_state == "rejected")
+                        | (CreativeGenerationJobRecord.provider_status == "canceled")
+                    )
+                )
+                or 0,
+            }
         return render_template(
             "settings.html",
             active="settings",
@@ -1321,6 +1730,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             asset_library_root=app.config["ASSET_LIBRARY_ROOT"],
             export_dir=app.config["EXPORT_DIR"],
             products=products,
+            cleanup_counts=cleanup_counts,
         )
 
     @app.post("/settings/export")
@@ -1329,6 +1739,20 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         with session_scope(factory) as session:
             path = export_operating_data(session, app.config["EXPORT_DIR"], scope=scope)
         return send_file(path.resolve(), as_attachment=True, download_name=path.name)
+
+    @app.post("/settings/cleanup-rejected")
+    def cleanup_rejected_items() -> str:
+        with session_scope(factory) as session:
+            summary = purge_rejected_and_canceled_items(session, base_dir=Path(app.root_path).parent)
+        flash(
+            "Cleanup removed "
+            f"{len(summary.deleted_candidate_ids)} rejected candidate(s), "
+            f"{len(summary.deleted_asset_ids)} generated asset(s), "
+            f"{len(summary.deleted_creative_job_ids)} rejected/canceled job(s), "
+            f"{len(summary.deleted_planned_item_ids)} empty planned item(s), and "
+            f"{len(summary.deleted_paths)} local file(s)."
+        )
+        return redirect(url_for("settings"))
 
     return app
 
@@ -1655,7 +2079,7 @@ def main(argv: list[str] | None = None) -> int:
     load_local_env()
     parser = argparse.ArgumentParser(description="Run the MattMadeMe Marketing OS local web console")
     parser.add_argument("--host", default=os.environ.get("MARKETING_OS_HOST", "0.0.0.0"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("MARKETING_OS_PORT", "8000")))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("MARKETING_OS_PORT", "3001")))
     parser.add_argument("--db-path", default=os.environ.get("MARKETING_OS_DB_PATH", "data/marketing_os.sqlite"))
     parser.add_argument("--business-dir", default=os.environ.get("MARKETING_OS_BUSINESS_DIR", "docs/business"))
     parser.add_argument("--bootstrap-data", action="store_true", help="Seed business products and a default plan on startup.")

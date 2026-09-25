@@ -34,6 +34,8 @@ from marketing_os.jobs.content_automation import run as run_content_automation_j
 from marketing_os.jobs.content_production import run as run_content_production_job
 from marketing_os.jobs.import_etsy_sales_csv import run as run_import_etsy_sales_csv_job
 from marketing_os.jobs.phase5_readiness import run as run_phase5_readiness_job
+from marketing_os.jobs.register_art_studio_outputs import run as run_register_art_studio_outputs_job
+from marketing_os.jobs.register_art_studio_video_workflow import run as run_register_art_studio_video_workflow_job
 from marketing_os.jobs.register_generated_copy import run as run_register_generated_copy_job
 from marketing_os.jobs.register_generated_images import run as run_register_generated_images_job
 from marketing_os.jobs.weekly_social_planner import run as run_weekly_social_planner_job
@@ -83,12 +85,35 @@ from marketing_os.services.content_briefs import (
     produce_content_for_item,
     record_candidate_review,
     register_generated_copy_candidate,
+    register_generated_image_option,
     register_uploaded_image_option,
+)
+from marketing_os.services.art_studio import (
+    DEFAULT_VIDEO_NEGATIVE_PROMPT,
+    approve_video_request_for_generation,
+    art_studio_queue,
+    art_studio_video_requests,
+    create_video_request,
+    enqueue_social_image_generation,
+    enqueue_video_art_board_generation,
+    enqueue_video_generation,
+    enqueue_video_storyboard_generation,
+    register_social_image_output,
+    register_video_output,
+    social_image_handoff,
+    social_image_scene_direction,
+    social_image_scene_variation,
+    validate_video_motion_prompt,
 )
 from marketing_os.services.creative_generation import import_manual_generated_output, review_creative_generation_job
 from marketing_os.services.etsy_import import sync_etsy_read_only
 from marketing_os.services.insights import build_learning_summary, serialize_learning_summary
-from marketing_os.services.skill_adapters import copywriter_contract, image_option_from_contract, social_copy_workflow_contract, social_media_art_director_contracts
+from marketing_os.services.skill_adapters import (
+    copywriter_contract,
+    image_option_from_contract,
+    social_copy_workflow_contract,
+    social_media_art_director_contracts,
+)
 from marketing_os.services.local_assets import scan_asset_root
 from marketing_os.services.mattmademe_website_import import sync_mattmademe_website
 from marketing_os.services.phase5_readiness import (
@@ -331,6 +356,55 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             products_without_hidden = client.get("/products")
             self.assertNotIn(b"Shared Duck Etsy image A", products_without_hidden.data)
             self.assertNotIn(b"Shared Duck Etsy image B", products_without_hidden.data)
+
+    def test_products_page_hides_remote_image_when_local_download_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "product-local-remote-duplicate.sqlite"
+            local_path = tmp_path / "downloaded-duck.jpg"
+            local_path.write_bytes(b"downloaded remote duck image")
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            shared_url = "https://images.example/downloaded-duck.jpg"
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Downloaded Duck")
+                session.add(product)
+                session.flush()
+                remote_asset = AssetRecord(
+                    product_id=product.id,
+                    name="Remote Downloaded Duck",
+                    asset_type="Etsy product photo",
+                    source_path=shared_url,
+                    preview_path=shared_url,
+                    canonical_url=shared_url,
+                    readiness_state="remote Etsy reference",
+                    external_source="etsy",
+                    review_state="synced",
+                    file_exists=0,
+                )
+                session.add(remote_asset)
+                session.flush()
+                session.add(
+                    AssetRecord(
+                        product_id=product.id,
+                        name="Local Downloaded Duck",
+                        asset_type="source photo",
+                        source_path=local_path.as_posix(),
+                        preview_path=local_path.as_posix(),
+                        canonical_url=shared_url,
+                        readiness_state="existing Etsy photo ready",
+                        external_source="etsy",
+                        review_state="approved",
+                        file_exists=1,
+                        source_asset_id=remote_asset.id,
+                    )
+                )
+
+            products = app.test_client().get("/products")
+            self.assertEqual(products.status_code, 200)
+            self.assertIn(b"Local Downloaded Duck", products.data)
+            self.assertNotIn(b"Remote Downloaded Duck", products.data)
 
     def test_gallery_deletes_local_shared_file_and_unlinks_asset_records(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -851,6 +925,16 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"data-reference-checkbox", products_page.data)
             self.assertIn(b"reference-toggle", products_page.data)
             self.assertIn(b"Toggle default reference image", products_page.data)
+            self.assertIn(b"Edit image details in Gallery", products_page.data)
+            self.assertIn(b"Generate social images", products_page.data)
+            self.assertIn(b"Uses the default reference images selected above", products_page.data)
+            self.assertIn(b"data-product-social-studio", products_page.data)
+            self.assertIn(b"data-social-reference-count", products_page.data)
+            self.assertIn(b"data-social-generate-button", products_page.data)
+            self.assertIn(b"open_asset=", products_page.data)
+            self.assertNotIn(b"product-image-link-", products_page.data)
+            self.assertIn(b"data-lucide=\"image\"", products_page.data)
+            self.assertIn(b"data-lucide=\"badge-check\"", products_page.data)
             self.assertNotIn(b"Local product tag", products_page.data)
             self.assertNotIn(b"Local product tags", products_page.data)
             self.assertIn(b"Description", products_page.data)
@@ -917,6 +1001,34 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             )
             self.assertEqual(api_defaults_response.status_code, 200)
             self.assertEqual(api_defaults_response.get_json()["asset_ids"], [source_id])
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                replacement_product = ProductRecord(name="Corrected Image Product")
+                session.add(replacement_product)
+                session.flush()
+                replacement_product_id = replacement_product.id
+
+            asset_gallery_response = client.get(f"/assets?open_asset={source_id}&return_to=/products%23product-{product_id}")
+            self.assertEqual(asset_gallery_response.status_code, 200)
+            self.assertIn(f'data-auto-open-drawer="#asset-drawer-{source_id}"'.encode(), asset_gallery_response.data)
+            self.assertIn(b"Back to products", asset_gallery_response.data)
+            self.assertIn(b"/products#product-", asset_gallery_response.data)
+
+            image_edit_response = client.post(
+                f"/assets/{source_id}/product",
+                data={
+                    "product_id": str(replacement_product_id),
+                    "name": "Corrected product image",
+                    "return_to": f"/assets?open_asset={source_id}&return_to=/products%23product-{product_id}#asset-{source_id}",
+                },
+                follow_redirects=True,
+            )
+            self.assertEqual(image_edit_response.status_code, 200)
+            self.assertIn(b"Photo details saved.", image_edit_response.data)
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                source = session.get(AssetRecord, source_id)
+                self.assertEqual(source.product_id, replacement_product_id)
+                self.assertEqual(source.name, "Corrected product image")
 
             export_response = client.post("/settings/export", data={"scope": "products"})
             self.assertEqual(export_response.status_code, 200)
@@ -1920,6 +2032,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
         self.assertIn("$social-media-copywriter", weekly_codex_prompt_text)
         self.assertIn("$social-media-copy-chief", weekly_codex_prompt_text)
         self.assertIn("$social-media-art-director", weekly_codex_prompt_text)
+        self.assertIn("$video-content-planner", weekly_codex_prompt_text)
+        self.assertIn("$video-editor", weekly_codex_prompt_text)
+        self.assertIn("video-workflow.json", weekly_codex_prompt_text)
         self.assertTrue(weekly_runner.is_file())
         self.assertTrue(weekly_runner.stat().st_mode & 0o111)
         weekly_runner_text = weekly_runner.read_text(encoding="utf-8")
@@ -2188,6 +2303,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertNotIn(b"Approved copy", rendered_review.data)
             self.assertIn(b'aria-label="Close image preview"', rendered_review.data)
             self.assertNotIn(b'data-image-modal-close>Close</button>', rendered_review.data)
+            self.assertIn(b'typeof refreshIcons === "function"', rendered_review.data)
 
             upload_response = client.post(
                 f"/planning/{item_id}/upload-image",
@@ -2204,6 +2320,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             self.assertIn(b"class=\"image-select-button\"", upload_response.data)
             self.assertIn(b"Select image: Custom planned post image", upload_response.data)
             self.assertIn(b"data-image-zoom-src", upload_response.data)
+            self.assertIn(b'data-lucide="search"', upload_response.data)
             self.assertIn(b"data-image-modal", upload_response.data)
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 item = session.get(PlannedContentRecord, item_id)
@@ -4312,6 +4429,103 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 website_response = client.post("/api/integrations/website/sync")
                 self.assertEqual(website_response.status_code, 404)
 
+    def test_phase5_settings_cleanup_removes_rejected_or_canceled_generated_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "phase5-cleanup.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            source_path = Path(tmp) / "approved-source.png"
+            source_path.write_bytes(tiny_png_bytes("#0f766e"))
+            rejected_image_path = Path(tmp) / "rejected-generated.png"
+            rejected_image_path.write_bytes(tiny_png_bytes("#ef4444"))
+            canceled_output_path = Path(tmp) / "canceled-video.mp4"
+            canceled_output_path.write_bytes(b"fake-video")
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Cleanup Duck")
+                session.add(product)
+                session.flush()
+
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Approved source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="needs human review",
+                    review_state="needs review",
+                    file_exists=1,
+                )
+                session.add(source)
+                session.flush()
+                review_asset(session, source.id, "approved", "Source approved.")
+
+                item = create_planned_content_item(
+                    session,
+                    calendar_date=date.today(),
+                    destinations=["Facebook"],
+                    goals=["Follower growth"],
+                    product_ids=[product.id],
+                    selected_source_asset_ids=[source.id],
+                    audience="Gift Buyers",
+                    occasion="Test cleanup",
+                )
+                copy_candidate = self.register_agent_copy(session, item, "Cleanup test hook.\n\nCleanup test body.\n\nCleanup CTA.")
+                record_candidate_review(session, copy_candidate.id, "rejected", "Rejected test copy.")
+
+                image_candidate = register_generated_image_option(
+                    session,
+                    item.id,
+                    rejected_image_path,
+                    option_number=1,
+                    title="Rejected generated option",
+                    provider="codex_imagegen",
+                )
+                record_candidate_review(session, image_candidate.id, "rejected", "Rejected generated image.")
+                rejected_asset_id = json.loads(image_candidate.body)["asset_id"]
+
+                canceled_job = CreativeGenerationJobRecord(
+                    source_asset_id=source.id,
+                    target_format="video_request",
+                    provider="magnific_mcp",
+                    prompt="Canceled output.",
+                    provider_status="canceled",
+                    output_path=canceled_output_path.as_posix(),
+                    review_state="rejected",
+                    review_notes="Canceled in test.",
+                )
+                session.add(canceled_job)
+                session.flush()
+
+                item_id = item.id
+                copy_candidate_id = copy_candidate.id
+                image_candidate_id = image_candidate.id
+                source_id = source.id
+                canceled_job_id = canceled_job.id
+
+            settings = client.get("/settings")
+            self.assertEqual(settings.status_code, 200)
+            self.assertIn(b"Clean rejected or canceled items", settings.data)
+            self.assertIn(b"Rejected candidates:", settings.data)
+
+            response = client.post("/settings/cleanup-rejected", follow_redirects=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Cleanup removed", response.data)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                self.assertIsNone(session.get(PlannedContentRecord, item_id))
+                self.assertIsNone(session.get(GeneratedContentCandidateRecord, copy_candidate_id))
+                self.assertIsNone(session.get(GeneratedContentCandidateRecord, image_candidate_id))
+                self.assertIsNone(session.get(AssetRecord, rejected_asset_id))
+                self.assertIsNone(session.get(CreativeGenerationJobRecord, canceled_job_id))
+                self.assertIsNotNone(session.get(AssetRecord, source_id))
+
+            self.assertTrue(source_path.exists())
+            self.assertFalse(rejected_image_path.exists())
+            self.assertFalse(canceled_output_path.exists())
+
     def test_phase5_local_asset_library_scan_indexes_local_root(self) -> None:
         tmp, factory = self.build_session()
         self.addCleanup(tmp.cleanup)
@@ -4397,6 +4611,1117 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             response = client.post("/api/assets/library/scan")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.get_json()["indexed"], 1)
+
+    def test_art_studio_queue_prioritizes_products_with_approved_references_and_sales_signal(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        source_path.write_bytes(tiny_png_bytes())
+
+        with session_scope(factory) as session:
+            strong = ProductRecord(name="Strong Duck")
+            weak = ProductRecord(name="Weak Duck")
+            session.add_all([strong, weak])
+            session.flush()
+            session.add(
+                AssetRecord(
+                    product_id=strong.id,
+                    name="Strong approved source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+            )
+            session.add(
+                ProductSalesRecord(
+                    product_id=strong.id,
+                    source_name="test",
+                    external_id="sale-1",
+                    quantity=12,
+                    revenue_cents=1200,
+                )
+            )
+            session.flush()
+
+            queue = art_studio_queue(session, limit=2)
+            self.assertEqual(queue[0].product.name, "Strong Duck")
+            self.assertEqual(queue[0].approved_reference_count, 1)
+            self.assertIn("$social-media-art-director", queue[0].image_handoff)
+            self.assertIn("video_plan", queue[0].video_handoff)
+
+    def test_art_studio_generation_jobs_queue_and_attach_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-studio-jobs.sqlite"
+            source_path = tmp_path / "source.png"
+            output_path = tmp_path / "generated.png"
+            manifest_path = tmp_path / "manifest.json"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            output_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Queued Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Queued source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                job = enqueue_social_image_generation(session, product.id, source.id)
+                job_id = job.id
+
+            client = app.test_client()
+            api_response = client.get("/api/art-studio/jobs")
+            self.assertEqual(api_response.status_code, 200)
+            payload = api_response.get_json()
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["jobs"][0]["provider_status"], "queued")
+
+            page = client.get("/products")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(f"Job #{job_id}".encode(), page.data)
+            self.assertIn(b"Social image jobs", page.data)
+            self.assertIn(b"Generation request", page.data)
+
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "job_id": job_id,
+                                "media_type": "social_image",
+                                "output_path": output_path.as_posix(),
+                                "title": "Queued generated image",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            summary = run_register_art_studio_outputs_job(db_path=db_path, manifest_path=manifest_path)
+            self.assertEqual(summary["count"], 1)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                queued = session.get(CreativeGenerationJobRecord, job_id)
+                self.assertEqual(queued.provider_status, "generated")
+                self.assertIsNotNone(queued.candidate_asset_id)
+                self.assertEqual(queued.candidate_asset.asset_type, "generated social image")
+                self.assertEqual(queued.candidate_asset.review_state, "needs review")
+
+    def test_social_image_prompt_uses_product_theme_scene_context(self) -> None:
+        product = ProductRecord(
+            name="Construction Duck: 3D Printed Builder Gift",
+            sales_momentum_note="Meet Construction Duck, wearing a hard hat and ready for the job site with tools and worksite attitude.",
+        )
+        direction = social_image_scene_direction(product)
+        self.assertIn("construction site", direction)
+        self.assertIn("tools", direction)
+        self.assertIn("bowling alley", social_image_scene_direction(ProductRecord(name="Bowling Duck: Cruise Duck, 3D Printed")))
+        self.assertIn("woodland", social_image_scene_direction(ProductRecord(name="Chipmunk Duck: Animal Costume Duck, 3D Printed")))
+
+        prompt = social_image_handoff(product, [], "outputs/test")
+        self.assertIn("Product theme context:", prompt)
+        self.assertIn("Scene direction:", prompt)
+        self.assertIn("Scene variation:", prompt)
+        self.assertIn("construction site", prompt)
+        self.assertIn("do not put the duck in a generic office", prompt)
+        self.assertIn("no weapons, ammunition, shell casings", prompt)
+        self.assertIn("adult themes", prompt)
+        self.assertNotIn("After generation", prompt)
+        self.assertNotIn("download the file", prompt)
+        self.assertNotEqual(social_image_scene_variation(1), social_image_scene_variation(2))
+
+    def test_content_automation_exports_art_studio_social_image_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-studio-social-export.sqlite"
+            output_dir = tmp_path / "content-automation"
+            source_path = tmp_path / "source.png"
+            generated_path = tmp_path / "generated-social.png"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            generated_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(
+                    name="Construction Duck: 3D Printed Builder Gift",
+                    sales_momentum_note="Hard hat, tools, and job-site attitude.",
+                )
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Construction source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                job = enqueue_social_image_generation(session, product.id, source.id)
+                job_id = job.id
+
+            summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            self.assertEqual(len(summary["art_studio_social_image_files"]), 1)
+            request_path = Path(summary["art_studio_social_image_files"][0])
+            self.assertTrue(request_path.is_file())
+            payload = json.loads(request_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["workflow_name"], "art_studio_social_worthy_images")
+            self.assertEqual(payload["job_count"], 1)
+            self.assertEqual(payload["jobs"][0]["id"], job_id)
+            self.assertIn("construction site", payload["jobs"][0]["prompt"])
+            self.assertIn("no weapons, ammunition, shell casings", payload["jobs"][0]["prompt"])
+            self.assertIn("adult themes", payload["jobs"][0]["prompt"])
+            self.assertNotIn("After generation", payload["jobs"][0]["prompt"])
+            self.assertNotIn("download the file", payload["jobs"][0]["prompt"])
+            self.assertIn("recommended_output_path", payload["jobs"][0])
+            self.assertEqual(payload["registration_manifest_example"]["outputs"][0]["media_type"], "social_image")
+            self.assertIn("Download each completed image", " ".join(payload["instructions"]))
+            self.assertIn("register_art_studio_outputs", " ".join(payload["instructions"]))
+
+            manifest = payload["registration_manifest_example"]
+            manifest["outputs"][0]["output_path"] = generated_path.as_posix()
+            manifest_path = request_path.parent / "register-social-images.json"
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            registered = run_register_art_studio_outputs_job(db_path=db_path, manifest_path=manifest_path)
+            self.assertEqual(registered["count"], 1)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                completed = session.get(CreativeGenerationJobRecord, job_id)
+                self.assertEqual(completed.provider_status, "generated")
+                self.assertIsNotNone(completed.candidate_asset_id)
+                self.assertEqual(completed.candidate_asset.asset_type, "generated social image")
+
+    def test_art_studio_video_art_board_queue_and_attach_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-board-jobs.sqlite"
+            source_path = tmp_path / "source.png"
+            art_board_path = tmp_path / "art-board.png"
+            manifest_path = tmp_path / "manifest.json"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            art_board_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Storyboard Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Storyboard source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                job = enqueue_video_art_board_generation(
+                    session,
+                    product.id,
+                    source.id,
+                    scene="festive picnic setup",
+                    aspect_ratio="9:16",
+                )
+                job_id = job.id
+                self.assertEqual(job.target_format, "art_studio_video_art_board")
+                self.assertIn("$social-media-art-director", job.prompt)
+                self.assertIn("festive picnic setup", job.prompt)
+
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "job_id": job_id,
+                                "media_type": "video_art_board",
+                                "output_path": art_board_path.as_posix(),
+                                "title": "Storyboard Duck picnic art board",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            summary = run_register_art_studio_outputs_job(db_path=db_path, manifest_path=manifest_path)
+            self.assertEqual(summary["count"], 1)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                queued = session.get(CreativeGenerationJobRecord, job_id)
+                self.assertEqual(queued.provider_status, "generated")
+                self.assertEqual(queued.candidate_asset.asset_type, "generated video art board")
+                self.assertEqual(queued.candidate_asset.asset_role, "video opening card")
+                queue = art_studio_queue(session, limit=1)
+                self.assertEqual(queue[0].video_start_assets[0].id, queued.candidate_asset_id)
+
+    def test_art_studio_video_storyboard_queues_opening_and_ending_cards(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        source_path.write_bytes(tiny_png_bytes("#facc15"))
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Strategist Duck")
+            session.add(product)
+            session.flush()
+            source = AssetRecord(
+                product_id=product.id,
+                name="Strategist source",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                readiness_state="ready",
+                review_state="approved",
+                default_reference=1,
+            )
+            session.add(source)
+            session.flush()
+
+            jobs = enqueue_video_storyboard_generation(
+                session,
+                product.id,
+                source.id,
+                scene_guidance="festive picnic setup with red gingham tablecloth",
+                aspect_ratio="9:16",
+                option_number=2,
+            )
+
+            self.assertEqual(len(jobs), 2)
+            self.assertEqual({json.loads(job.response_metadata_json)["board_role"] for job in jobs}, {"opening_card", "ending_card"})
+            self.assertEqual(len({json.loads(job.response_metadata_json)["storyboard_id"] for job in jobs}), 1)
+            self.assertTrue(all("festive picnic setup" in job.prompt for job in jobs))
+            self.assertTrue(all("exact silhouette" in job.prompt for job in jobs))
+
+            rerun = enqueue_video_storyboard_generation(
+                session,
+                product.id,
+                source.id,
+                scene_guidance="festive picnic setup with red gingham tablecloth",
+                aspect_ratio="9:16",
+                option_number=2,
+            )
+            self.assertEqual([job.id for job in rerun], [job.id for job in jobs])
+
+    def test_art_studio_video_request_approval_uses_generated_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "video-request.sqlite"
+            source_path = tmp_path / "source.png"
+            opening_path = tmp_path / "opening.png"
+            workflow_manifest_path = tmp_path / "workflow-manifest.json"
+            output_manifest_path = tmp_path / "output-manifest.json"
+            output_dir = tmp_path / "content-automation"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            opening_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Approval Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Approval source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                request_job = create_video_request(
+                    session,
+                    product.id,
+                    [source.id],
+                    duration_seconds=6,
+                    aspect_ratio="9:16",
+                    resolution="720p",
+                    scene_guidance="festive picnic setup",
+                )
+                request_id = request_job.id
+                request_rows = art_studio_video_requests(session)
+                self.assertEqual(request_rows[0].status, "queued")
+                self.assertIsNone(request_rows[0].opening_job)
+                self.assertIsNone(request_rows[0].ending_job)
+                metadata = json.loads(request_job.response_metadata_json)
+                self.assertEqual(metadata["storyboard_mode"], "single_start_frame")
+                self.assertFalse(metadata["ending_card_required"])
+                self.assertEqual(metadata["video_template_slug"], "focus_pull")
+                self.assertEqual(metadata["video_template_name"], "Focus pull")
+                self.assertNotIn("video_effect_name", metadata)
+                self.assertIn("Queued for agent-run video planning", request_job.prompt)
+
+            export_summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            self.assertEqual(len(export_summary["video_request_files"]), 1)
+            workflow_path = Path(export_summary["video_request_files"][0])
+            self.assertTrue(workflow_path.is_file())
+            workflow_payload = json.loads(workflow_path.read_text(encoding="utf-8"))
+            self.assertEqual(workflow_payload["request_job_id"], request_id)
+            self.assertEqual(workflow_payload["workflow"]["planner_request"]["skill"], "video-content-planner")
+            self.assertEqual(workflow_payload["workflow"]["art_direction_request"]["skill"], "social-media-art-director")
+            self.assertEqual(workflow_payload["workflow"]["editor_request"]["skill"], "video-editor")
+            self.assertEqual(workflow_payload["workflow"]["editor_request"]["input"]["model_selection"]["mode"], "fidelity_first")
+            self.assertEqual(
+                workflow_payload["workflow"]["editor_request"]["input"]["model_selection"]["suggested_model"],
+                "kling-25",
+            )
+            self.assertIn("audio_direction", workflow_payload["registration_manifest_example"]["planner_result"])
+            self.assertIn("tail_rule", workflow_payload["registration_manifest_example"]["planner_result"])
+
+            workflow_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "request_job_id": request_id,
+                        "provider": "codex_agent",
+                        "notes": "Planner brief registered from agent automation.",
+                        "planner_result": {
+                            "summary": "Create a 6 second 9:16 product-safe social video for Approval Duck in a festive picnic scene with a focus pull.",
+                            "scene_strategy": "festive picnic setup",
+                            "selected_effect": {
+                                "slug": "focus_pull",
+                                "name": "Focus pull",
+                                "risk": "low",
+                                "value": "Use shallow depth and a rack focus while the duck stays frozen.",
+                            },
+                            "opening_card_brief": "Build a realistic picnic opening frame with foreground depth and a scroll-stopping product placement.",
+                            "ending_card_brief": "Not needed for this effect.",
+                            "video_motion_prompt": "Slow rack focus from the foreground texture to the unchanged duck.",
+                            "audio_direction": "Subtle picnic ambience only.",
+                            "style_direction": "Photorealistic high-detail product video, clean social frame, 9:16, no text.",
+                            "tail_rule": "End with the duck physically unchanged while focus settles on the hero product.",
+                            "storyboard_mode": "single_start_frame",
+                            "ending_card_required": False,
+                        },
+                        "opening_card": {
+                            "title": "Approval Duck opening card",
+                            "prompt": "Use $video-content-planner and $social-media-art-director. Create a realistic opening scene card for Approval Duck in a festive picnic setup. Preserve the exact duck from the references. Add foreground depth for a focus pull. No text, no watermark, no changed accessories.",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "ending_card": {
+                            "required": False,
+                            "title": "Approval Duck ending card",
+                            "prompt": "",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "video_editor_request": workflow_payload["workflow"]["editor_request"]["input"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            workflow_summary = run_register_art_studio_video_workflow_job(db_path=db_path, manifest_path=workflow_manifest_path)
+            self.assertEqual(workflow_summary["status"], "cards_in_progress")
+            opening_id = workflow_summary["opening_card_job_id"]
+            self.assertIsNotNone(opening_id)
+
+            output_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "job_id": opening_id,
+                                "media_type": "video_art_board",
+                                "output_path": opening_path.as_posix(),
+                                "title": "Approval Duck opening card",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            summary = run_register_art_studio_outputs_job(db_path=db_path, manifest_path=output_manifest_path)
+            self.assertEqual(summary["count"], 1)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                request_rows = art_studio_video_requests(session)
+                self.assertEqual(request_rows[0].status, "ready_for_approval")
+                self.assertIn("Selected template: Focus pull", request_rows[0].details["strategist_direction"])
+                self.assertIn("Video motion direction: Slow rack focus", request_rows[0].details["strategist_direction"])
+                video_job = approve_video_request_for_generation(session, request_id)
+                self.assertEqual(video_job.target_format, "art_studio_product_video")
+                self.assertIn(f'"video_request_job_id": {request_id}', video_job.response_metadata_json)
+                self.assertIn('"end_frame_asset_id": null', video_job.response_metadata_json)
+                self.assertIn("Suggested model: kling-25.", video_job.prompt)
+                self.assertIn("Subtle picnic ambience only.", video_job.prompt)
+                self.assertIn("End with the duck physically unchanged while focus settles on the hero product.", video_job.prompt)
+
+    def test_art_studio_video_request_exports_agent_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "video-export.sqlite"
+            source_path = Path(tmp) / "source.png"
+            output_dir = Path(tmp) / "content-automation"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Tattoo Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Tattoo Duck source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                create_video_request(
+                    session,
+                    product.id,
+                    [source.id],
+                    duration_seconds=8,
+                    aspect_ratio="9:16",
+                    resolution="1080p",
+                    scene_guidance="tattoo parlor shelf with moody practical lighting",
+                )
+
+            summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            self.assertEqual(len(summary["video_request_files"]), 1)
+            payload = json.loads(Path(summary["video_request_files"][0]).read_text(encoding="utf-8"))
+            self.assertEqual(payload["workflow"]["workflow_name"], "art_studio_video_planner_art_direction_editor")
+            self.assertEqual(payload["workflow"]["planner_request"]["skill"], "video-content-planner")
+            self.assertEqual(payload["workflow"]["art_direction_request"]["skill"], "social-media-art-director")
+            self.assertEqual(payload["workflow"]["editor_request"]["skill"], "video-editor")
+            self.assertEqual(payload["request"]["video_template_slug"], "focus_pull")
+            self.assertEqual(payload["request"]["suggested_video_model"], "kling-25")
+            self.assertIn("register-video-workflow.json", "\n".join(payload["instructions"]))
+
+    def test_social_media_ad_request_preserves_voice_script(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "video-social-ad.sqlite"
+            source_path = tmp_path / "source.png"
+            opening_path = tmp_path / "opening.png"
+            workflow_manifest_path = tmp_path / "workflow-manifest.json"
+            output_manifest_path = tmp_path / "output-manifest.json"
+            output_dir = tmp_path / "content-automation"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            opening_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Ad Voice Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Ad Voice Duck source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                request_job = create_video_request(
+                    session,
+                    product.id,
+                    [source.id],
+                    duration_seconds=6,
+                    aspect_ratio="9:16",
+                    resolution="1080p",
+                    scene_guidance="clean cruise-ship artist workstation with printed art cards",
+                    template_slug="social_media_ad",
+                    voice_script="Limited edition drop now live.",
+                    voice_tone="serious and neutral",
+                )
+                request_id = request_job.id
+
+            export_summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            payload = json.loads(Path(export_summary["video_request_files"][0]).read_text(encoding="utf-8"))
+            self.assertEqual(payload["request"]["video_template_slug"], "social_media_ad")
+            self.assertEqual(payload["request"]["requested_voice_script"], "Limited edition drop now live.")
+            self.assertEqual(payload["workflow"]["planner_request"]["input"]["requested_voice_tone"], "serious and neutral")
+
+            workflow_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "request_job_id": request_id,
+                        "provider": "codex_agent",
+                        "notes": "Planner brief registered from agent automation.",
+                        "planner_result": {
+                            "summary": "Create a 6 second 9:16 product-safe social ad video for Ad Voice Duck from one start frame.",
+                            "scene_strategy": "clean cruise-ship artist workstation with printed art cards",
+                            "selected_effect": {
+                                "slug": "social_media_ad",
+                                "name": "Social Media Ad",
+                                "risk": "medium-high",
+                                "value": "Use clean ad pacing while preserving product identity.",
+                            },
+                            "opening_card_brief": "Build a bright hero opening card that reads instantly in 9:16.",
+                            "ending_card_brief": "Not needed for this effect.",
+                            "video_motion_prompt": "Create a scroll-stopping 9:16 social media ad with clean, realistic camera motion and one punchier emphasis change while keeping the duck exact.",
+                            "style_direction": "Photorealistic high-detail product video, clean social frame, 9:16, no text.",
+                            "tail_rule": "End on the clearest hero product frame with the duck still exact and unchanged.",
+                            "storyboard_mode": "single_start_frame",
+                            "ending_card_required": False,
+                        },
+                        "opening_card": {
+                            "title": "Ad Voice Duck opening card",
+                            "prompt": "Create a bright 9:16 social ad opening card for Ad Voice Duck on a clean cruise-ship artist workstation. Preserve the exact duck and keep the scene product-safe.",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "ending_card": {
+                            "required": False,
+                            "title": "Ad Voice Duck ending card",
+                            "prompt": "",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "video_editor_request": payload["workflow"]["editor_request"]["input"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            workflow_summary = run_register_art_studio_video_workflow_job(db_path=db_path, manifest_path=workflow_manifest_path)
+            opening_id = workflow_summary["opening_card_job_id"]
+            output_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "job_id": opening_id,
+                                "media_type": "video_art_board",
+                                "output_path": opening_path.as_posix(),
+                                "title": "Ad Voice Duck opening card",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            run_register_art_studio_outputs_job(db_path=db_path, manifest_path=output_manifest_path)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                video_job = approve_video_request_for_generation(session, request_id)
+                self.assertIn('Add a short serious and neutral voice saying "Limited edition drop now live."', video_job.prompt)
+                self.assertEqual(video_job.model_name, "bytedance-seedance-pro-2.0")
+
+    def test_art_studio_approved_video_request_exports_generation_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "video-generation-export.sqlite"
+            source_path = tmp_path / "source.png"
+            opening_path = tmp_path / "opening.png"
+            workflow_manifest_path = tmp_path / "workflow-manifest.json"
+            output_manifest_path = tmp_path / "output-manifest.json"
+            output_dir = tmp_path / "content-automation"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            opening_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Export Video Duck")
+                session.add(product)
+                session.flush()
+                source = AssetRecord(
+                    product_id=product.id,
+                    name="Export video source",
+                    asset_type="source photo",
+                    source_path=source_path.as_posix(),
+                    preview_path=source_path.as_posix(),
+                    readiness_state="ready",
+                    review_state="approved",
+                    default_reference=1,
+                )
+                session.add(source)
+                session.flush()
+                request_job = create_video_request(
+                    session,
+                    product.id,
+                    [source.id],
+                    duration_seconds=6,
+                    aspect_ratio="9:16",
+                    resolution="1080p",
+                    scene_guidance="tattoo station counter with ocean light",
+                )
+                request_id = request_job.id
+
+            export_summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            workflow_payload = json.loads(Path(export_summary["video_request_files"][0]).read_text(encoding="utf-8"))
+            workflow_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "request_job_id": request_id,
+                        "provider": "codex_agent",
+                        "notes": "Planner brief registered from agent automation.",
+                        "planner_result": {
+                            "summary": "Create a 6 second 9:16 product-safe social video for Export Video Duck in a tattoo station scene with a focus pull.",
+                            "scene_strategy": "tattoo station counter with ocean light",
+                            "selected_effect": {
+                                "slug": "focus_pull",
+                                "name": "Focus pull",
+                                "risk": "low",
+                                "value": "Use shallow depth and a rack focus while the duck stays frozen.",
+                            },
+                            "opening_card_brief": "Build a realistic tattoo-station opening frame with foreground depth and a clear hero placement.",
+                            "ending_card_brief": "Not needed for this effect.",
+                            "video_motion_prompt": "Slow rack focus from a foreground station detail to the unchanged duck.",
+                            "audio_direction": "Subtle room tone with distant ship ambience.",
+                            "style_direction": "Photorealistic high-detail product video, clean social frame, 9:16, no text.",
+                            "tail_rule": "End with the duck unchanged while the focus settles into a clean final frame.",
+                            "storyboard_mode": "single_start_frame",
+                            "ending_card_required": False,
+                        },
+                        "opening_card": {
+                            "title": "Export Video Duck opening card",
+                            "prompt": "Create a realistic opening scene card for Export Video Duck in a tattoo station counter scene. Preserve the exact duck from the references. Add foreground depth for a focus pull. No text or watermark.",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "ending_card": {
+                            "required": False,
+                            "title": "Export Video Duck ending card",
+                            "prompt": "",
+                            "provider": "magnific_mcp",
+                            "model_name": "Google Nano Banana 2",
+                        },
+                        "video_editor_request": workflow_payload["workflow"]["editor_request"]["input"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            workflow_summary = run_register_art_studio_video_workflow_job(db_path=db_path, manifest_path=workflow_manifest_path)
+            opening_id = workflow_summary["opening_card_job_id"]
+            output_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "outputs": [
+                            {
+                                "job_id": opening_id,
+                                "media_type": "video_art_board",
+                                "output_path": opening_path.as_posix(),
+                                "title": "Export Video Duck opening card",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            run_register_art_studio_outputs_job(db_path=db_path, manifest_path=output_manifest_path)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                video_job = approve_video_request_for_generation(session, request_id)
+                self.assertEqual(video_job.target_format, "art_studio_product_video")
+
+            summary = run_content_automation_job(db_path=db_path, output_dir=output_dir, limit=10, days_ahead=14)
+            self.assertEqual(summary["video_request_files"], [])
+            self.assertEqual(len(summary["video_generation_files"]), 1)
+            payload = json.loads(Path(summary["video_generation_files"][0]).read_text(encoding="utf-8"))
+            self.assertEqual(payload["request_job_id"], request_id)
+            self.assertEqual(payload["status"], "video_queued")
+            self.assertEqual(payload["video_job"]["target_format"], "art_studio_product_video")
+            self.assertEqual(payload["registration_manifest_example"]["outputs"][0]["media_type"], "product_video")
+            self.assertIn("Use video-editor and Magnific MCP", payload["instructions"][0])
+            self.assertEqual(payload["video_editor_request"]["model_selection"]["mode"], "fidelity_first")
+            self.assertTrue(payload["brief"]["audio_direction"])
+            self.assertTrue(payload["brief"]["style_direction"])
+            self.assertTrue(payload["brief"]["tail_rule"])
+
+    def test_art_studio_social_image_import_is_review_gated_and_reusable_after_approval(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        output_path = Path(tmp.name) / "social.png"
+        source_path.write_bytes(tiny_png_bytes("#facc15"))
+        output_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Reusable Duck")
+            session.add(product)
+            session.flush()
+            source = AssetRecord(
+                product_id=product.id,
+                name="Reusable source",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                readiness_state="ready",
+                review_state="approved",
+                default_reference=1,
+            )
+            session.add(source)
+            session.flush()
+
+            asset = register_social_image_output(
+                session,
+                product_id=product.id,
+                source_asset_id=source.id,
+                output_path=output_path,
+                title="Reusable social image",
+                prompt="Create a product-safe social image.",
+            )
+            self.assertEqual(asset.asset_type, "generated social image")
+            self.assertEqual(asset.asset_role, "social worthy image")
+            self.assertEqual(asset.review_state, "needs review")
+            self.assertEqual(asset.source_asset_id, source.id)
+
+            review_asset(session, asset.id, "approved", "Looks accurate.")
+            from marketing_os.services.content_briefs import _best_task_asset
+
+            selected = _best_task_asset(session, product)
+            self.assertIsNotNone(selected)
+            self.assertEqual(selected.id, asset.id)
+
+    def test_art_studio_video_queue_prefers_generated_scene_start_frame(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        scene_path = Path(tmp.name) / "scene.png"
+        source_path.write_bytes(tiny_png_bytes("#0ea5e9"))
+        scene_path.write_bytes(tiny_png_bytes("#22c55e"))
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Scene First Duck")
+            session.add(product)
+            session.flush()
+            source = AssetRecord(
+                product_id=product.id,
+                name="Plain source",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                readiness_state="ready",
+                review_state="approved",
+                default_reference=1,
+            )
+            scene = AssetRecord(
+                product_id=product.id,
+                name="Generated picnic scene",
+                asset_type="generated social image",
+                asset_role="social worthy image",
+                source_path=scene_path.as_posix(),
+                preview_path=scene_path.as_posix(),
+                readiness_state="needs human review",
+                review_state="needs review",
+            )
+            session.add_all([source, scene])
+            session.flush()
+
+            queue = art_studio_queue(session, limit=1)
+            self.assertEqual(queue[0].video_start_assets[0].id, scene.id)
+            self.assertIn("start frame", queue[0].video_handoff.lower())
+            self.assertIn("extra yellow pieces", queue[0].video_handoff)
+
+            job = enqueue_video_generation(session, product.id, scene.id)
+            self.assertEqual(job.source_asset_id, scene.id)
+            self.assertEqual(job.model_name, "kling-25")
+            self.assertIn("start_frame_strategy", job.response_metadata_json)
+            self.assertIn("extra yellow pieces", job.prompt)
+            for section in [
+                "SCENE:",
+                "SUBJECT:",
+                "REFERENCE / PRODUCT LOCK:",
+                "MOTION:",
+                "AUDIO:",
+                "STYLE:",
+                "NEGATIVE PROMPT:",
+                "TAIL (Ending Rule):",
+            ]:
+                self.assertIn(section, job.prompt)
+            self.assertIn("Product video for Scene First Duck. 8 seconds. 9:16. 1080p.", job.prompt)
+            self.assertIn("Use the approved opening card as the first frame.", job.prompt)
+            self.assertIn("Keep the duck identical", job.prompt)
+            self.assertIn("0-2s -", job.prompt)
+            self.assertIn("2-5s -", job.prompt)
+            self.assertIn("5-8s -", job.prompt)
+            self.assertIn("Subtle realistic ambient sound", job.prompt)
+            self.assertIn("Photorealistic high-detail product video", job.prompt)
+            self.assertIn("plain product-photo opening card", job.prompt)
+            self.assertIn(DEFAULT_VIDEO_NEGATIVE_PROMPT, job.prompt)
+
+            end_scene = AssetRecord(
+                product_id=product.id,
+                name="Generated picnic ending",
+                asset_type="generated video art board",
+                asset_role="video ending card",
+                source_path=scene_path.as_posix(),
+                preview_path=scene_path.as_posix(),
+                readiness_state="needs human review",
+                review_state="needs review",
+            )
+            session.add(end_scene)
+            session.flush()
+            paired_job = enqueue_video_generation(session, product.id, scene.id, end_asset_id=end_scene.id)
+            self.assertIn(f'"end_frame_asset_id": {end_scene.id}', paired_job.response_metadata_json)
+            self.assertIn("End frame:", paired_job.prompt)
+
+    def test_art_studio_video_guardrails_and_registration_metadata(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        video_path = Path(tmp.name) / "video.mp4"
+        source_path.write_bytes(tiny_png_bytes("#0ea5e9"))
+        video_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+
+        safe = validate_video_motion_prompt(
+            "The camera slowly pushes in. No walking, talking, blinking, flapping, or transformation."
+        )
+        self.assertTrue(safe["passed"])
+        safe_with_negative_section = validate_video_motion_prompt(
+            "The camera slowly pushes in while the duck remains still.\n\n"
+            f"NEGATIVE PROMPT:\n{DEFAULT_VIDEO_NEGATIVE_PROMPT}"
+        )
+        self.assertTrue(safe_with_negative_section["passed"])
+        unsafe = validate_video_motion_prompt("The duck rides down the highway and talks to camera.")
+        self.assertFalse(unsafe["passed"])
+        self.assertIn("rides", unsafe["disallowed_motion_terms"])
+        self.assertIn("talks", unsafe["disallowed_motion_terms"])
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Video Duck")
+            session.add(product)
+            session.flush()
+            source = AssetRecord(
+                product_id=product.id,
+                name="Video source",
+                asset_type="source photo",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                readiness_state="ready",
+                review_state="approved",
+                default_reference=1,
+            )
+            session.add(source)
+            session.flush()
+
+            video = register_video_output(
+                session,
+                product_id=product.id,
+                source_asset_id=source.id,
+                video_path=video_path,
+                title="Video Duck pilot",
+                prompt="The camera slowly pushes in while road lights pass in the background. The duck remains still.",
+                duration_seconds=8,
+                aspect_ratio="9:16",
+                resolution="1080p",
+            )
+            self.assertEqual(video.asset_type, "generated product video")
+            self.assertEqual(video.asset_role, "social video option")
+            self.assertEqual(video.mime_type, "video/mp4")
+            self.assertEqual(video.review_state, "needs review")
+            self.assertIn(DEFAULT_VIDEO_NEGATIVE_PROMPT, video.notes)
+
+    def test_long_art_studio_video_uses_seedance_default_model(self) -> None:
+        tmp, factory = self.build_session()
+        self.addCleanup(tmp.cleanup)
+        source_path = Path(tmp.name) / "source.png"
+        source_path.write_bytes(tiny_png_bytes("#0ea5e9"))
+
+        with session_scope(factory) as session:
+            product = ProductRecord(name="Long Clip Duck")
+            session.add(product)
+            session.flush()
+            source = AssetRecord(
+                product_id=product.id,
+                name="Long clip source",
+                asset_type="generated video art board",
+                asset_role="video opening card",
+                source_path=source_path.as_posix(),
+                preview_path=source_path.as_posix(),
+                readiness_state="needs human review",
+                review_state="needs review",
+            )
+            session.add(source)
+            session.flush()
+
+            job = enqueue_video_generation(session, product.id, source.id, duration_seconds=10, aspect_ratio="9:16", resolution="1080p")
+            self.assertEqual(job.model_name, "bytedance-seedance-pro-2.0")
+
+    def test_products_queue_social_images_from_default_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "products-social-images.sqlite"
+            source_paths = [tmp_path / f"source-{index}.png" for index in range(1, 4)]
+            for source_path in source_paths:
+                source_path.write_bytes(tiny_png_bytes("#facc15"))
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                product = ProductRecord(name="Social Duck")
+                session.add(product)
+                session.flush()
+                for index, source_path in enumerate(source_paths, start=1):
+                    session.add(
+                        AssetRecord(
+                            product_id=product.id,
+                            name=f"Social source {index}",
+                            asset_type="source photo",
+                            source_path=source_path.as_posix(),
+                            preview_path=source_path.as_posix(),
+                            readiness_state="ready",
+                            review_state="approved",
+                            default_reference=1,
+                        )
+                    )
+                product_id = product.id
+
+            client = app.test_client()
+            page = client.get("/products")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"Social Images", page.data)
+            self.assertIn(b"3 default refs", page.data)
+
+            response = client.post(
+                f"/products/{product_id}/social-images/queue",
+                data={"option_number": "3"},
+                follow_redirects=True,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Queued 3 Social Worthy image jobs for Social Duck.", response.data)
+            self.assertIn(b"Social image jobs", response.data)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                jobs = list(session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.id)))
+                self.assertEqual(len(jobs), 3)
+                prompts = [job.prompt for job in jobs]
+                for index, job in enumerate(jobs, start=1):
+                    metadata = json.loads(job.response_metadata_json)
+                    self.assertEqual(job.target_format, "art_studio_social_image")
+                    self.assertEqual(metadata["option_number"], index)
+                    self.assertEqual(len(metadata["reference_asset_ids"]), 3)
+                    self.assertIn("@img1 primary visible product angle", job.prompt)
+                    self.assertIn("@img2 identity lock side/profile angle", job.prompt)
+                    self.assertIn("@img3 identity lock detail angle", job.prompt)
+                    self.assertIn(f"Option {index}:", job.prompt)
+                    self.assertIn("Social Duck", job.prompt)
+                self.assertEqual(len(set(prompts)), 3)
+
+    def test_video_studio_page_renders_video_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "art-studio.sqlite"
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+            client = app.test_client()
+
+            legacy_social = client.get("/art-studio?tab=social-images")
+            self.assertEqual(legacy_social.status_code, 302)
+            self.assertIn("/products", legacy_social.headers["Location"])
+
+            video = client.get("/art-studio")
+            self.assertEqual(video.status_code, 200)
+            self.assertIn(b"Video Studio", video.data)
+            self.assertNotIn(b">Social Images</a>", video.data)
+            self.assertIn(b"Create product video", video.data)
+            self.assertIn(b'data-duration-slider', video.data)
+            self.assertIn(b'aspect-picker', video.data)
+            self.assertIn(b'Motion template', video.data)
+            self.assertIn(b'Dolly In', video.data)
+            self.assertIn(b'Vertigo Zoom', video.data)
+            self.assertIn(b'Fidelity-first flow', video.data)
+            self.assertIn(b'Voice script', video.data)
+            self.assertIn(b'serious and neutral', video.data)
+            self.assertIn(b'type="hidden" name="resolution" value="1080p"', video.data)
+            self.assertNotIn(b"1080p final", video.data)
+            self.assertNotIn(b"Three-step flow", video.data)
+
+    def test_art_studio_video_product_picker_includes_products_beyond_display_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-studio-products.sqlite"
+            source_path = tmp_path / "source.png"
+            source_path.write_bytes(tiny_png_bytes("#facc15"))
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                for index in range(35):
+                    product = ProductRecord(name=f"Video Product {index:02d}")
+                    session.add(product)
+                    session.flush()
+                    session.add(
+                        AssetRecord(
+                            product_id=product.id,
+                            name=f"Reference {index:02d}",
+                            asset_type="source photo",
+                            source_path=source_path.as_posix(),
+                            preview_path=source_path.as_posix(),
+                            readiness_state="ready",
+                            review_state="approved",
+                            default_reference=1,
+                        )
+                    )
+
+            response = app.test_client().get("/art-studio?tab=video")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Video Product 00", response.data)
+            self.assertIn(b"Video Product 34", response.data)
+
+    def test_art_studio_video_product_picker_sorts_products_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "art-studio-video-sort.sqlite"
+            source_path = tmp_path / "source.png"
+            source_path.write_bytes(tiny_png_bytes("#22c55e"))
+            app = create_app(db_path)
+            self.addCleanup(app.config["SESSION_FACTORY"].kw["bind"].dispose)
+
+            with session_scope(app.config["SESSION_FACTORY"]) as session:
+                for name in ["Zulu Duck", "Alpha Duck", "Bravo Duck"]:
+                    product = ProductRecord(name=name)
+                    session.add(product)
+                    session.flush()
+                    session.add(
+                        AssetRecord(
+                            product_id=product.id,
+                            name=f"{name} Reference",
+                            asset_type="source photo",
+                            source_path=source_path.as_posix(),
+                            preview_path=source_path.as_posix(),
+                            readiness_state="ready",
+                            review_state="approved",
+                            default_reference=1,
+                        )
+                    )
+
+            response = app.test_client().get("/art-studio?tab=video")
+            self.assertEqual(response.status_code, 200)
+            page = response.data.decode("utf-8")
+            self.assertLess(page.index("Alpha Duck"), page.index("Bravo Duck"))
+            self.assertLess(page.index("Bravo Duck"), page.index("Zulu Duck"))
 
 
 if __name__ == "__main__":

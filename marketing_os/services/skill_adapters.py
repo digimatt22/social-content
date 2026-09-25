@@ -14,6 +14,31 @@ class SkillContract:
     check: dict[str, object]
 
 
+def _video_model_defaults(duration_seconds: int) -> dict[str, str]:
+    if duration_seconds > 8:
+        return {
+            "draft": "bytedance-seedance-fast-2.0",
+            "final": "bytedance-seedance-pro-2.0",
+        }
+    return {
+        "draft": "kling-25",
+        "final": "kling-25",
+    }
+
+
+def _video_model_selection(duration_seconds: int, suggested_model: str = "") -> dict[str, object]:
+    explicit = _video_model_defaults(duration_seconds)
+    pinned = suggested_model.strip() or explicit["final"]
+    return {
+        "mode": "fidelity_first",
+        "label": "Pinned suggested model",
+        "suggested_model": pinned,
+        "draft_model": explicit["draft"],
+        "fallback_final_model": explicit["final"],
+        "selection_rule": "Always fidelity first. Use suggested_model when present; do not use auto model selection.",
+    }
+
+
 def copywriter_contract(brief: dict[str, object], destination: str) -> SkillContract:
     """Map Marketing OS source facts into the reusable copywriter skill shape."""
     products = [str(item) for item in brief.get("products", []) if str(item).strip()]
@@ -171,6 +196,249 @@ def social_media_art_director_contracts(brief: dict[str, object], count: int = 3
     return contracts
 
 
+def art_studio_video_workflow_contract(
+    *,
+    request_job_id: int,
+    product_id: int,
+    product_name: str,
+    duration_seconds: int,
+    aspect_ratio: str,
+    resolution: str,
+    scene_guidance: str,
+    requested_template_slug: str,
+    requested_template_name: str,
+    suggested_model: str,
+    requested_voice_script: str,
+    requested_voice_tone: str,
+    reference_images: list[str],
+    source_asset_ids: list[int],
+) -> dict[str, object]:
+    planner = video_content_planner_contract(
+        request_job_id=request_job_id,
+        product_id=product_id,
+        product_name=product_name,
+        duration_seconds=duration_seconds,
+        aspect_ratio=aspect_ratio,
+        resolution=resolution,
+        scene_guidance=scene_guidance,
+        requested_template_slug=requested_template_slug,
+        requested_template_name=requested_template_name,
+        suggested_model=suggested_model,
+        requested_voice_script=requested_voice_script,
+        requested_voice_tone=requested_voice_tone,
+        reference_images=reference_images,
+        source_asset_ids=source_asset_ids,
+    )
+    art_director_request = {
+        "skill": "social-media-art-director",
+        "input": {
+            "platform": "social video",
+            "destination": "social video",
+            "format": "opening scene card / first frame",
+            "audience": "collectors and gift buyers",
+            "goal": "scroll-stopping opening frame for product-safe video",
+            "subject": product_name,
+            "social_angle": "planner-selected video direction",
+            "brand_style": "MattMadeMe handmade, playful, product-accurate, realistic",
+            "details": json.dumps(
+                {
+                    "request_job_id": request_job_id,
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "duration_seconds": duration_seconds,
+                    "aspect_ratio": aspect_ratio,
+                    "scene_guidance": scene_guidance,
+                    "requested_template_slug": requested_template_slug,
+                    "requested_template_name": requested_template_name,
+                    "requested_voice_script": requested_voice_script,
+                    "requested_voice_tone": requested_voice_tone,
+                    "task": (
+                        "Use the saved video-content-planner result and honor the requested video template when writing the opening scene-card prompt. "
+                        "Generate an ending card prompt only when the planner explicitly says first/last-frame control is required."
+                    ),
+                },
+                indent=2,
+            ),
+            "reference_images": reference_images,
+            "reference_image_roles": _reference_roles(reference_images),
+            "aspect_ratio": aspect_ratio,
+            "provider_path": "magnific-mcp",
+            "fallback_provider_path": "built-in-image-edit",
+            "model_preference": "Google Nano Banana 2",
+            "must_include": [product_name],
+            "avoid": [
+                "text overlays",
+                "watermarks",
+                "duplicate products",
+                "invented accessories",
+                "distorted product details",
+                "plain listing-photo opening cards",
+            ],
+            "source_asset_ids": source_asset_ids,
+            "task": (
+                "Create the exact opening scene-card prompt from the planner result. Preserve the duck exactly as shown in the references. "
+                "Default to a single opening card. Only add an ending card when the planner requires controlled first/last-frame motion."
+            ),
+        },
+    }
+    editor_request = {
+        "skill": "video-editor",
+        "input": {
+            "product": product_name,
+            "request_job_id": request_job_id,
+            "product_id": product_id,
+            "duration_seconds": duration_seconds,
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+            "source_references": reference_images,
+            "reference_image_roles": _reference_roles(reference_images),
+            "requested_template_slug": requested_template_slug,
+            "requested_template_name": requested_template_name,
+            "suggested_model": suggested_model,
+            "requested_voice_script": requested_voice_script,
+            "requested_voice_tone": requested_voice_tone,
+            "model_defaults": _video_model_defaults(duration_seconds),
+            "model_selection": _video_model_selection(duration_seconds, suggested_model),
+            "prompt_sections": [
+                "SCENE",
+                "SUBJECT",
+                "REFERENCE / PRODUCT LOCK",
+                "MOTION",
+                "AUDIO",
+                "STYLE",
+                "NEGATIVE PROMPT",
+                "TAIL (Ending Rule)",
+            ],
+            "prompt_requirements": {
+                "time_coded_motion_beats": 3,
+                "start_frame_rule": "Use the approved opening scene card as the first frame.",
+                "end_frame_rule": "Use an ending card only when the planner explicitly required one.",
+                "audio_rule": "Use subtle scene-matched ambient sound unless the user asks for something else.",
+                "style_rule": "Keep the result photorealistic, product-safe, and free of text or watermarks.",
+                "tail_rule": "End with the duck physically unchanged while motion settles into a clean final frame.",
+            },
+            "negative_prompt": (
+                "walking, riding by itself, flapping, talking, blinking, changing expression, living creature, "
+                "animated face, transforming, changed accessories, changed material, resized product, distorted product, "
+                "extra yellow pieces, extra parts, extra products, duplicate products, plain product-photo opening card, "
+                "boring fade-in from listing photo, blurry, low quality, watermark, text"
+            ),
+            "task": (
+                "After the opening scene card exists and a human approves video generation, package the final Magnific handoff. "
+                "Use the planner-selected effect, honor the requested video template, start from the approved opening card, add an ending card only when the planner required it, "
+                f"and pin the suggested fidelity-first model ({suggested_model}) unless validation requires a different slug."
+            ),
+        },
+    }
+    return {
+        "workflow_name": "art_studio_video_planner_art_direction_editor",
+        "request_job_id": request_job_id,
+        "product_id": product_id,
+        "product_name": product_name,
+        "planner_request": {"skill": planner.skill_name, "input": planner.request},
+        "art_direction_request": art_director_request,
+        "editor_request": editor_request,
+        "contract_check": planner.check,
+    }
+
+
+def video_content_planner_contract(
+    *,
+    request_job_id: int,
+    product_id: int,
+    product_name: str,
+    duration_seconds: int,
+    aspect_ratio: str,
+    resolution: str,
+    scene_guidance: str,
+    requested_template_slug: str,
+    requested_template_name: str,
+    suggested_model: str,
+    requested_voice_script: str,
+    requested_voice_tone: str,
+    reference_images: list[str],
+    source_asset_ids: list[int],
+) -> SkillContract:
+    request = {
+        "request_job_id": request_job_id,
+        "product_id": product_id,
+        "product": product_name,
+        "platform": "short-form social video",
+        "duration": f"{duration_seconds} seconds",
+        "duration_seconds": duration_seconds,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+        "requested_template_slug": requested_template_slug,
+        "requested_template_name": requested_template_name,
+        "suggested_model": suggested_model,
+        "requested_voice_script": requested_voice_script,
+        "requested_voice_tone": requested_voice_tone,
+        "start_frame_strategy": "Generate one product-in-scene opening card first, then use it as the video start frame.",
+        "source_references": reference_images,
+        "reference_image_roles": _reference_roles(reference_images),
+        "scene_reference": scene_guidance,
+        "social_angle": "Choose the strongest single product-safe scene direction for this queued request.",
+        "environment": scene_guidance or "planner-selected real-world scene",
+        "audio": requested_voice_script.strip() or "subtle ambient sound effects only",
+        "allowed_motion": [
+            "camera push-in",
+            "camera pan",
+            "small orbit",
+            "focus pull",
+            "light motion",
+            "environmental motion",
+            "time passing around a still product",
+        ],
+        "disallowed_motion": [
+            "walking",
+            "riding by itself",
+            "flapping",
+            "talking",
+            "blinking",
+            "changing expression",
+            "transforming",
+            "changing accessories",
+            "changing material",
+            "resizing",
+        ],
+        "model_path": {
+            **_video_model_defaults(duration_seconds),
+            "final": suggested_model.strip() or _video_model_defaults(duration_seconds)["final"],
+        },
+        "model_selection": _video_model_selection(duration_seconds, suggested_model),
+        "required_output_fields": [
+            "summary",
+            "scene_strategy",
+            "selected_effect.slug",
+            "selected_effect.name",
+            "selected_effect.risk",
+            "selected_effect.value",
+            "opening_card_brief",
+            "ending_card_brief",
+            "video_motion_prompt",
+            "audio_direction",
+            "style_direction",
+            "tail_rule",
+            "storyboard_mode",
+            "ending_card_required",
+        ],
+        "source_asset_ids": source_asset_ids,
+        "review_checklist": [
+            "Pick exactly one scene direction for the queued product.",
+            "Choose one effect style and explain why it is the safest useful choice.",
+            "Default to a single opening card unless first/last-frame control is clearly required.",
+            "Keep the duck inanimate and physically unchanged.",
+            "Do not approve, publish, or generate the final video automatically.",
+        ],
+        "task": (
+            "Plan one product-safe short-form video direction for this queued product. Honor the requested video template unless it is clearly unsafe or incompatible. "
+            "Choose the scene, selected effect, opening card brief, optional ending card brief, motion prompt, audio direction, style direction, ending rule, and whether an ending card is actually required. "
+            "If requested_voice_script is present, preserve it as a clean voice instruction instead of dropping back to generic ambient audio."
+        ),
+    }
+    return SkillContract("video-content-planner", request, _video_content_planner_check(request))
+
+
 def image_option_from_contract(contract: SkillContract) -> dict[str, object]:
     request = dict(contract.request)
     details = _json_dict(str(request.get("details") or "{}"))
@@ -291,6 +559,19 @@ def _social_media_art_director_check(request: dict[str, object]) -> dict[str, ob
         "missing_required": missing,
         "missing_recommended": warnings,
         "notes": ["Brief has the minimum fields needed to prepare an image prompt."] if not missing else [],
+    }
+
+
+def _video_content_planner_check(request: dict[str, object]) -> dict[str, object]:
+    missing = [field for field in ["product", "duration", "aspect_ratio"] if not str(request.get(field, "")).strip()]
+    warnings = [field for field in ["scene_reference", "resolution"] if not str(request.get(field, "")).strip()]
+    if not isinstance(request.get("source_references"), list) or not request.get("source_references"):
+        missing.append("source_references")
+    return {
+        "status": "blocked" if missing else ("ready_with_assumptions" if warnings else "ready"),
+        "missing_required": missing,
+        "missing_recommended": warnings,
+        "notes": ["Queued request has the minimum fields needed for a product-safe video planning pass."] if not missing else [],
     }
 
 

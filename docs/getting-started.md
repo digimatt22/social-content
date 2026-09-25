@@ -35,17 +35,18 @@ python run_local.py --bootstrap-data
 ```
 
 The server binds to `0.0.0.0` by default so trusted devices on the same network can reach it.
+The default development port is `3001` so Marketing OS can run alongside other local dev servers.
 
 On the same machine, open:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:3001
 ```
 
 From another device on the same network, open:
 
 ```text
-http://<this-computer-ip>:8000
+http://<this-computer-ip>:3001
 ```
 
 Use this only on a trusted local network. The app is not meant to be exposed to the public internet.
@@ -97,10 +98,10 @@ OK
 
 ## Useful Commands
 
-Run the console on another port:
+Run the console on another port only when `3001` is unavailable:
 
 ```bash
-python run_local.py --port 8080
+python run_local.py --port 3002
 ```
 
 Restrict the console to this computer only:

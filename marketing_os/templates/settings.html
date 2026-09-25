@@ -60,6 +60,16 @@
       <button type="submit">Export</button>
     </form>
   </section>
+  <section class="panel">
+    <h3>Cleanup Rejected Items</h3>
+    <p class="subtle">Remove rejected or canceled generated artifacts from the database and delete their local output files. Approved assets and source photos are left alone.</p>
+    <p><strong>Rejected candidates:</strong> {{ cleanup_counts.rejected_candidates }}</p>
+    <p><strong>Rejected generated assets:</strong> {{ cleanup_counts.rejected_generated_assets }}</p>
+    <p><strong>Rejected or canceled jobs:</strong> {{ cleanup_counts.canceled_or_rejected_jobs }}</p>
+    <form method="post" action="{{ url_for('cleanup_rejected_items') }}" onsubmit="return confirm('Delete rejected or canceled generated items and their local files?');">
+      <button class="warn" type="submit">Clean rejected or canceled items</button>
+    </form>
+  </section>
 </div>
 
 <div class="processing-modal" data-etsy-order-items-modal hidden>
