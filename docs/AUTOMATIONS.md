@@ -90,6 +90,8 @@ in `docs/architecture/pinterest-shadow-production-v1.md`.
 
 Art Studio social-image drain registers `art_studio.social_image.generate` when `MAGNIFIC_API_KEY` is configured. The handler claims queued `CreativeGenerationJobRecord` rows (`target_format=art_studio_social_image`, provider `magnific_mcp` or `magnific_api`), calls Magnific REST Nano Banana Pro Flash, downloads the output, and registers a needs-review candidate. Empty API key skips/no-ops; video jobs are not drained. `MAGNIFIC_WEBHOOK_SECRET` is reserved for later webhook verification. Handler reads `aspect_ratio` from creative job metadata (platform map; default 1:1).
 
+Agents find product refs and generated assets via `GET /api/assets` (filters: `product_id`, `asset_type`, `review_state`, `platform`, `aspect_ratio`, `q`) or `GET /api/products/<id>/assets`. Platform/aspect on list rows come from linked `CreativeGenerationJobRecord` metadata when present.
+
 Phase 4 registers `pinterest.publish` and `pinterest.reconcile` for disabled
 contract/recovery testing. Production refuses the fixture provider and no live
 adapter is installed. An ambiguous response commits `publish_unknown` before

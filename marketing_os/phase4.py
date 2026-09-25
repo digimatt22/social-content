@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import math
+import re
 import json
 import urllib.parse
 import urllib.request
@@ -45,6 +47,10 @@ ASSET_TAG_LABELS = {
     "etsy product photo": "etsy",
     "external listing image": "etsy",
     "generated post image": "magnific",
+    "generated social image": "social",
+    "generated video art board": "video-board",
+    "generated product video": "video",
+    "source photo": "source",
 }
 
 
@@ -128,6 +134,8 @@ class AssetView:
     asset: AssetRecord
     used_by: list[TaskView]
     grouped_assets: list[AssetRecord] | None = None
+    platform: str = ""
+    aspect_ratio: str = ""
 
     @property
     def related_assets(self) -> list[AssetRecord]:
@@ -289,11 +297,13 @@ def serialize_asset_view(model: AssetView) -> JsonDict:
     asset = model.asset
     return {
         "id": asset.id,
+        "product_id": asset.product_id,
         "name": asset.name,
         "product": asset.product.name if asset.product else "",
         "asset_type": asset.asset_type,
         "source_path": asset.source_path,
         "preview_path": asset.preview_path,
+        "canonical_url": asset.canonical_url,
         "readiness_state": asset.readiness_state,
         "review_state": asset.review_state,
         "file_exists": bool(asset.file_exists),
@@ -308,6 +318,11 @@ def serialize_asset_view(model: AssetView) -> JsonDict:
         "manual_override_note": asset.manual_override_note,
         "hidden_from_generation": bool(asset.hidden_from_generation),
         "source_asset_id": asset.source_asset_id,
+        "platform": model.platform or "",
+        "aspect_ratio": model.aspect_ratio or "",
+        "width": asset.width,
+        "height": asset.height,
+        "default_reference": bool(asset.default_reference),
         "used_by": [serialize_task_view(task) for task in model.used_by],
     }
 
@@ -587,37 +602,117 @@ def generate_creative_output_files_for_source(
     return run
 
 
+def _filtered_representative_assets(
+    session: Session,
+    include_hidden: bool = False,
+    tag: str = "",
+    product_id: int | None = None,
+    asset_type: str = "",
+    review_state: str = "",
+    platform: str = "",
+    aspect_ratio: str = "",
+    q: str = "",
+) -> tuple[list[AssetRecord], dict[int, list[AssetRecord]], dict[int, dict[str, str]]]:
+    _normalize_duplicate_asset_visibility(session)
+    assets = _representative_assets(
+        list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id))),
+        include_hidden=include_hidden,
+    )
+    grouped_assets_by_representative = _grouped_assets_by_representative(session, assets)
+    type_filter = (asset_type or tag or "").strip()
+    if type_filter:
+        assets = [
+            asset
+            for asset in assets
+            if _asset_group_matches_asset_tag(grouped_assets_by_representative.get(asset.id, [asset]), type_filter)
+        ]
+    if product_id is not None:
+        assets = [
+            asset
+            for asset in assets
+            if any(grouped.product_id == product_id for grouped in grouped_assets_by_representative.get(asset.id, [asset]))
+        ]
+    if review_state.strip():
+        selected_review = review_state.strip().lower()
+        assets = [
+            asset
+            for asset in assets
+            if any(
+                (grouped.review_state or "").strip().lower() == selected_review
+                for grouped in grouped_assets_by_representative.get(asset.id, [asset])
+            )
+        ]
+    if q.strip():
+        needle = q.strip().lower()
+        assets = [
+            asset
+            for asset in assets
+            if any(needle in (grouped.name or "").lower() for grouped in grouped_assets_by_representative.get(asset.id, [asset]))
+        ]
+
+    candidate_ids = [
+        grouped.id
+        for asset in assets
+        for grouped in grouped_assets_by_representative.get(asset.id, [asset])
+    ]
+    frames_by_asset = _generation_frames_by_asset_id(session, candidate_ids)
+    if platform.strip() or aspect_ratio.strip():
+        assets = [
+            asset
+            for asset in assets
+            if _asset_group_matches_frame(
+                grouped_assets_by_representative.get(asset.id, [asset]),
+                frames_by_asset,
+                platform=platform,
+                aspect_ratio=aspect_ratio,
+            )
+        ]
+    grouped_assets_by_representative = {
+        asset.id: grouped_assets_by_representative.get(asset.id, [asset])
+        for asset in assets
+    }
+    return assets, grouped_assets_by_representative, frames_by_asset
+
+
 def asset_inventory(
     session: Session,
     include_hidden: bool = False,
     limit: int | None = None,
     offset: int = 0,
     tag: str = "",
+    product_id: int | None = None,
+    asset_type: str = "",
+    review_state: str = "",
+    platform: str = "",
+    aspect_ratio: str = "",
+    q: str = "",
 ) -> list[AssetView]:
-    _normalize_duplicate_asset_visibility(session)
-    query = select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id)
-    assets = _representative_assets(list(session.scalars(query)), include_hidden=include_hidden)
-    grouped_assets_by_representative = _grouped_assets_by_representative(session, assets)
-    if tag:
-        assets = [
-            asset
-            for asset in assets
-            if _asset_group_matches_asset_tag(grouped_assets_by_representative.get(asset.id, [asset]), tag)
-        ]
+    assets, grouped_assets_by_representative, frames_by_asset = _filtered_representative_assets(
+        session,
+        include_hidden=include_hidden,
+        tag=tag,
+        product_id=product_id,
+        asset_type=asset_type,
+        review_state=review_state,
+        platform=platform,
+        aspect_ratio=aspect_ratio,
+        q=q,
+    )
     if limit is not None:
         start = max(offset, 0)
         assets = assets[start : start + limit]
+        grouped_assets_by_representative = {
+            asset.id: grouped_assets_by_representative.get(asset.id, [asset])
+            for asset in assets
+        }
     asset_ids = [asset.id for asset in assets]
-    grouped_assets_by_representative = {
-        asset.id: grouped_assets_by_representative.get(asset.id, [asset])
-        for asset in assets
-    }
     grouped_asset_ids = [
         grouped_asset.id
         for grouped_assets in grouped_assets_by_representative.values()
         for grouped_asset in grouped_assets
     ]
     refresh_asset_file_state(session, asset_ids=grouped_asset_ids or (asset_ids if limit is not None else None))
+    frames_by_asset = _generation_frames_by_asset_id(session, grouped_asset_ids)
     tasks_by_asset: dict[int, list[TaskView]] = defaultdict(list)
     if grouped_asset_ids:
         tasks = list(
@@ -639,23 +734,51 @@ def asset_inventory(
                     continue
                 seen_task_ids.add(task.task.id)
                 used_by.append(task)
-        views.append(AssetView(asset=asset, used_by=used_by, grouped_assets=grouped_assets))
+        frame = _preferred_frame_for_assets(grouped_assets, frames_by_asset)
+        views.append(
+            AssetView(
+                asset=asset,
+                used_by=used_by,
+                grouped_assets=grouped_assets,
+                platform=frame.get("platform", ""),
+                aspect_ratio=frame.get("aspect_ratio", ""),
+            )
+        )
     return views
 
 
-def asset_inventory_count(session: Session, include_hidden: bool = False, tag: str = "") -> int:
-    _normalize_duplicate_asset_visibility(session)
-    assets = _representative_assets(list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id))), include_hidden=include_hidden)
-    if not tag:
-        return len(assets)
-    grouped_assets_by_representative = _grouped_assets_by_representative(session, assets)
-    return len(
-        [
-            asset
-            for asset in assets
-            if _asset_group_matches_asset_tag(grouped_assets_by_representative.get(asset.id, [asset]), tag)
-        ]
+def asset_inventory_count(
+    session: Session,
+    include_hidden: bool = False,
+    tag: str = "",
+    product_id: int | None = None,
+    asset_type: str = "",
+    review_state: str = "",
+    platform: str = "",
+    aspect_ratio: str = "",
+    q: str = "",
+) -> int:
+    assets, _, _ = _filtered_representative_assets(
+        session,
+        include_hidden=include_hidden,
+        tag=tag,
+        product_id=product_id,
+        asset_type=asset_type,
+        review_state=review_state,
+        platform=platform,
+        aspect_ratio=aspect_ratio,
+        q=q,
     )
+    return len(assets)
+
+
+def asset_review_state_options(session: Session, include_hidden: bool = False) -> list[str]:
+    _normalize_duplicate_asset_visibility(session)
+    assets = _representative_assets(
+        list(session.scalars(select(AssetRecord).order_by(AssetRecord.name, AssetRecord.id))),
+        include_hidden=include_hidden,
+    )
+    return sorted({(asset.review_state or "").strip() for asset in assets if (asset.review_state or "").strip()})
 
 
 def asset_tag_label(asset_type: str) -> str:
@@ -1509,6 +1632,104 @@ def _remote_asset_identity_values(asset: AssetRecord) -> set[str]:
         if (normalized := _normalized_asset_identity_value(value))
         and normalized.startswith(("http://", "https://", "file://"))
     }
+
+
+
+def aspect_ratio_from_dimensions(width: int | None, height: int | None) -> str:
+    if not width or not height or width <= 0 or height <= 0:
+        return ""
+    divisor = math.gcd(int(width), int(height))
+    return f"{int(width) // divisor}:{int(height) // divisor}"
+
+
+def _normalize_aspect_ratio(value: str) -> str:
+    text = (value or "").strip().lower()
+    if not text:
+        return ""
+    match = re.search(r"(\d+)\s*[:x/]\s*(\d+)", text)
+    if not match:
+        return text.replace(" ", "")
+    try:
+        width = int(match.group(1))
+        height = int(match.group(2))
+    except ValueError:
+        return text.replace(" ", "")
+    return aspect_ratio_from_dimensions(width, height) or f"{width}:{height}"
+
+
+def _generation_frames_by_asset_id(session: Session, asset_ids: list[int]) -> dict[int, dict[str, str]]:
+    unique_ids = sorted({asset_id for asset_id in asset_ids if asset_id is not None})
+    if not unique_ids:
+        return {}
+    jobs = list(
+        session.scalars(
+            select(CreativeGenerationJobRecord)
+            .where(CreativeGenerationJobRecord.candidate_asset_id.in_(unique_ids))
+            .order_by(CreativeGenerationJobRecord.id.desc())
+        )
+    )
+    frames: dict[int, dict[str, str]] = {}
+    for job in jobs:
+        asset_id = job.candidate_asset_id
+        if asset_id is None or asset_id in frames:
+            continue
+        metadata = _json_dict(job.response_metadata_json)
+        platform = str(metadata.get("platform") or "").strip()
+        aspect_ratio = _normalize_aspect_ratio(str(metadata.get("aspect_ratio") or ""))
+        if not aspect_ratio:
+            aspect_ratio = _normalize_aspect_ratio(job.requested_dimensions or "")
+        frames[asset_id] = {"platform": platform, "aspect_ratio": aspect_ratio}
+    return frames
+
+
+def _preferred_frame_for_assets(
+    assets: list[AssetRecord],
+    frames_by_asset: dict[int, dict[str, str]],
+) -> dict[str, str]:
+    for asset in assets:
+        frame = frames_by_asset.get(asset.id)
+        if frame and (frame.get("platform") or frame.get("aspect_ratio")):
+            return {"platform": frame.get("platform", ""), "aspect_ratio": frame.get("aspect_ratio", "")}
+    for asset in assets:
+        aspect_ratio = aspect_ratio_from_dimensions(asset.width, asset.height)
+        if aspect_ratio:
+            return {"platform": "", "aspect_ratio": aspect_ratio}
+    return {"platform": "", "aspect_ratio": ""}
+
+
+def _asset_matches_platform(asset: AssetRecord, platform: str, frame: dict[str, str] | None) -> bool:
+    selected = platform.strip().lower()
+    if not selected:
+        return True
+    frame_platform = ((frame or {}).get("platform") or "").strip().lower()
+    if frame_platform and (selected == frame_platform or selected in frame_platform or frame_platform in selected):
+        return True
+    suitability = [str(item).strip().lower() for item in json_list(asset.platform_suitability_json)]
+    return any(selected == item or selected in item or item in selected for item in suitability if item)
+
+
+def _asset_matches_aspect_ratio(asset: AssetRecord, aspect_ratio: str, frame: dict[str, str] | None) -> bool:
+    selected = _normalize_aspect_ratio(aspect_ratio)
+    if not selected:
+        return True
+    frame_ratio = _normalize_aspect_ratio(((frame or {}).get("aspect_ratio") or ""))
+    if frame_ratio and frame_ratio == selected:
+        return True
+    derived = aspect_ratio_from_dimensions(asset.width, asset.height)
+    return bool(derived and derived == selected)
+
+
+def _asset_group_matches_frame(
+    assets: list[AssetRecord],
+    frames_by_asset: dict[int, dict[str, str]],
+    platform: str = "",
+    aspect_ratio: str = "",
+) -> bool:
+    return any(
+        _asset_matches_platform(asset, platform, frames_by_asset.get(asset.id))
+        and _asset_matches_aspect_ratio(asset, aspect_ratio, frames_by_asset.get(asset.id))
+        for asset in assets
+    )
 
 
 def _representative_assets(assets: list[AssetRecord], include_hidden: bool) -> list[AssetRecord]:

@@ -5,7 +5,7 @@
 - Owner: Matthew / Codex
 - Branch: docs/asset-workshop-strategy
 - PR: https://github.com/digimatt22/social-content/pull/10
-- Last updated: 2026-09-25
+- Last updated: 2026-09-25 (findability shipped in PR)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
@@ -58,7 +58,7 @@ Old plan kept and marked parked for primary focus:
 
 ## Build order
 1. **Done:** Magnific API drain (live on Sheldon). **In flight:** per-platform aspect ratios.
-2. **Findability:** search/filter by product, type, platform, ratio, review; agent-friendly list API if thin.
+2. **Done (this PR):** Findability — Gallery filters (product, type, review, platform, aspect, name search); `GET /api/assets` + `GET /api/products/<id>/assets` query params (`product_id`, `asset_type`, `review_state`, `platform`, `aspect_ratio`, `q`); stable agent JSON includes id/product_id/name/asset_type/review_state/source_path/canonical_url/file_exists/platform/aspect_ratio when known from linked generation jobs.
 3. **Make UX:** multi-platform queue; worker progress visible.
 4. **Local refs:** make local files Magnific-reachable (https/upload).
 5. **Nav focus:** image-asset primary; park coverage/shadow behind more.
@@ -73,11 +73,12 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Pinterest growth plan is **not** the primary active goal for day-to-day product work.
 
 ## Work State
-- Planned: findability, make UX, local refs, nav focus, later items above.
-- In progress: strategy lock (this docs PR); per-platform aspect ratios (separate PR).
-- Blocked: none for docs lock.
-- Needs human validation: none for this docs-only change.
-- Ready for review: this PR.
+- Planned: make UX, local refs, nav focus, later items above.
+- In progress: none for findability (PR opened).
+- Completed earlier: strategy lock; per-platform aspect ratios (#11); findability filters + agent list API (this PR).
+- Blocked: none.
+- Needs human validation: smoke Gallery filters on hosted/local; confirm agent list shape.
+- Ready for review: findability PR.
 - Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`).
 
 ## Decisions
@@ -112,10 +113,10 @@ No code, deploy, aspect-ratio, or nav-hide work in this PR.
 - After later implementation phases complete, move or split follow-on plans; keep this file as the durable strategy lock until superseded.
 
 ## Open questions
-- Exact agent list-API shape if `/api/assets` is thin for find filters.
+- (Resolved) Agent list filters: `GET /api/assets` query params + optional `GET /api/products/<id>/assets`.
 - Preferred path for local-ref Magnific reachability (upload vs temporary https).
 - When (if ever) to resume Pinterest growth as a primary track after asset-workshop loops are solid.
 
 ## Closeout
 - Final status: TBD until merge.
-- Follow-up: aspect ratios → findability → make UX → local refs → nav focus (separate PRs; no deploy from strategy lock).
+- Follow-up: make UX → local refs → nav focus → later items (separate PRs).

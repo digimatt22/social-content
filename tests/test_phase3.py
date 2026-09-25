@@ -268,7 +268,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
             client = app.test_client()
             gallery = client.get("/assets")
             self.assertEqual(gallery.status_code, 200)
-            self.assertIn(b"Image tag", gallery.data)
+            self.assertIn(b"Asset type", gallery.data)
             self.assertIn(b"etsy", gallery.data)
             self.assertIn(b"magnific", gallery.data)
             self.assertNotIn(b"Etsy product photo", gallery.data)
@@ -278,7 +278,7 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
 
             filtered = client.get("/assets?tag=etsy")
             self.assertEqual(filtered.status_code, 200)
-            self.assertIn(b"Filtered to image tag: etsy", filtered.data)
+            self.assertIn(b"type etsy", filtered.data)
             self.assertIn(b"Gift Duck image", filtered.data)
             self.assertNotIn(b"Display Duck image", filtered.data)
 
