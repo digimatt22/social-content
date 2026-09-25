@@ -322,6 +322,30 @@ class Phase0FoundationTests(unittest.TestCase):
         )
         factory.kw["bind"].dispose()
 
+    def test_login_page_matches_app_chrome(self) -> None:
+        db_path = self.root / "login-chrome.sqlite"
+        with patch.dict(
+            os.environ,
+            {"MARKETING_OS_SECRET": "test-secret-that-is-long-and-random-enough"},
+            clear=False,
+        ):
+            app = create_secure_app(str(db_path), bootstrap_data=False)
+        app.config.update(TESTING=True)
+        client = app.test_client()
+        response = client.get("/auth/login", base_url="https://localhost")
+        self.assertEqual(200, response.status_code)
+        body = response.get_data(as_text=True)
+        self.assertIn("Social Media Manager", body)
+        self.assertIn("MattMadeMe content console", body)
+        self.assertIn("--canvas: #fff9db", body)
+        self.assertIn("--accent: #087fe8", body)
+        self.assertIn('name="_login_csrf"', body)
+        self.assertIn('name="username"', body)
+        self.assertIn('name="password"', body)
+        self.assertIn("auth-card", body)
+        self.assertIn("brand/mattmademe_logo.png", body)
+        app.config["SESSION_FACTORY"].kw["bind"].dispose()
+
     def test_expired_session_is_rejected(self) -> None:
         db_path = self.root / "expired.sqlite"
         with patch.dict(os.environ, {"MARKETING_OS_SECRET": "another-test-secret-long-enough"}, clear=False):

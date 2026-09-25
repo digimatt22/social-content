@@ -5,7 +5,7 @@ import os
 import re
 import secrets
 
-from flask import Flask, Response, g, make_response, redirect, render_template_string, request
+from flask import Flask, Response, g, make_response, redirect, render_template, request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy import text
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -27,14 +27,6 @@ SESSION_COOKIE = "marketing_os_session"
 CSRF_COOKIE = "marketing_os_csrf"
 LOGIN_CSRF_COOKIE = "marketing_os_login_csrf"
 PUBLIC_ENDPOINTS = {"health", "ready", "login", "static"}
-LOGIN_TEMPLATE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Marketing OS sign in</title></head>
-<body><main><h1>Marketing OS</h1>{% if error %}<p role="alert">{{ error }}</p>{% endif %}
-<form method="post"><input type="hidden" name="_login_csrf" value="{{ login_csrf }}">
-<label>Username <input name="username" autocomplete="username" required></label>
-<label>Password <input type="password" name="password" autocomplete="current-password" required></label>
-<button type="submit">Sign in</button></form></main></body></html>"""
 
 
 def create_secure_app(
@@ -177,7 +169,7 @@ def create_secure_app(
             error = "Invalid credentials or account temporarily locked."
         login_csrf = login_csrf_signer.dumps(secrets.token_urlsafe(24))
         response = make_response(
-            render_template_string(LOGIN_TEMPLATE, error=error, login_csrf=login_csrf)
+            render_template("login.html", error=error, login_csrf=login_csrf)
         )
         response.set_cookie(
             LOGIN_CSRF_COOKIE,
