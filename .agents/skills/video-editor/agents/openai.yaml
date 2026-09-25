@@ -1,0 +1,5 @@
+name: video-editor
+version: 1
+agent:
+  short_description: "Magnific product video handoffs and review imports"
+  default_prompt: "Use $video-editor to prepare or execute review-safe Magnific product video handoffs for MattMadeMe products."

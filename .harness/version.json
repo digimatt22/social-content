@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "name": "DigiColony Harness",
+  "upstream": "git@github.com:MATT-Agent/DigiColony-Harness.git",
+  "version": "0.4.0",
+  "sourceCommit": "4a310bd326cfb585a15ff9710cfb2252271aad50",
+  "importedAt": "2026-06-22",
+  "previousVersion": "none",
+  "previousSourceCommit": "none",
+  "localDeviations": []
+}

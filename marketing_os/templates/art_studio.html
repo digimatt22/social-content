@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topline">
+  <div>
+    <div class="eyebrow">Creative production</div>
+    <h2>Video Studio</h2>
+    <div class="subtle">Stage product-safe videos behind review before they enter the planner. Social image generation now starts from Products.</div>
+  </div>
+</div>
+
+<section class="assistant-brief">
+  <div class="brief-layout">
+    <div class="brief-title">
+      <div class="eyebrow">Magnific-ready bench</div>
+      <h3>Make product-safe video assets before a post needs them.</h3>
+      <p>Automation can generate and import queued scene cards and approved videos here. Manual Magnific import still works, and every video asset stays in review until product accuracy is approved.</p>
+    </div>
+    <div class="brief-stats">
+      <div class="stat-tile"><strong>{{ stats.products }}</strong><span>video-ready products</span></div>
+      <div class="stat-tile"><strong>{{ stats.ready_for_images }}</strong><span>with approved refs</span></div>
+      <div class="stat-tile"><strong>{{ stats.video }}</strong><span>video picks</span></div>
+      <div class="stat-tile"><strong>{{ stats.needs_reference_review }}</strong><span>need ref review</span></div>
+    </div>
+  </div>
+</section>
+
+{% if selected_tab == 'social-images' %}
+  <section class="agenda">
+    {% for item in queue %}
+      <article class="panel" id="product-{{ item.product.id }}">
+        <div class="planned-header">
+          <div>
+            <div class="eyebrow">Score {{ item.queue_score }}</div>
+            <h3>{{ item.product.name }}</h3>
+            <div class="meta">
+              <span class="pill {{ 'complete' if item.approved_reference_count else 'blocked' }}">{{ item.approved_reference_count }} approved refs</span>
+              <span class="pill">{{ item.default_reference_count }} default refs</span>
+              <span class="pill">{{ item.approved_generated_social_count }}/{{ item.generated_social_count }} approved generated</span>
+              {% if item.sales_quantity %}<span class="pill gold">{{ item.sales_quantity }} sold signal</span>{% endif %}
+            </div>
+          </div>
+          <a class="button secondary" href="{{ url_for('products_admin', _anchor='product-' ~ item.product.id) }}">References</a>
+        </div>
+
+        {% if item.reference_assets %}
+          <div class="reference-strip">
+            {% for asset in item.reference_assets %}
+              <figure>
+                {% if asset.file_exists %}
+                  <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
+                {% else %}
+                  <div class="asset-missing">Remote</div>
+                {% endif %}
+                <figcaption>{{ asset.name }}</figcaption>
+              </figure>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="queue-state">
+            <strong>Reference review needed</strong>
+            <span class="subtle">Approve at least one source image before spending credits on this product.</span>
+          </div>
+        {% endif %}
+
+        <form class="inline" method="post" action="{{ url_for('art_studio_queue_social_image') }}" style="margin-top: 12px;">
+          <input type="hidden" name="product_id" value="{{ item.product.id }}">
+          <label>Reference
+            <select name="source_asset_id" required>
+              {% for asset in item.reference_assets %}
+                <option value="{{ asset.id }}">{{ asset.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Option
+            <input name="option_number" type="number" min="1" max="8" value="1">
+          </label>
+          <button type="submit" {{ 'disabled' if not item.reference_assets else '' }}>Queue image</button>
+        </form>
+
+        {% if item.social_jobs %}
+          <section class="agenda" style="margin-top: 12px;">
+            {% for job in item.social_jobs %}
+              <article class="task">
+                <div class="meta">
+                  <span class="pill">Job #{{ job.id }}</span>
+                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ job.provider_status }}</span>
+                  <span class="pill">{{ job.model_name }}</span>
+                </div>
+                {% if job.candidate_asset %}
+                  <strong>{{ job.candidate_asset.name }}</strong>
+                  <div class="meta">
+                    <span class="pill {{ 'complete' if job.candidate_asset.review_state == 'approved' else 'blocked' }}">{{ job.candidate_asset.review_state }}</span>
+                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, return_to=url_for('art_studio', tab='social-images') ~ '#product-' ~ item.product.id) }}">Review in Gallery</a>
+                  </div>
+                  {% if job.candidate_asset.file_exists %}
+                    <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=job.candidate_asset.id) }}" alt="{{ job.candidate_asset.name }}" loading="lazy" decoding="async">
+                  {% endif %}
+                {% else %}
+                  <details class="generation-details">
+                    <summary>Generation request</summary>
+                    <textarea readonly>{{ job.prompt }}</textarea>
+                  </details>
+                  <form method="post" action="{{ url_for('art_studio_import_social_image') }}">
+                    <input type="hidden" name="job_id" value="{{ job.id }}">
+                    <div class="brief-field-grid two-up">
+                      <label>Generated file path
+                        <input name="output_path" placeholder="{{ item.output_dir }}/option-1.png" required>
+                      </label>
+                      <label>Title
+                        <input name="title" value="{{ item.product.name }} social image">
+                      </label>
+                    </div>
+                    <div class="brief-field-grid two-up">
+                      <label>Magnific job/creation
+                        <input name="provider_job_id" placeholder="Optional">
+                      </label>
+                      <label>Output URL
+                        <input name="output_url" placeholder="Optional">
+                      </label>
+                    </div>
+                    <label>Review notes
+                      <textarea name="notes" placeholder="What to check before approval"></textarea>
+                    </label>
+                    <button type="submit">Attach generated result</button>
+                  </form>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </section>
+        {% endif %}
+
+        <details class="generation-details">
+          <summary>Queue details</summary>
+          <textarea id="image-handoff-{{ item.product.id }}" readonly>{{ item.image_handoff }}</textarea>
+        </details>
+
+        <details class="generation-details">
+          <summary>Direct import fallback</summary>
+          <form method="post" action="{{ url_for('art_studio_import_social_image') }}">
+            <input type="hidden" name="product_id" value="{{ item.product.id }}">
+            <label>Source reference
+              <select name="source_asset_id" required>
+                {% for asset in item.reference_assets %}
+                  <option value="{{ asset.id }}">{{ asset.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <div class="brief-field-grid two-up">
+              <label>Local output path
+                <input name="output_path" placeholder="{{ item.output_dir }}/option-1.png" required>
+              </label>
+              <label>Title
+                <input name="title" value="{{ item.product.name }} social image">
+              </label>
+            </div>
+            <div class="brief-field-grid two-up">
+              <label>Model
+                <input name="model_name" placeholder="Google Nano Banana 2">
+              </label>
+              <label>Magnific job/creation
+                <input name="provider_job_id" placeholder="Optional">
+              </label>
+            </div>
+            <label>Prompt used
+              <textarea name="prompt">{{ item.image_handoff }}</textarea>
+            </label>
+            <label>Review notes
+              <textarea name="notes" placeholder="What to check before approval"></textarea>
+            </label>
+            <button class="secondary" type="submit" {{ 'disabled' if not item.reference_assets else '' }}>Import image for review</button>
+          </form>
+        </details>
+      </article>
+    {% else %}
+      <div class="panel">
+        <h3>No products queued.</h3>
+        <p class="subtle">Sync or add products and source references first.</p>
+      </div>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="planner-shell post-brief-canvas">
+    <form method="post" action="{{ url_for('art_studio_queue_video_storyboard') }}" data-video-request-wizard>
+      <div class="brief-canvas-layout">
+        <div class="brief-section-stack">
+          <section class="brief-section active">
+            <header class="brief-section-header">
+              <span class="brief-section-number">1</span>
+              <div>
+                <div class="step-kicker">Video request</div>
+                <h3>Create product video</h3>
+              </div>
+              <span class="brief-state">Active</span>
+            </header>
+            <div class="wizard-step brief-section-body active">
+              <div class="brief-section-grid">
+                <aside class="brief-section-note">
+                  <p>Choose the product, identity references, and output shape. Agent automation will run the video planner and art director before any card generation starts.</p>
+                  <div class="planner-tip">
+                    <i data-lucide="video" aria-hidden="true"></i>
+                    <span>Generated videos stay behind review.</span>
+                  </div>
+                </aside>
+                <div class="brief-fields">
+                  <label>
+                    Product
+                    <select id="video-product-select" name="product_id" required data-video-product-reference-select>
+                      {% for item in video_products %}
+                        <option value="{{ item.product.id }}">{{ item.product.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+
+                  <div class="field-label">Reference images</div>
+                  <p class="subtle">Select the product images the art director should preserve.</p>
+                  <div class="reference-picker" data-video-reference-picker>
+                    {% for item in video_products %}
+                      {% for asset in item.reference_assets %}
+                        <label class="reference-card" data-product-id="{{ item.product.id }}" title="{{ asset.name }}">
+                          <input type="checkbox" name="reference_asset_ids" value="{{ asset.id }}" aria-label="{{ asset.name }}">
+                          {% if asset.file_exists %}
+                            <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=asset.id) }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
+                          {% elif asset.preview_path.startswith('http') or asset.source_path.startswith('http') %}
+                            <img class="reference-thumb" src="{{ asset.preview_path or asset.source_path }}" alt="{{ asset.name }}" loading="lazy" decoding="async">
+                          {% else %}
+                            <span class="asset-missing">Remote</span>
+                          {% endif %}
+                        </label>
+                      {% endfor %}
+                    {% else %}
+                      <div class="empty-state">No approved product reference images are ready for video yet.</div>
+                    {% endfor %}
+                  </div>
+
+                  <div class="video-control-stack">
+                    <div class="video-field-block duration-control">
+                      <div class="duration-control-header">
+                        <span>Duration</span>
+                        <span class="duration-value" data-duration-output>8 sec</span>
+                      </div>
+                      <input name="duration_seconds" type="range" min="5" max="12" step="1" value="8" aria-label="Video duration in seconds" data-duration-slider>
+                      <div class="duration-scale" aria-hidden="true">
+                        <span>5 sec</span>
+                        <span>8 sec</span>
+                        <span>12 sec</span>
+                      </div>
+                    </div>
+                    <div class="video-field-block">
+                      <div class="field-label">Motion template</div>
+                      <div class="aspect-picker">
+                        {% for template in video_template_options %}
+                          <label class="aspect-card">
+                            <input type="radio" name="video_template" value="{{ template.slug }}" {{ 'checked' if loop.first else '' }}>
+                            <span class="aspect-label">{{ template.name }}<small>{{ template.description }} Suggested model: {{ template.suggested_model }}.</small></span>
+                          </label>
+                        {% endfor %}
+                      </div>
+                      <p class="subtle">Fidelity-first flow: the selected template pins its suggested model automatically. No auto model switching.</p>
+                    </div>
+                    <div class="video-field-block">
+                      <div class="field-label">Aspect ratio</div>
+                      <div class="aspect-picker">
+                        <label class="aspect-card">
+                          <input type="radio" name="aspect_ratio" value="9:16" checked>
+                          <span class="aspect-icon" aria-hidden="true"><span class="aspect-shape vertical"></span></span>
+                          <span class="aspect-label">Vertical<small>Reels/TikTok</small></span>
+                        </label>
+                        <label class="aspect-card">
+                          <input type="radio" name="aspect_ratio" value="1:1">
+                          <span class="aspect-icon" aria-hidden="true"><span class="aspect-shape square"></span></span>
+                          <span class="aspect-label">Square<small>Feed</small></span>
+                        </label>
+                        <label class="aspect-card">
+                          <input type="radio" name="aspect_ratio" value="16:9">
+                          <span class="aspect-icon" aria-hidden="true"><span class="aspect-shape wide"></span></span>
+                          <span class="aspect-label">Wide<small>YouTube</small></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  <input type="hidden" name="resolution" value="1080p">
+                  <label>
+                    Scene guidance
+                    <textarea name="scene_guidance" placeholder="Optional, e.g. festive picnic setup with subtle ambient sound"></textarea>
+                  </label>
+                  <div class="brief-field-grid two-up" data-voice-fields hidden>
+                    <label>
+                      Voice script
+                      <input name="voice_script" placeholder='Optional, especially for Social Media Ad, e.g. "Limited edition drop now live."'>
+                    </label>
+                    <label>
+                      Voice tone
+                      <input name="voice_tone" value="serious and neutral" placeholder="serious and neutral">
+                    </label>
+                  </div>
+                  <p class="subtle">Leave voice blank for silent or ambient-only product videos. Add it only when the template needs ad-style narration.</p>
+                  <div class="button-group wizard-actions">
+                    <button type="submit" {{ 'disabled' if not video_products else '' }}>Create video</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <aside class="queue-preview-panel">
+          <div class="eyebrow">Queued workflow</div>
+          <h3>Product-safe video</h3>
+          <div class="queue-preview-list">
+            <div>
+              <i data-lucide="clapperboard" aria-hidden="true"></i>
+              <span><strong>Planner</strong><small>Chooses one scene direction and the product-safe motion approach.</small></span>
+            </div>
+            <div>
+              <i data-lucide="image" aria-hidden="true"></i>
+              <span><strong>Art Director</strong><small>Creates the opening scene card and only adds an ending card when needed.</small></span>
+            </div>
+            <div>
+              <i data-lucide="badge-check" aria-hidden="true"></i>
+              <span><strong>Editor + Review</strong><small>After card review, the video editor packages the handoff and you approve or cancel.</small></span>
+            </div>
+          </div>
+          <dl class="queue-preview-details">
+            <div><dt>Default crop</dt><dd>9:16</dd></div>
+            <div><dt>Motion</dt><dd>Camera and scene</dd></div>
+            <div><dt>Status</dt><dd>Needs review</dd></div>
+          </dl>
+        </aside>
+      </div>
+    </form>
+  </section>
+
+  <section class="agenda" style="margin-top: 16px;">
+    {% for video_request in video_requests %}
+      <article class="panel" id="video-request-{{ video_request.request_job.id }}">
+        <div class="planned-header">
+          <div>
+            <div class="eyebrow">Video request #{{ video_request.request_job.id }}</div>
+            <h3>{{ video_request.product.name }}</h3>
+            <div class="meta">
+              <span class="pill {{ 'complete' if video_request.status == 'complete' else 'blocked' if video_request.status == 'canceled' else 'ready' }}">{{ video_request.status_label }}</span>
+              <span class="pill">{{ video_request.details.duration_seconds or 8 }} sec</span>
+              <span class="pill">{{ video_request.details.aspect_ratio or '9:16' }}</span>
+              <span class="pill">{{ video_request.details.resolution or '1080p' }}</span>
+              {% if video_request.details.video_template_name %}<span class="pill">{{ video_request.details.video_template_name }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="button-group">
+            {% if video_request.can_approve %}
+              <form method="post" action="{{ url_for('art_studio_approve_video_request', request_job_id=video_request.request_job.id) }}">
+                <button type="submit">Approve video generation</button>
+              </form>
+            {% endif %}
+            {% if video_request.can_cancel %}
+              <form method="post" action="{{ url_for('art_studio_cancel_video_request', request_job_id=video_request.request_job.id) }}">
+                <button class="secondary" type="submit">Cancel</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if video_request.details.scene_guidance %}
+          <p><strong>Scene guidance:</strong> {{ video_request.details.scene_guidance }}</p>
+        {% endif %}
+        {% if video_request.details.suggested_video_model %}
+          <p><strong>Suggested model:</strong> {{ video_request.details.suggested_video_model }}</p>
+        {% endif %}
+        {% if video_request.details.requested_voice_script %}
+          <p><strong>Requested voice:</strong> "{{ video_request.details.requested_voice_script }}"{% if video_request.details.requested_voice_tone %} ({{ video_request.details.requested_voice_tone }}){% endif %}</p>
+        {% endif %}
+
+        {% set planner_summary = video_request.details.planner_summary %}
+        {% set strategist_direction = video_request.details.strategist_direction or video_request.details.scene_strategy %}
+        {% if planner_summary or strategist_direction %}
+          <details class="generation-details" open>
+            <summary>Video brief</summary>
+            {% if strategist_direction %}
+              <p><strong>Chosen direction:</strong> {{ strategist_direction }}</p>
+            {% endif %}
+            {% if planner_summary %}
+              <textarea readonly>{{ planner_summary }}</textarea>
+            {% endif %}
+          </details>
+        {% else %}
+          <p class="subtle">Waiting for agent automation to register the planner brief and scene-card prompts.</p>
+        {% endif %}
+
+        <div class="video-card-preview-grid">
+          <article class="task video-card-preview">
+            <div class="meta">
+              <span class="pill">Scene card</span>
+              {% if video_request.opening_job %}
+                <span class="pill {{ 'complete' if video_request.opening_job.provider_status == 'generated' else 'ready' }}">{{ video_request.opening_job.provider_status }}</span>
+              {% endif %}
+            </div>
+            {% if video_request.opening_job and video_request.opening_job.candidate_asset %}
+              <strong>{{ video_request.opening_job.candidate_asset.name }}</strong>
+              {% if video_request.opening_job.candidate_asset.file_exists %}
+                <div class="image-thumb-frame">
+                  <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=video_request.opening_job.candidate_asset.id) }}" alt="{{ video_request.opening_job.candidate_asset.name }}" loading="lazy" decoding="async">
+                  <button class="image-zoom-button" type="button" aria-label="Open full-size preview" title="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=video_request.opening_job.candidate_asset.id) }}" data-image-zoom-title="{{ video_request.opening_job.candidate_asset.name }}">
+                    <i data-lucide="search" aria-hidden="true"></i>
+                    <span class="sr-only">Open full-size preview</span>
+                  </button>
+                </div>
+              {% endif %}
+            {% else %}
+              <p class="subtle">Waiting for Art Director scene card.</p>
+            {% endif %}
+          </article>
+          {% if video_request.ending_job or video_request.details.ending_card_required %}
+            <article class="task video-card-preview">
+              <div class="meta">
+                <span class="pill">Optional ending card</span>
+                {% if video_request.ending_job %}
+                  <span class="pill {{ 'complete' if video_request.ending_job.provider_status == 'generated' else 'ready' }}">{{ video_request.ending_job.provider_status }}</span>
+                {% endif %}
+              </div>
+              {% if video_request.ending_job and video_request.ending_job.candidate_asset %}
+                <strong>{{ video_request.ending_job.candidate_asset.name }}</strong>
+                {% if video_request.ending_job.candidate_asset.file_exists %}
+                  <div class="image-thumb-frame">
+                    <img class="reference-thumb" src="{{ url_for('asset_preview', asset_id=video_request.ending_job.candidate_asset.id) }}" alt="{{ video_request.ending_job.candidate_asset.name }}" loading="lazy" decoding="async">
+                    <button class="image-zoom-button" type="button" aria-label="Open full-size preview" title="Open full-size preview" data-image-zoom-src="{{ url_for('asset_preview', asset_id=video_request.ending_job.candidate_asset.id) }}" data-image-zoom-title="{{ video_request.ending_job.candidate_asset.name }}">
+                      <i data-lucide="search" aria-hidden="true"></i>
+                      <span class="sr-only">Open full-size preview</span>
+                    </button>
+                  </div>
+                {% endif %}
+              {% else %}
+                <p class="subtle">Only needed when an effect requires first/last-frame control.</p>
+              {% endif %}
+            </article>
+          {% endif %}
+        </div>
+
+        {% if video_request.video_job %}
+          <article class="task" style="margin-top: 12px;">
+            <div class="meta">
+              <span class="pill">Video job #{{ video_request.video_job.id }}</span>
+              <span class="pill {{ 'complete' if video_request.video_job.provider_status == 'generated' else 'ready' }}">{{ video_request.video_job.provider_status }}</span>
+              <span class="pill">{{ video_request.video_job.model_name }}</span>
+            </div>
+            {% if video_request.video_job.candidate_asset %}
+              <strong>{{ video_request.video_job.candidate_asset.name }}</strong>
+              <a href="{{ url_for('assets', open_asset=video_request.video_job.candidate_asset.id, return_to=url_for('art_studio', tab='video') ~ '#video-request-' ~ video_request.request_job.id) }}">Review in Gallery</a>
+              {% if video_request.video_job.candidate_asset.file_exists %}
+                <video class="asset-thumb" src="{{ url_for('asset_preview', asset_id=video_request.video_job.candidate_asset.id) }}" controls preload="metadata"></video>
+              {% endif %}
+            {% endif %}
+          </article>
+        {% endif %}
+      </article>
+    {% else %}
+      <div class="panel">
+        <h3>No video jobs yet.</h3>
+        <p class="subtle">Create the first product video request above.</p>
+      </div>
+    {% endfor %}
+  </section>
+  <div class="image-modal" data-image-modal hidden>
+    <div class="image-modal-backdrop" data-image-modal-close></div>
+    <div class="image-modal-panel" role="dialog" aria-modal="true" aria-label="Image preview">
+      <button class="drawer-close image-modal-close icon-button" type="button" data-image-modal-close aria-label="Close image preview" title="Close">
+        <i data-lucide="x" aria-hidden="true"></i>
+        <span class="sr-only">Close image preview</span>
+      </button>
+      <img data-image-modal-img alt="">
+    </div>
+  </div>
+  <script>
+    (() => {
+      const productSelect = document.getElementById("video-product-select");
+      const picker = document.querySelector("[data-video-reference-picker]");
+      if (!productSelect || !picker) return;
+      const syncReferences = () => {
+        const productId = productSelect.value;
+        let firstInput = null;
+        picker.querySelectorAll("[data-product-id]").forEach((card) => {
+          const belongs = card.dataset.productId === productId;
+          card.classList.toggle("hidden", !belongs);
+          const input = card.querySelector("input[type='checkbox']");
+          if (!input) return;
+          input.disabled = !belongs;
+          if (!belongs) input.checked = false;
+          if (belongs && firstInput === null) firstInput = input;
+        });
+        const checked = picker.querySelector("input[type='checkbox']:checked:not(:disabled)");
+        if (!checked && firstInput) firstInput.checked = true;
+      };
+      productSelect.addEventListener("change", syncReferences);
+      syncReferences();
+      const durationSlider = document.querySelector("[data-duration-slider]");
+      const durationOutput = document.querySelector("[data-duration-output]");
+      if (durationSlider && durationOutput) {
+        const syncDuration = () => {
+          durationOutput.textContent = `${durationSlider.value} sec`;
+        };
+        durationSlider.addEventListener("input", syncDuration);
+        syncDuration();
+      }
+      const voiceFields = document.querySelector("[data-voice-fields]");
+      const templateInputs = document.querySelectorAll("input[name='video_template']");
+      if (voiceFields && templateInputs.length) {
+        const syncVoiceFields = () => {
+          const selected = document.querySelector("input[name='video_template']:checked");
+          voiceFields.hidden = !selected || selected.value !== "social_media_ad";
+        };
+        templateInputs.forEach((input) => input.addEventListener("change", syncVoiceFields));
+        syncVoiceFields();
+      }
+      function closeImageModal() {
+        const modal = document.querySelector("[data-image-modal]");
+        if (!modal) return;
+        modal.hidden = true;
+        const img = modal.querySelector("[data-image-modal-img]");
+        if (img) img.removeAttribute("src");
+      }
+      document.addEventListener("click", (event) => {
+        const zoom = event.target.closest("[data-image-zoom-src]");
+        if (zoom) {
+          const modal = document.querySelector("[data-image-modal]");
+          if (!modal) return;
+          const img = modal.querySelector("[data-image-modal-img]");
+          if (img) {
+            img.src = zoom.dataset.imageZoomSrc;
+            img.alt = zoom.dataset.imageZoomTitle || "Image preview";
+          }
+          modal.hidden = false;
+          modal.querySelector("[data-image-modal-close]")?.focus();
+          return;
+        }
+        if (event.target.closest("[data-image-modal-close]")) closeImageModal();
+      });
+    })();
+  </script>
+{% endif %}
+{% endblock %}

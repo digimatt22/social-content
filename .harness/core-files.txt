@@ -1,0 +1,37 @@
+# Paths managed by the upstream harness sync.
+# Project-owned facts should not be listed here unless intentionally overwritten.
+.github/PULL_REQUEST_TEMPLATE.md
+.harness/core-files.txt
+.harness/version.template.json
+AGENTS.md
+docs/BOOTSTRAP_CHECKLIST.md
+docs/CURRENT_STATE_GATE.md
+docs/GITHUB_ISSUE_WORKFLOW.md
+docs/HARNESS_BOUNDARIES.md
+docs/HARNESS_SYNC.md
+docs/INBOX.md
+docs/ISSUES_AND_BACKLOG.md
+docs/LIFEOS_INTEGRATION.md
+docs/PROJECT_INTAKE_WORKFLOW.md
+docs/PULL_REQUESTS.md
+docs/SETUP.md
+docs/TOOL_ADAPTERS.md
+docs/WORKFLOW.md
+docs/WORK_STATE.md
+docs/templates/EXEC_PLAN_TEMPLATE.md
+docs/templates/ISSUE_SESSION_TEMPLATE.md
+docs/templates/ISSUE_WORK_ITEM_TEMPLATE.md
+docs/templates/INBOX_ITEM_TEMPLATE.md
+docs/templates/PROJECT_OVERRIDES_TEMPLATE.md
+docs/templates/REPOSITORY_HEALTH_TEMPLATE.md
+docs/templates/RELEASE_RUNBOOK_TEMPLATE.md
+docs/templates/RUNBOOK_TEMPLATE.md
+docs/templates/SPEC_TEMPLATE.md
+scripts/check-current-state.sh
+scripts/check-doc-links.sh
+scripts/check-inbox.sh
+scripts/bootstrap-install.sh
+scripts/install-harness.sh
+scripts/new-project.sh
+scripts/start-issue-session.sh
+scripts/update-harness.sh

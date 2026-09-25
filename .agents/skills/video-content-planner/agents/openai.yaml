@@ -1,0 +1,5 @@
+name: video-content-planner
+version: 1
+agent:
+  short_description: "Product-safe short-form video planner"
+  default_prompt: "Use $video-content-planner to plan conservative, product-accurate short-form video concepts for MattMadeMe products before Magnific generation."
