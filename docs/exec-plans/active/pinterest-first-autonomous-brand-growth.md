@@ -2,11 +2,12 @@
 
 ## Status
 
-- Status: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and the hosted Marketing OS release contract is under exact-release validation
+- Status: **parked / superseded for primary focus** (2026-09-25). Keep this file for history and Phase -1–4 context. Day-to-day product work follows `docs/exec-plans/active/asset-workshop.md`.
+- Prior status note: in progress; Phases -1 through 3 completed, Phase 4 disabled readiness implemented, and the hosted Marketing OS release contract is under exact-release validation
 - Owner: Matthew / Codex
 - Branch: main (planning artifact only; implementation must use a new `codex/` branch)
 - PR: Planning artifact on `main`; implementation work uses `codex/` branches and PRs into `main` on `https://github.com/digimatt22/social-content.git`.
-- Last updated: 2026-07-24
+- Last updated: 2026-09-25 (parked for primary focus; content otherwise as of 2026-07-24)
 - Planning framework: Digi-CTO plugin `0.3.0`
 
 ## Outcome

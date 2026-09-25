@@ -149,25 +149,24 @@ python -m unittest discover -s tests
 
 ## Current Scope
 
-The Marketing OS is a local planning and operator assistant. It does not publish content or connect to external analytics.
+**Active product goal:** Marketing OS is the **asset workshop** — find product truth + reference photos, make social-ready assets for review (catalog ↔ files ↔ generate ↔ review). Strategy lock: [docs/exec-plans/active/asset-workshop.md](docs/exec-plans/active/asset-workshop.md).
 
-Current implementation keeps the Python/Flask/SQLAlchemy/SQLite stack while adding service boundaries and integration-ready fields so a future richer frontend can attach without replacing the planning core.
+Hosted runtime targets `mmm.digicolony.net` (Sheldon). Magnific social-image drain uses the worker REST path when `MAGNIFIC_API_KEY` is set; Magnific MCP remains the interactive assistant path. Brand Lab / grok desks own posting; this app does not auto-publish to social networks.
 
-Current active planning docs:
+Current implementation keeps the Python/Flask/SQLAlchemy stack (SQLite locally; PostgreSQL when hosted) with service boundaries for assets, Art Studio jobs, and review.
+
+Operator guides:
 
 - [Local web console operating guide](docs/operating-guides/local-web-console.md)
-- [Magnific MCP creative asset guide](docs/operating-guides/magnific-mcp-creative-assets.md)
+- [Magnific MCP creative asset guide](docs/operating-guides/magnific-mcp-creative-assets.md) (MCP + hosted REST drain notes)
 
-Superseded Phase 5 implementation plans and proof artifacts are archived under `docs/archive/2026-06-17-phase5-implementation/`.
+Superseded Phase 5 implementation plans and proof artifacts are archived under `docs/archive/2026-06-17-phase5-implementation/`. Phase 5 is historical. The Pinterest-first growth plan is parked for primary focus (see asset-workshop park list).
 
-Phase 5 is closed as historical implementation work. The next active goal and plan should start from the current Planning and Products workflows.
+Out of scope for this app's primary loop:
 
-Out of scope:
-
-- Instagram API integration
-- Facebook API integration
-- Google Analytics integration
-- Search Console integration
-- Automated content publishing
+- Instagram / Facebook / X API publishing (Brand Lab desks)
+- Live Pinterest publish as the day-to-day build driver
+- Google Analytics / Search Console as primary nav
+- Public mattmademe.com site desk work
 
 The code includes local-first extension points so future integrations can be added without rewriting the core planning logic.

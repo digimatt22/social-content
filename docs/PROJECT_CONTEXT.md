@@ -29,7 +29,7 @@ The public MattMadeMe site is a separate Next.js application at `../websites/mat
 - GA4 reporting API: unavailable/unconfigured.
 - Google Search Console API: unavailable/unconfigured.
 - Alert delivery: unavailable/unconfigured.
-- Magnific provider: unavailable in the current tool session.
+- Magnific: hosted worker REST drain configured when `MAGNIFIC_API_KEY` is set (Sheldon live for `art_studio.social_image.generate`). Magnific MCP remains the interactive assistant path (OAuth); do not treat MCP session availability as the hosted drain status.
 
 Missing capabilities degrade to shadow/export, persisted exceptions, labeled hypotheses, or disabled publishing. They do not authorize guessed data or public writes.
 
@@ -74,11 +74,15 @@ Missing capabilities degrade to shadow/export, persisted exceptions, labeled hyp
 
 ## Strategy source
 
-The active strategy and phased implementation plan is:
+The active product goal (asset workshop) is:
+
+- `docs/exec-plans/active/asset-workshop.md`
+
+The prior Pinterest-first growth plan is **parked / superseded for primary day-to-day focus** (keep file; do not treat as the active build driver):
 
 - `docs/exec-plans/active/pinterest-first-autonomous-brand-growth.md`
 
-Phase -1 evidence and decisions:
+Phase -1 evidence and decisions (still useful background):
 
 - `docs/architecture/adr-001-permanent-marketing-service-foundation.md`
 - `docs/architecture/pinterest-growth-capability-matrix.md`
