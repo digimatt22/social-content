@@ -104,6 +104,39 @@
   </div>
 </div>
 
+{% if needs_review_social_count %}
+  <section class="panel make-review-queue" aria-label="Generated social images needing review">
+    <div class="planned-header">
+      <div>
+        <div class="eyebrow">Make loop · needs review</div>
+        <h3>{{ needs_review_social_count }} generated social image{{ '' if needs_review_social_count == 1 else 's' }} await approve/reject</h3>
+        <p class="subtle">Grouped by product. Open a group to filter Gallery, or jump straight into an asset drawer.</p>
+      </div>
+      <a class="button" href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, show_hidden=1 if show_hidden else none) }}">Show all needs-review socials</a>
+    </div>
+    <div class="make-review-groups">
+      {% for group in needs_review_social_groups %}
+        <article class="make-review-group">
+          <div class="meta">
+            <strong>{{ group.product_name }}</strong>
+            <span class="pill blocked">{{ group.count }} awaiting</span>
+            {% for platform in group.platforms %}<span class="pill">{{ platform }}</span>{% endfor %}
+            {% for ratio in group.aspect_ratios %}<span class="pill">{{ ratio }}</span>{% endfor %}
+          </div>
+          <div class="button-group">
+            {% if group.product_id %}
+              <a class="button secondary" href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=group.product_id, show_hidden=1 if show_hidden else none) }}">Filter to product</a>
+            {% endif %}
+            {% if group.assets %}
+              <a class="button secondary" href="{{ url_for('assets', open_asset=group.assets[0].id, review_state='needs review', tag=social_image_asset_type, product_id=group.product_id if group.product_id else none, show_hidden=1 if show_hidden else none) }}">Open first</a>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
 {{ gallery_controls() }}
 
 {% if open_asset_id %}

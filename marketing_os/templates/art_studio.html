@@ -95,14 +95,31 @@
         </form>
 
         {% if item.social_jobs %}
+          {% set progress = summarize_social_image_job_progress(item.social_jobs) %}
           <section class="agenda" style="margin-top: 12px;">
-            {% for job in item.social_jobs %}
-              <article class="task">
+            <div class="make-progress-strip" aria-label="Multi-platform job progress">
+              <div class="meta">
+                <span class="pill ready">{{ progress.counts.queued }} queued</span>
+                <span class="pill gold">{{ progress.counts.running }} running</span>
+                <span class="pill complete">{{ progress.counts.done }} done</span>
+                {% if progress.has_failed %}<span class="pill blocked">{{ progress.counts.failed }} failed</span>{% endif %}
+                {% if progress.platforms %}<span class="pill">Platforms: {{ progress.platforms|join(', ') }}</span>{% endif %}
+              </div>
+              {% if progress.ready_for_review_count %}
+                <p class="subtle make-progress-review-link">
+                  {{ progress.ready_for_review_count }} ready for review —
+                  <a href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=item.product.id, return_to=url_for('art_studio', tab='social-images') ~ '#product-' ~ item.product.id) }}">Open needs-review in Gallery</a>
+                </p>
+              {% endif %}
+            </div>
+            {% for row in progress.rows %}
+              {% set job = row.job %}
+              <article class="task" data-make-phase="{{ row.phase }}">
                 <div class="meta">
                   <span class="pill">Job #{{ job.id }}</span>
-                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(job.provider_status) }}</span>
-                  <span class="pill">{{ job.requested_dimensions or '1:1 IG Feed' }}</span>
-                  <span class="pill">{{ job.model_name }}</span>
+                  <span class="pill {{ row.pill_class }}">{{ row.phase_label }}</span>
+                  <span class="pill">{{ row.platform_label }}{% if row.aspect_ratio %} ({{ row.aspect_ratio }}){% endif %}</span>
+                  <span class="pill">{{ row.status_label }}</span>
                 </div>
                 {% if job.candidate_asset %}
                   <strong>{{ job.candidate_asset.name }}</strong>

@@ -1866,6 +1866,183 @@ def art_studio_provider_status_label(provider_status: str | None) -> str:
     return status.replace("_", " ") if status else "unknown"
 
 
+MAKE_PROGRESS_PHASE_LABELS: dict[str, str] = {
+    "queued": "Queued",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed",
+}
+MAKE_PROGRESS_PILL_CLASS: dict[str, str] = {
+    "queued": "ready",
+    "running": "gold",
+    "done": "complete",
+    "failed": "blocked",
+}
+_NEEDS_REVIEW_STATES = {"needs review", "needs_review", "unreviewed"}
+
+
+def social_image_job_frame(job: CreativeGenerationJobRecord) -> tuple[str, str, str]:
+    """Return (platform_key, aspect_ratio, platform_label) for a social-image job."""
+    metadata = _json_dict(job.response_metadata_json)
+    platform_key = normalize_social_image_platform(str(metadata.get("platform") or "").strip())
+    aspect_ratio = str(metadata.get("aspect_ratio") or "").strip()
+    if not aspect_ratio:
+        aspect_ratio = social_image_aspect_ratio_from_job(job)
+    if not platform_key and job.requested_dimensions:
+        # Fall back to trailing label in "4:5 IG Portrait"
+        parts = job.requested_dimensions.strip().split(None, 1)
+        if len(parts) == 2:
+            platform_key = normalize_social_image_platform(parts[1])
+    if platform_key and not aspect_ratio:
+        aspect_ratio = SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS.get(platform_key, DEFAULT_SOCIAL_IMAGE_ASPECT_RATIO)
+    label = str(metadata.get("platform_label") or "").strip() or social_image_platform_label(platform_key)
+    return platform_key, aspect_ratio, label
+
+
+def social_image_job_progress_phase(job: CreativeGenerationJobRecord) -> str:
+    """Map provider_status (+ candidate) to make-loop UX phase: queued/running/done/failed."""
+    status = (job.provider_status or "").strip().lower()
+    if status in {"canceled", "cancelled", "failed", "error"}:
+        return "failed"
+    if status == "generated" or job.candidate_asset_id is not None:
+        return "done"
+    if status == "generating":
+        return "running"
+    return "queued"
+
+
+def social_image_job_progress_row(job: CreativeGenerationJobRecord) -> dict[str, object]:
+    platform_key, aspect_ratio, platform_label = social_image_job_frame(job)
+    phase = social_image_job_progress_phase(job)
+    candidate = job.candidate_asset
+    candidate_review = (candidate.review_state if candidate is not None else "") or ""
+    ready_for_review = bool(
+        phase == "done"
+        and candidate is not None
+        and candidate_review.strip().lower() in _NEEDS_REVIEW_STATES
+    )
+    return {
+        "id": job.id,
+        "platform": platform_key,
+        "platform_label": platform_label,
+        "aspect_ratio": aspect_ratio,
+        "phase": phase,
+        "phase_label": MAKE_PROGRESS_PHASE_LABELS[phase],
+        "pill_class": MAKE_PROGRESS_PILL_CLASS[phase],
+        "status_label": art_studio_provider_status_label(job.provider_status),
+        "requested_dimensions": job.requested_dimensions or f"{aspect_ratio} {platform_label}".strip(),
+        "option_number": _json_dict(job.response_metadata_json).get("option_number"),
+        "candidate_asset_id": job.candidate_asset_id,
+        "candidate_review_state": candidate_review,
+        "ready_for_review": ready_for_review,
+        "job": job,
+    }
+
+
+def summarize_social_image_job_progress(
+    jobs: list[CreativeGenerationJobRecord] | None,
+) -> dict[str, object]:
+    """Aggregate multi-platform social-image jobs for Products / Art Studio progress UI."""
+    rows = [social_image_job_progress_row(job) for job in (jobs or [])]
+    counts = {phase: 0 for phase in MAKE_PROGRESS_PHASE_LABELS}
+    for row in rows:
+        counts[str(row["phase"])] += 1
+    platforms: list[str] = []
+    seen_platforms: set[str] = set()
+    for row in rows:
+        label = str(row.get("platform_label") or "").strip()
+        key = str(row.get("platform") or label)
+        if not key or key in seen_platforms:
+            continue
+        seen_platforms.add(key)
+        platforms.append(label or key)
+    platforms = sorted(platforms, key=str.lower)
+    ready_rows = [row for row in rows if row.get("ready_for_review")]
+    return {
+        "total": len(rows),
+        "counts": counts,
+        "platforms": platforms,
+        "rows": rows,
+        "ready_for_review_count": len(ready_rows),
+        "has_active": (counts["queued"] + counts["running"]) > 0,
+        "has_failed": counts["failed"] > 0,
+    }
+
+
+def needs_review_social_groups(session: Session, limit_products: int = 24) -> list[dict[str, object]]:
+    """Group generated social images awaiting approve/reject by product (+ platform/ratio)."""
+    assets = list(
+        session.scalars(
+            select(AssetRecord)
+            .where(AssetRecord.asset_type == SOCIAL_IMAGE_ASSET_TYPE)
+            .where(AssetRecord.review_state.in_(list(_NEEDS_REVIEW_STATES)))
+            .where(AssetRecord.hidden_from_generation == 0)
+            .order_by(AssetRecord.id.desc())
+        )
+    )
+    if not assets:
+        return []
+    asset_ids = [asset.id for asset in assets]
+    jobs = list(
+        session.scalars(
+            select(CreativeGenerationJobRecord)
+            .where(CreativeGenerationJobRecord.candidate_asset_id.in_(asset_ids))
+            .where(CreativeGenerationJobRecord.target_format == SOCIAL_JOB_FORMAT)
+        )
+    )
+    frame_by_asset: dict[int, tuple[str, str, str]] = {}
+    for job in jobs:
+        if job.candidate_asset_id is None:
+            continue
+        frame_by_asset[job.candidate_asset_id] = social_image_job_frame(job)
+    product_ids = {asset.product_id for asset in assets if asset.product_id is not None}
+    products = {
+        product.id: product
+        for product in session.scalars(select(ProductRecord).where(ProductRecord.id.in_(product_ids))).all()
+    } if product_ids else {}
+    grouped: dict[int | None, dict[str, object]] = {}
+    for asset in assets:
+        product_id = asset.product_id
+        bucket = grouped.get(product_id)
+        if bucket is None:
+            product = products.get(product_id) if product_id is not None else None
+            bucket = {
+                "product_id": product_id,
+                "product_name": product.name if product is not None else "Unlinked",
+                "count": 0,
+                "assets": [],
+                "platforms": [],
+                "aspect_ratios": [],
+            }
+            grouped[product_id] = bucket
+        platform_key, aspect_ratio, platform_label = frame_by_asset.get(asset.id, ("", "", ""))
+        bucket["count"] = int(bucket["count"]) + 1
+        assets_list = bucket["assets"]
+        assert isinstance(assets_list, list)
+        assets_list.append(
+            {
+                "id": asset.id,
+                "name": asset.name,
+                "platform": platform_key,
+                "platform_label": platform_label,
+                "aspect_ratio": aspect_ratio,
+            }
+        )
+        platforms_list = bucket["platforms"]
+        assert isinstance(platforms_list, list)
+        if platform_label and platform_label not in platforms_list:
+            platforms_list.append(platform_label)
+        ratios_list = bucket["aspect_ratios"]
+        assert isinstance(ratios_list, list)
+        if aspect_ratio and aspect_ratio not in ratios_list:
+            ratios_list.append(aspect_ratio)
+    ordered = sorted(
+        grouped.values(),
+        key=lambda item: (-int(item["count"]), str(item["product_name"]).lower()),
+    )
+    return ordered[: max(1, limit_products)]
+
+
 def serialize_art_studio_job(job: CreativeGenerationJobRecord) -> dict[str, object]:
     return {
         "id": job.id,

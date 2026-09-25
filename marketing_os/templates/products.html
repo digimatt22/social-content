@@ -184,7 +184,12 @@
             <span class="pill {{ 'complete' if social_item and social_item.default_reference_count else 'blocked' }}" data-social-reference-count>{{ social_item.default_reference_count if social_item else 0 }} default refs</span>
             {% if social_item %}
               <span class="pill">{{ social_item.approved_generated_social_count }}/{{ social_item.generated_social_count }} approved generated</span>
-              {% if social_item.social_jobs %}<span class="pill ready">{{ social_item.social_jobs|length }} Magnific handoff{{ '' if social_item.social_jobs|length == 1 else 's' }}</span>{% endif %}
+              {% if social_item.social_jobs %}
+                {% set progress_meta = summarize_social_image_job_progress(social_item.social_jobs) %}
+                <span class="pill ready">{{ progress_meta.total }} job{{ '' if progress_meta.total == 1 else 's' }}</span>
+                {% if progress_meta.has_active %}<span class="pill gold">{{ progress_meta.counts.queued + progress_meta.counts.running }} in progress</span>{% endif %}
+                {% if progress_meta.ready_for_review_count %}<span class="pill blocked">{{ progress_meta.ready_for_review_count }} need review</span>{% endif %}
+              {% endif %}
             {% endif %}
           </div>
         </div>
@@ -211,8 +216,26 @@
       </section>
 
       {% if social_item and social_item.social_jobs %}
+        {% set progress = summarize_social_image_job_progress(social_item.social_jobs) %}
         <details class="generation-details product-social-jobs" open>
-          <summary>Social image {% if magnific_api_configured %}jobs{% else %}handoffs{% endif %}</summary>
+          <summary>Social image {% if magnific_api_configured %}jobs{% else %}handoffs{% endif %} ({{ progress.total }})</summary>
+          <div class="make-progress-strip" aria-label="Multi-platform job progress">
+            <div class="meta">
+              <span class="pill ready">{{ progress.counts.queued }} queued</span>
+              <span class="pill gold">{{ progress.counts.running }} running</span>
+              <span class="pill complete">{{ progress.counts.done }} done</span>
+              {% if progress.has_failed %}<span class="pill blocked">{{ progress.counts.failed }} failed</span>{% endif %}
+              {% if progress.platforms %}
+                <span class="pill">Platforms: {{ progress.platforms|join(', ') }}</span>
+              {% endif %}
+            </div>
+            {% if progress.ready_for_review_count %}
+              <p class="subtle make-progress-review-link">
+                {{ progress.ready_for_review_count }} ready for review —
+                <a href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=product.id, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Open needs-review in Gallery</a>
+              </p>
+            {% endif %}
+          </div>
           <p class="subtle">
             {% if magnific_api_configured %}
               Done path: 1) queue → 2) worker generates via Magnific API → 3) review candidate (attach/import still works as fallback).
@@ -221,19 +244,21 @@
             {% endif %}
           </p>
           <div class="product-social-job-list">
-            {% for job in social_item.social_jobs %}
-              <div class="product-social-job">
+            {% for row in progress.rows %}
+              {% set job = row.job %}
+              <div class="product-social-job" data-make-phase="{{ row.phase }}">
                 <div class="meta">
                   <span class="pill">Job #{{ job.id }}</span>
-                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(job.provider_status) }}</span>
-                  <span class="pill">{{ job.requested_dimensions or '1:1 IG Feed' }}</span>
-                  <span class="pill">{{ job.model_name }}</span>
+                  <span class="pill {{ row.pill_class }}">{{ row.phase_label }}</span>
+                  <span class="pill">{{ row.platform_label }}{% if row.aspect_ratio %} ({{ row.aspect_ratio }}){% endif %}</span>
+                  {% if row.option_number %}<span class="pill">Option {{ row.option_number }}</span>{% endif %}
+                  <span class="pill">{{ row.status_label }}</span>
                 </div>
                 {% if job.candidate_asset %}
                   <strong>{{ job.candidate_asset.name }}</strong>
                   <div class="meta">
                     <span class="pill {{ 'complete' if job.candidate_asset.review_state == 'approved' else 'blocked' }}">{{ job.candidate_asset.review_state }}</span>
-                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Review in Gallery</a>
+                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, review_state='needs review' if row.ready_for_review else none, tag=social_image_asset_type if row.ready_for_review else none, product_id=product.id if row.ready_for_review else none, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Review in Gallery</a>
                   </div>
                 {% else %}
                   {% if job.review_notes %}<p class="subtle">{{ job.review_notes }}</p>{% endif %}

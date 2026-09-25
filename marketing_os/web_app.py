@@ -55,9 +55,13 @@ from .services.art_studio import (
     create_video_request,
     enqueue_social_image_generation,
     social_image_platform_options,
+    social_image_platform_label,
+    summarize_social_image_job_progress,
+    needs_review_social_groups,
     DEFAULT_SOCIAL_IMAGE_PLATFORM,
     normalize_social_image_platform,
     SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS,
+    SOCIAL_IMAGE_ASSET_TYPE,
     enqueue_video_art_board_generation,
     enqueue_video_generation,
     enqueue_video_storyboard_generation,
@@ -194,9 +198,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "statuses": TASK_STATUSES,
             "roles": ROLE_OPTIONS,
             "art_studio_provider_status_label": art_studio_provider_status_label,
+            "summarize_social_image_job_progress": summarize_social_image_job_progress,
             "magnific_api_configured": magnific_api_configured(),
             "social_image_platform_options": social_image_platform_options(),
             "default_social_image_platform": DEFAULT_SOCIAL_IMAGE_PLATFORM,
+            "social_image_asset_type": SOCIAL_IMAGE_ASSET_TYPE,
         }
 
     @app.get("/health")
@@ -650,6 +656,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         pagination = _pagination(page, total_assets, ASSETS_PAGE_SIZE)
         platform_options = [item["key"] for item in social_image_platform_options()]
         aspect_options = sorted({item["aspect_ratio"] for item in social_image_platform_options()})
+        review_social_groups = needs_review_social_groups(session)
         return {
             "active": "assets",
             "assets": asset_inventory(
@@ -685,6 +692,8 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 "aspect_ratio": selected_aspect_ratio or None,
                 "q": search_q or None,
             },
+            "needs_review_social_groups": review_social_groups,
+            "needs_review_social_count": sum(int(group["count"]) for group in review_social_groups),
         }
 
     @app.get("/creative-assets")
@@ -1230,18 +1239,18 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     )
                     for platform in platforms
                 ]
-                job = jobs[0]
-                labels = ", ".join(platforms)
+                labels = ", ".join(social_image_platform_label(key) for key in platforms)
+                job_ids = ", ".join(f"#{job.id}" for job in jobs)
                 flash(
                     (
                         f"Queued {len(jobs)} Social Worthy image job{'s' if len(jobs) != 1 else ''} "
-                        f"(#{', #'.join(str(j.id) for j in jobs)}; {labels}) for marketing-os-worker Magnific API drain. "
-                        "Attach/import remains available as a fallback."
+                        f"({job_ids}; {labels}) for marketing-os-worker Magnific API drain. "
+                        "Watch status below; open Review in Gallery when Done."
                     )
                     if magnific_api_configured()
                     else (
                         f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'s' if len(jobs) != 1 else ''} "
-                        f"(#{', #'.join(str(j.id) for j in jobs)}; {labels}). "
+                        f"({job_ids}; {labels}). "
                         "Generate in Magnific, then attach/import each file to complete."
                     )
                 )
@@ -1529,15 +1538,21 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     for platform in platforms
                     for option_number in range(1, option_count + 1)
                 ]
+                platform_labels = ", ".join(social_image_platform_label(key) for key in platforms)
+                job_ids = ", ".join(f"#{job.id}" for job in jobs[:8])
+                if len(jobs) > 8:
+                    job_ids += f" (+{len(jobs) - 8} more)"
                 if magnific_api_configured():
                     flash(
-                        f"Queued {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name} "
-                        "for marketing-os-worker Magnific API drain. Attach/import remains available as a fallback."
+                        f"Queued {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} "
+                        f"for {product.name} across {platform_labels} ({job_ids}) for marketing-os-worker Magnific API drain. "
+                        "Watch status below; open Review in Gallery when Done."
                     )
                 else:
                     flash(
                         f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} "
-                        f"for {product.name}. Generate in Magnific, then attach/import each file to complete."
+                        f"for {product.name} across {platform_labels} ({job_ids}). "
+                        "Generate in Magnific, then attach/import each file to complete."
                     )
         except ValueError as exc:
             flash(str(exc))
