@@ -42,7 +42,7 @@ present.
 2. Explicit sampled/public write authority for a named policy class.
 3. Alert destination, named owner, acknowledgement policy, and cost ceiling.
 4. Off-host encrypted backup destination, key custodian, retention, RPO/RTO.
-5. Production hostname/route, administrator handoff, and cutover approval.
+5. Production hostname locked for now as `mmm.digicolony.net` (Matthew, 2026-09-25); Cloudflare route configuration, administrator handoff, and cutover approval remain open.
 6. Live Sheldon mutations remain separately gated, but the upgraded deployer
    now supports and validates the required multi-service topology.
 

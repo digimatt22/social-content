@@ -87,7 +87,7 @@ Phase -1 evidence and decisions:
 ## Known human/deployment gates
 
 - Configure the Marketing OS remote/PR workflow.
-- Select production hostname and Caddy/Cloudflare policy.
+- Production hostname locked for now: `mmm.digicolony.net` (Matthew, 2026-09-25). Caddy/Cloudflare route configuration remains a live ops gate.
 - Transfer the first administrator credential securely.
 - Select encrypted off-host backup destination, retention, RPO/RTO, and key custodian.
 - Configure alert delivery/owner, acknowledgement, and cost ceiling.
