@@ -1,11 +1,11 @@
 # Social Images On Products And Video Studio
 
 ## Status
-- Status: ready for review
+- Status: completed
 - Owner: Codex
 - Branch: main
-- PR: TBD
-- Last updated: 2026-07-02
+- PR: none (landed on `main` without a dedicated PR; docs closeout 2026-09-25)
+- Last updated: 2026-09-25
 
 ## Summary
 - Move the Social Images generation entry point into Products so product references and generation live together.
@@ -15,10 +15,10 @@
 ## Work State
 - Planned: Product page controls, video studio naming, docs, focused validation.
 - In progress: None.
-- Blocked: Remote sync is blocked because no `origin` remote is configured.
-- Needs human validation: Confirm the simplified product flow feels right in the running browser.
-- Ready for review: Product-first Social Images controls and Video Studio naming are implemented.
-- Completed: Focused route/template tests, py_compile, and local smoke checks.
+- Blocked: None.
+- Needs human validation: None for closeout; product/Video Studio UX can still be re-checked in a live browser anytime.
+- Ready for review: None (implementation already on `main`).
+- Completed: Product-first Social Images controls, Video Studio naming, focused route/template tests, py_compile, local smoke checks, and operator-guide updates present on `main` as of 2026-09-25.
 
 ## Decisions
 - Default product references are the source of truth for Social Images generation.
@@ -43,7 +43,7 @@
 - SQLite verification on 2026-07-02 found 46 queued `art_studio_social_image` jobs. All queued jobs now include `Scene direction:` and the generic-office guardrail. Scene directions were spot-checked by product group, including biker/motorcycle, bowling alley, woodland chipmunk costume, patriotic July 4th, package delivery, lodge hall, firehouse, tropical/beach, Georgia Southern/peach, New York city, Pennsylvania/Keystone, cruise-cabin room steward, tattoo studio, and Texas western scenes.
 - `python -m unittest discover -s tests` still fails 2 pre-existing video/content automation expectations: missing `video_plan` text in `video_handoff`, and missing `$video-content-planner` in the weekly Codex prompt.
 - `scripts/check-doc-links.sh` still fails on the pre-existing `AGENTS.md` link to `docs/HARNESS_IMPROVEMENT_BACKLOG.md`.
-- `scripts/check-current-state.sh` still fails because no `origin` remote is configured.
+- `scripts/check-current-state.sh` previously failed when no `origin` remote was configured; `origin` is now `https://github.com/digimatt22/social-content.git` (noted at closeout 2026-09-25).
 
 ## Human Validation
 - Owner: Matthew
@@ -53,10 +53,10 @@
 - Blocks merge: No, if automated checks and local smoke pass.
 
 ## Documentation
-- Update the local web console guide.
-- Move this plan to `docs/exec-plans/completed/` after review or merge.
+- Local web console guide documents Products Social Images and Video Studio.
+- This plan moved to `docs/exec-plans/completed/` on 2026-09-25.
 
 ## Closeout
-- Final status: TBD.
-- Merge or abandonment notes: TBD.
-- Follow-up work items: TBD.
+- Final status: completed.
+- Merge or abandonment notes: Implementation and operator docs are already on `main` (Products Social Images controls, Video Studio labeling, related tests/services). Plan stayed `ready for review` with stale no-`origin` blockers; closed as completed during the 2026-09-25 docs scrub once remote `https://github.com/digimatt22/social-content.git` and default PR base `main` were recorded.
+- Follow-up work items: None required inside this plan. Optional live browser re-check of the product Social Images flow remains available but does not block closeout.

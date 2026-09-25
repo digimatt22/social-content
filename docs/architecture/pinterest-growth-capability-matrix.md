@@ -36,7 +36,7 @@ Phase -1 evidence captured 2026-07-24. `Unknown` means account/environment capab
 | Cloudflare/Caddy route | Partially available | Hostname selected: `mmm.digicolony.net` (Matthew, 2026-09-25); Caddy active on Sheldon; Cloudflare route not yet configured | Access/route policy still open | Loopback/LAN-only until Cloudflare route is configured |
 | Alert delivery | Unconfigured | No alert webhook/email provider configuration found | Unattended failures could go unseen | Persist exceptions; no unattended external writes until alert proof |
 | Off-host PostgreSQL backup | Unconfigured | No Marketing OS database deployment exists | Restore objective unproven | Phase 0 selects destination and runs restore proof |
-| Source-control remote/PR | Unavailable in Marketing OS repo | No `origin` remote configured | Local phase commits cannot be pushed/reviewed | Create scoped local commits; remote setup remains a delivery follow-up |
+| Source-control remote/PR | Available | `origin` is `https://github.com/digimatt22/social-content.git`; default PR base `main` | None for hosting; follow `docs/PULL_REQUESTS.md` | Use feature branches and draft/ready PRs into `main` |
 
 ## Provider Facts Used
 

@@ -8,6 +8,11 @@
 - Tests: `tests/` with `unittest`
 - Public website: separate repo at `../websites/mattmade_me`
 
+## Remote
+
+- Git remote: `https://github.com/digimatt22/social-content.git`
+- Default PR base: `main`
+
 ## High-value paths
 
 | Path | Role |
@@ -55,7 +60,6 @@
 
 ## Current gaps
 
-- Marketing OS remote/PR target is unknown.
 - Pinterest/GA4/GSC authorization is unavailable.
 - Off-host backup target and real alert delivery are unconfigured.
 - Magnific is not callable in the current session.
