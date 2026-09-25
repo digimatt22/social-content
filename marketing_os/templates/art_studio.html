@@ -13,7 +13,7 @@
     <div class="brief-title">
       <div class="eyebrow">Magnific-ready bench</div>
       <h3>Make product-safe video assets before a post needs them.</h3>
-      <p>Automation can generate and import queued scene cards and approved videos here. Manual Magnific import still works, and every video asset stays in review until product accuracy is approved.</p>
+      <p>Art Studio queues Magnific handoffs — marketing-os-worker does not drain them yet. Generate externally, then import/attach here. Manual Magnific import still works, and every video asset stays in review until product accuracy is approved.</p>
     </div>
     <div class="brief-stats">
       <div class="stat-tile"><strong>{{ stats.products }}</strong><span>video-ready products</span></div>
@@ -83,7 +83,7 @@
               <article class="task">
                 <div class="meta">
                   <span class="pill">Job #{{ job.id }}</span>
-                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ job.provider_status }}</span>
+                  <span class="pill {{ 'complete' if job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(job.provider_status) }}</span>
                   <span class="pill">{{ job.model_name }}</span>
                 </div>
                 {% if job.candidate_asset %}
@@ -303,7 +303,7 @@
           </section>
         </div>
         <aside class="queue-preview-panel">
-          <div class="eyebrow">Queued workflow</div>
+          <div class="eyebrow">Handoff workflow</div>
           <h3>Product-safe video</h3>
           <div class="queue-preview-list">
             <div>
@@ -381,7 +381,7 @@
             {% endif %}
           </details>
         {% else %}
-          <p class="subtle">Waiting for agent automation to register the planner brief and scene-card prompts.</p>
+          <p class="subtle">Waiting on Magnific / agent handoff to register the planner brief and scene-card prompts (not drained by marketing-os-worker yet).</p>
         {% endif %}
 
         <div class="video-card-preview-grid">
@@ -389,7 +389,7 @@
             <div class="meta">
               <span class="pill">Scene card</span>
               {% if video_request.opening_job %}
-                <span class="pill {{ 'complete' if video_request.opening_job.provider_status == 'generated' else 'ready' }}">{{ video_request.opening_job.provider_status }}</span>
+                <span class="pill {{ 'complete' if video_request.opening_job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(video_request.opening_job.provider_status) }}</span>
               {% endif %}
             </div>
             {% if video_request.opening_job and video_request.opening_job.candidate_asset %}
@@ -404,7 +404,7 @@
                 </div>
               {% endif %}
             {% else %}
-              <p class="subtle">Waiting for Art Director scene card.</p>
+              <p class="subtle">Waiting on Magnific scene card handoff (not drained by worker yet). Import/attach when ready.</p>
             {% endif %}
           </article>
           {% if video_request.ending_job or video_request.details.ending_card_required %}
@@ -412,7 +412,7 @@
               <div class="meta">
                 <span class="pill">Optional ending card</span>
                 {% if video_request.ending_job %}
-                  <span class="pill {{ 'complete' if video_request.ending_job.provider_status == 'generated' else 'ready' }}">{{ video_request.ending_job.provider_status }}</span>
+                  <span class="pill {{ 'complete' if video_request.ending_job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(video_request.ending_job.provider_status) }}</span>
                 {% endif %}
               </div>
               {% if video_request.ending_job and video_request.ending_job.candidate_asset %}
@@ -437,7 +437,7 @@
           <article class="task" style="margin-top: 12px;">
             <div class="meta">
               <span class="pill">Video job #{{ video_request.video_job.id }}</span>
-              <span class="pill {{ 'complete' if video_request.video_job.provider_status == 'generated' else 'ready' }}">{{ video_request.video_job.provider_status }}</span>
+              <span class="pill {{ 'complete' if video_request.video_job.provider_status == 'generated' else 'ready' }}">{{ art_studio_provider_status_label(video_request.video_job.provider_status) }}</span>
               <span class="pill">{{ video_request.video_job.model_name }}</span>
             </div>
             {% if video_request.video_job.candidate_asset %}

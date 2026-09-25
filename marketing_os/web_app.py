@@ -47,6 +47,7 @@ from .services.insights import build_learning_summary, outcome_tags, serialize_l
 from .services.maintenance import purge_rejected_and_canceled_items
 from .services.art_studio import (
     approve_video_request_for_generation,
+    art_studio_provider_status_label,
     art_studio_queue,
     art_studio_video_requests,
     cancel_video_request,
@@ -186,6 +187,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "playbook_for": playbook_for,
             "statuses": TASK_STATUSES,
             "roles": ROLE_OPTIONS,
+            "art_studio_provider_status_label": art_studio_provider_status_label,
         }
 
     @app.get("/health")
@@ -1057,7 +1059,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                         notes=request.form.get("notes", "").strip(),
                     )
                     asset = job.candidate_asset
-                flash(f"Imported Social Worthy image for review: {asset.name}.")
+                flash(f"Imported Social Worthy image for review: {asset.name}. Handoff complete.")
         except ValueError as exc:
             flash(str(exc))
         return redirect(url_for("art_studio", tab="social-images"))
@@ -1070,7 +1072,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             option_number = int(request.form.get("option_number", "1") or 1)
             with session_scope(factory) as session:
                 job = enqueue_social_image_generation(session, product_id, source_asset_id, option_number=option_number)
-                flash(f"Queued Social Worthy image job #{job.id}.")
+                flash(f"Handoff queued for Magnific: Social Worthy image job #{job.id}. Generate in Magnific, then attach/import the file to complete.")
         except ValueError as exc:
             flash(str(exc))
         return redirect(url_for("art_studio", tab="social-images"))
@@ -1345,7 +1347,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     )
                     for option_number in range(1, option_count + 1)
                 ]
-                flash(f"Queued {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name}.")
+                flash(f"Handoff queued for Magnific: {len(jobs)} Social Worthy image job{'' if len(jobs) == 1 else 's'} for {product.name}. Generate in Magnific, then attach/import each file to complete.")
         except ValueError as exc:
             flash(str(exc))
         return redirect(return_to)
