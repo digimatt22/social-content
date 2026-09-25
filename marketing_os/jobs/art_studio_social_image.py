@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -9,11 +10,12 @@ from typing import Any
 from sqlalchemy import select
 
 from ..db import create_db_engine, init_db, session_factory, session_scope
-from ..db_models import AssetRecord, CreativeGenerationJobRecord
+from ..db_models import AssetRecord, CreativeGenerationJobRecord, SyncMetadata, utc_now
 from ..magnific_api import (
     MagnificApiError,
     MagnificClient,
     MagnificReferenceImage,
+    MagnificUploadedFile,
     guess_mime_type,
     https_asset_url,
     magnific_api_configured,
@@ -76,7 +78,7 @@ def art_studio_social_image_generate_handler(payload: dict[str, Any]) -> dict[st
                 )
 
             references = _reference_assets(session, job)
-            reference_images = _reference_images_or_raise(references)
+            reference_images = _reference_images_or_raise(session, references, client)
             metadata = _json_dict(job.response_metadata_json)
             product_name = str(metadata.get("product_name") or "").strip() or "product"
             option_number = int(metadata.get("option_number") or 1)
@@ -94,12 +96,14 @@ def art_studio_social_image_generate_handler(payload: dict[str, Any]) -> dict[st
                 "marketing-os-worker is generating via Magnific API. "
                 "Attach/import remains available as a fallback if needed."
             )
+            staged_refs = _staged_refs_for_assets(session, references)
             metadata["magnific_api"] = {
                 "endpoint": "nano-banana-pro-flash",
                 "reference_count": len(reference_images),
                 "reference_urls": [item.image for item in reference_images],
                 "aspect_ratio": aspect_ratio,
                 "platform": platform_key,
+                "staged_refs": staged_refs,
             }
             job.response_metadata_json = json.dumps(metadata, indent=2)
             session.flush()
@@ -233,27 +237,171 @@ def _reference_assets(session, job: CreativeGenerationJobRecord) -> list[AssetRe
     return ordered
 
 
-def _reference_images_or_raise(references: list[AssetRecord]) -> list[MagnificReferenceImage]:
+STAGED_REF_SOURCE_PREFIX = "magnific_upload_asset_"
+
+
+def _reference_images_or_raise(
+    session,
+    references: list[AssetRecord],
+    client: MagnificClient,
+) -> list[MagnificReferenceImage]:
+    """Resolve refs to Magnific-reachable https URLs; stage local files via Upload Files API."""
     images: list[MagnificReferenceImage] = []
-    missing: list[int] = []
     for index, asset in enumerate(references):
         url = https_asset_url(asset.canonical_url, asset.source_path, asset.preview_path)
+        mime = (asset.mime_type or "").strip()
         if not url:
-            missing.append(asset.id)
-            continue
-        mime = (asset.mime_type or "").strip() or guess_mime_type(url)
+            try:
+                url, mime, _staged = _stage_local_reference(session, asset, client, mime)
+            except MagnificApiError as exc:
+                message = f"Failed to stage local reference asset {asset.id} for Magnific: {exc}"
+                if exc.retryable:
+                    raise RuntimeError(message) from exc
+                raise NonRetryableJobError(message) from exc
+            except (OSError, ValueError) as exc:
+                raise NonRetryableJobError(
+                    f"Failed to stage local reference asset {asset.id} for Magnific: {exc}"
+                ) from exc
+        if not url:
+            raise NonRetryableJobError(
+                f"Reference asset {asset.id} has no https URL and no readable local image file "
+                "to stage for Magnific."
+            )
+        mime = mime or guess_mime_type(url)
         role = REFERENCE_ROLE_TEXT[0] if index == 0 else REFERENCE_ROLE_TEXT["default"]
         images.append(MagnificReferenceImage(image=url, text=role, mime_type=mime))
-    if missing:
-        raise NonRetryableJobError(
-            "Magnific REST requires publicly reachable https reference URLs "
-            f"(Etsy remotes). Local-only asset ids without https canonical_url/source_path: {missing}. "
-            "Upload/sync remote URLs or attach/import manually; Magnific upload REST is not wired yet."
-        )
     if not images:
         raise NonRetryableJobError("No https reference images available for Magnific API generation.")
     return images[:14]
 
+
+def _stage_local_reference(
+    session,
+    asset: AssetRecord,
+    client: MagnificClient,
+    mime_hint: str,
+) -> tuple[str, str, dict[str, object]]:
+    local_path = _local_image_path(asset)
+    if local_path is None:
+        raise ValueError("no local image file found on disk")
+    checksum = _sha256_file(local_path)
+    mime = mime_hint or guess_mime_type(local_path.name)
+    if mime == "image/jpg":
+        mime = "image/jpeg"
+
+    existing = _load_staged_ref(session, asset.id)
+    if (
+        existing
+        and existing.get("checksum") == checksum
+        and str(existing.get("file_id") or "").startswith("upl_")
+    ):
+        file_id = str(existing["file_id"])
+        try:
+            asset_url = client.refresh_upload_asset_url(file_id)
+            return asset_url, str(existing.get("content_type") or mime), {
+                "file_id": file_id,
+                "checksum": checksum,
+                "reused": True,
+            }
+        except MagnificApiError:
+            # Upload expired/deleted — fall through to re-upload.
+            pass
+
+    uploaded: MagnificUploadedFile = client.upload_local_image(local_path, content_type=mime)
+    meta = {
+        "file_id": uploaded.file_id,
+        "checksum": checksum,
+        "content_type": uploaded.content_type,
+        "local_path": local_path.as_posix(),
+        "reused": False,
+    }
+    _save_staged_ref(session, asset.id, local_path.as_posix(), meta)
+    return uploaded.asset_url, uploaded.content_type, meta
+
+
+def _local_image_path(asset: AssetRecord) -> Path | None:
+    """Prefer full-resolution source over preview thumbnails for Magnific refs."""
+    for value in (asset.source_path, asset.preview_path, asset.canonical_url):
+        text = (value or "").strip()
+        if not text or text.startswith(("http://", "https://")):
+            continue
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            path = Path(".") / path
+        if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+            return path
+    return None
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _staged_source_name(asset_id: int) -> str:
+    return f"{STAGED_REF_SOURCE_PREFIX}{int(asset_id)}"
+
+
+def _load_staged_ref(session, asset_id: int) -> dict[str, object] | None:
+    record = session.scalar(
+        select(SyncMetadata).where(SyncMetadata.source_name == _staged_source_name(asset_id))
+    )
+    if record is None:
+        return None
+    try:
+        data = json.loads(record.notes or "{}")
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _save_staged_ref(session, asset_id: int, source_path: str, meta: dict[str, object]) -> None:
+    name = _staged_source_name(asset_id)
+    record = session.scalar(select(SyncMetadata).where(SyncMetadata.source_name == name))
+    notes = json.dumps(
+        {
+            "file_id": meta.get("file_id"),
+            "checksum": meta.get("checksum"),
+            "content_type": meta.get("content_type"),
+            "local_path": source_path,
+        },
+        indent=2,
+    )
+    if record is None:
+        session.add(
+            SyncMetadata(
+                source_name=name,
+                source_path=source_path,
+                notes=notes,
+                synced_at=utc_now(),
+            )
+        )
+    else:
+        record.source_path = source_path
+        record.notes = notes
+        record.synced_at = utc_now()
+    session.flush()
+
+
+
+def _staged_refs_for_assets(session, references: list[AssetRecord]) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for asset in references:
+        existing = _load_staged_ref(session, asset.id)
+        if not existing:
+            continue
+        out.append(
+            {
+                "asset_id": asset.id,
+                "file_id": existing.get("file_id"),
+                "checksum": existing.get("checksum"),
+                "content_type": existing.get("content_type"),
+            }
+        )
+    return out
 
 def _mark_provider_error(
     factory,
