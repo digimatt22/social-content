@@ -593,15 +593,15 @@
           ("art_studio", "Video Studio", "art_studio"),
           ("assets", "Gallery", "assets"),
           ("products", "Products", "products_admin"),
-          ("coverage", "Coverage", "coverage_intelligence.coverage_page"),
-          ("shadow", "Pinterest Shadow", "pinterest_shadow.shadow_page"),
           ("insights", "Signals", "insights")
         ] %}
           <a class="{{ 'active' if active == key else '' }}" href="{{ url_for(endpoint) }}">{{ label }}</a>
         {% endfor %}
-        <details class="nav-more" {{ 'open' if active in ['metrics_due', 'completed', 'metrics', 'data_health', 'plans', 'settings'] else '' }}>
+        <details class="nav-more" {{ 'open' if active in ['coverage', 'shadow', 'metrics_due', 'completed', 'metrics', 'data_health', 'plans', 'settings'] else '' }}>
           <summary>More tools</summary>
           {% for key, label, endpoint in [
+            ("coverage", "Coverage", "coverage_intelligence.coverage_page"),
+            ("shadow", "Pinterest Shadow", "pinterest_shadow.shadow_page"),
             ("metrics_due", "Follow-Ups", "metrics_due"),
             ("completed", "Completed", "completed"),
             ("metrics", "Metrics History", "metrics"),

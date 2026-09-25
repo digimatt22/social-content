@@ -1,18 +1,18 @@
 # Asset Workshop (Marketing OS primary goal)
 
 ## Status
-- Status: in progress
+- Status: ready for review
 - Owner: Matthew / Codex
-- Branch: codex/local-refs-magnific
-- PR: https://github.com/digimatt22/social-content/pull/14
-- Last updated: 2026-09-25 (local refs → Magnific-reachable)
+- Branch: codex/nav-focus
+- PR: https://github.com/digimatt22/social-content/pull/15
+- Last updated: 2026-09-25 (nav focus — Coverage/Shadow demoted from primary chrome)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
 ## Summary
 - Lock **asset workshop** as the active product goal for Marketing OS.
 - Why: humans and agents need one place to **find** product truth + reference photos and **make** social-ready assets for review. Brand Lab / grok desks own posting (pins, IG/FB/X drafts). This app owns catalog ↔ files ↔ generate ↔ review.
-- Out of scope for this plan file: code, deploy, aspect-ratio implementation (separate PR), nav-hide code, mattmademe.com site desk, Brand Lab content desks.
+- Out of scope for this plan file: deploy, Brand Lab, video, background Etsy, mattmademe.com site desk. Nav focus shipped in this PR; earlier build-order items shipped in #11–#14.
 
 ## Job (for now)
 Marketing OS is the **asset workshop**:
@@ -47,8 +47,8 @@ Default reference assets lock generation inputs.
 
 ## Park / demote (do not delete)
 Keep code and old plans; demote as primary day-to-day focus:
-- Coverage intelligence surfaces as primary nav
-- Pinterest Shadow as primary nav
+- Coverage intelligence — **demoted from primary nav** into More tools; routes/APIs remain; **parked for primary investment**
+- Pinterest Shadow — **demoted from primary nav** into More tools; routes/APIs remain; **parked for primary investment**
 - Live Pinterest publish
 - Website-as-product source of truth
 - Weekly planner / metrics as primary nav
@@ -60,9 +60,11 @@ Old plan kept and marked parked for primary focus:
 1. **Done:** Magnific API drain (live on Sheldon). Per-platform aspect ratios (#11).
 2. **Done:** Findability — Gallery filters + agent asset list APIs (PR #12).
 3. **Done:** Make UX — multi-platform queue progress on Products/Art Studio; Gallery needs-review social grouping (#13).
-4. **In progress (this PR):** Local refs → Magnific-reachable (Upload Files API staging).
-5. **Nav focus:** image-asset primary; park coverage/shadow behind more.
+4. **Done:** Local refs → Magnific-reachable (Upload Files API staging) (#14).
+5. **Done (this PR):** Nav focus — Coverage / Pinterest Shadow moved under More tools so Products, Gallery, Art Studio dominate primary chrome.
 6. **Later:** background Etsy sync; video on same pattern; Magnific webhook verify.
+
+**Primary build-order loop (items 1–5) complete.** Remaining work is the later parked track (item 6+).
 
 ## Success
 An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + Stories 9:16 → wait for reviewable files → approve — without leaving Marketing OS and without a bot babysitting Magnific.
@@ -73,13 +75,14 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Pinterest growth plan is **not** the primary active goal for day-to-day product work.
 
 ## Work State
-- Planned: nav focus, later items above.
-- In progress: local refs → Magnific-reachable (this PR).
-- Completed earlier: strategy lock; Magnific REST drain; per-platform aspect ratios (#11); findability (#12); make UX (#13).
+- Planned: later items (background Etsy sync; video pattern; Magnific webhook verify).
+- In progress: none for primary loop.
+- Completed earlier: strategy lock; Magnific REST drain; per-platform aspect ratios (#11); findability (#12); make UX (#13); local refs staging (#14).
+- Completed (this PR): nav focus — Coverage/Shadow demoted from primary chrome into More tools.
 - Blocked: none.
-- Needs human validation: queue a social-image job with a local-only reference on Sheldon; confirm Magnific receives a staged https `asset_url` and generation completes.
-- Ready for review: this PR (local refs staging).
-- Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`).
+- Needs human validation: spot-check chrome on `mmm.digicolony.net` after deploy — primary Workflow shows Products/Gallery/Art Studio; Coverage/Shadow only under More tools; `/coverage` and `/shadow-campaigns` still load.
+- Ready for review: this PR (nav focus).
+- Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`); primary build-order items 1–5.
 
 ## Decisions
 - Asset workshop is the active strategy source in `docs/PROJECT_CONTEXT.md`.
@@ -88,25 +91,25 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Production hostname: `mmm.digicolony.net`.
 
 ## Implementation
-Local-ref staging (this PR):
-- `MagnificClient.upload_local_image` / `request_upload_urls` / `refresh_upload_asset_url` in `marketing_os/magnific_api.py`
-- Drain handler stages local-only refs before nano-banana create; Etsy https path unchanged
-- Idempotency via `SyncMetadata` `magnific_upload_asset_<asset_id>` (`file_id` + sha256 checksum)
-- Docs: this plan + `docs/operating-guides/magnific-mcp-creative-assets.md`
+Nav focus (this PR):
+- `marketing_os/templates/base.html` — remove Coverage and Pinterest Shadow from primary Workflow list; place them first under More tools; auto-open overflow when `active` is coverage/shadow
+- Routes/blueprints unchanged (`/coverage`, `/shadow-campaigns`, APIs)
+- `tests/test_nav_focus.py` — asserts primary chrome excludes those labels and overflow still links them; routes return 200
+- Docs: this plan (item 5 done; primary loop 1–5 complete; Coverage/Shadow remain parked for primary investment)
 
-Out of scope: nav hide, video, deploy, Brand Lab publish, Etsy sync changes.
+Out of scope: deleting Coverage/Shadow code, deploy, Brand Lab, video, background Etsy.
 
 ## Validation
-- Docs-only; `scripts/check-current-state.sh --remote` before PR.
-- Link sanity for new strategy path from PROJECT_CONTEXT / README.
+- `python -m unittest tests.test_nav_focus`
+- `scripts/check-current-state.sh --remote` before PR
 - Date checked: 2026-09-25
 
 ## Human Validation
 - Owner: Matthew
-- Exact steps: Confirm strategy wording matches approved chat; merge docs PR.
-- Expected evidence: PR merged; PROJECT_CONTEXT Strategy source points at this plan.
+- Exact steps: After merge/deploy, open Marketing OS chrome — confirm Coverage and Pinterest Shadow are only under More tools; Products/Gallery/Art Studio remain primary; deep links `/coverage` and `/shadow-campaigns` still work.
+- Expected evidence: PR merged; chrome matches intent on hosted app.
 - Evidence location: this plan + PR.
-- Blocks merge: No (Matthew already approved writing strategy into docs).
+- Blocks merge: No (template demotion + unit test; routes preserved).
 
 ## Documentation
 - Same-change updates listed under Implementation.
@@ -118,5 +121,5 @@ Out of scope: nav hide, video, deploy, Brand Lab publish, Etsy sync changes.
 - When (if ever) to resume Pinterest growth as a primary track after asset-workshop loops are solid.
 
 ## Closeout
-- Final status: TBD until merge.
-- Follow-up: nav focus → later items (separate PRs).
+- Final status: TBD until merge of nav-focus PR.
+- Follow-up: later items only (background Etsy sync; video; Magnific webhook verify) — separate PRs. Coverage/Shadow stay parked for primary investment.

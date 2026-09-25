@@ -166,6 +166,7 @@ Out of scope for this app's primary loop:
 
 - Instagram / Facebook / X API publishing (Brand Lab desks)
 - Live Pinterest publish as the day-to-day build driver
+- Coverage / Pinterest Shadow as primary nav (demoted under More tools; routes kept; parked for primary investment)
 - Google Analytics / Search Console as primary nav
 - Public mattmademe.com site desk work
 
