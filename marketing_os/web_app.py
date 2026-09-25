@@ -84,6 +84,7 @@ from .phase4 import (
     asset_inventory,
     asset_inventory_count,
     asset_path,
+    asset_review_state_options,
     asset_tag_label,
     asset_tag_options,
     complete_task_status,
@@ -318,8 +319,81 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
 
     @app.get("/api/assets")
     def api_assets():
+        product_id = _int_or_none(request.args.get("product_id"))
+        asset_type = request.args.get("asset_type", "").strip()
+        review_state = request.args.get("review_state", "").strip()
+        platform = request.args.get("platform", "").strip()
+        aspect_ratio = request.args.get("aspect_ratio", "").strip()
+        q = request.args.get("q", "").strip()
+        tag = request.args.get("tag", "").strip()
+        include_hidden = request.args.get("show_hidden") == "1"
         with session_scope(factory) as session:
-            return jsonify({"assets": [serialize_asset_view(model) for model in asset_inventory(session)]})
+            models = asset_inventory(
+                session,
+                include_hidden=include_hidden,
+                tag=tag,
+                product_id=product_id,
+                asset_type=asset_type,
+                review_state=review_state,
+                platform=platform,
+                aspect_ratio=aspect_ratio,
+                q=q,
+            )
+            return jsonify(
+                {
+                    "assets": [serialize_asset_view(model) for model in models],
+                    "filters": {
+                        "product_id": product_id,
+                        "asset_type": asset_type or tag,
+                        "review_state": review_state,
+                        "platform": platform,
+                        "aspect_ratio": aspect_ratio,
+                        "q": q,
+                        "show_hidden": include_hidden,
+                    },
+                    "count": len(models),
+                }
+            )
+
+    @app.get("/api/products/<int:product_id>/assets")
+    def api_product_assets(product_id: int):
+        asset_type = request.args.get("asset_type", "").strip()
+        review_state = request.args.get("review_state", "").strip()
+        platform = request.args.get("platform", "").strip()
+        aspect_ratio = request.args.get("aspect_ratio", "").strip()
+        q = request.args.get("q", "").strip()
+        tag = request.args.get("tag", "").strip()
+        include_hidden = request.args.get("show_hidden") == "1"
+        with session_scope(factory) as session:
+            if session.get(ProductRecord, product_id) is None:
+                abort(404)
+            models = asset_inventory(
+                session,
+                include_hidden=include_hidden,
+                tag=tag,
+                product_id=product_id,
+                asset_type=asset_type,
+                review_state=review_state,
+                platform=platform,
+                aspect_ratio=aspect_ratio,
+                q=q,
+            )
+            return jsonify(
+                {
+                    "product_id": product_id,
+                    "assets": [serialize_asset_view(model) for model in models],
+                    "filters": {
+                        "product_id": product_id,
+                        "asset_type": asset_type or tag,
+                        "review_state": review_state,
+                        "platform": platform,
+                        "aspect_ratio": aspect_ratio,
+                        "q": q,
+                        "show_hidden": include_hidden,
+                    },
+                    "count": len(models),
+                }
+            )
 
     @app.get("/api/data-health")
     def api_data_health():
@@ -537,34 +611,64 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         include_hidden: bool = False,
         page: int = 1,
         selected_tag: str = "",
+        selected_product_id: int | None = None,
+        selected_review_state: str = "",
+        selected_platform: str = "",
+        selected_aspect_ratio: str = "",
+        search_q: str = "",
         open_asset_id: int | None = None,
         return_to: str = "",
     ) -> dict[str, object]:
         page = max(page, 1)
         tag_options = asset_tag_options(session, include_hidden=include_hidden)
+        review_options = asset_review_state_options(session, include_hidden=include_hidden)
         selected_tag = selected_tag.strip()
         if selected_tag and selected_tag.lower() not in {tag.lower() for tag in tag_options}:
             selected_tag = ""
-        total_assets = asset_inventory_count(session, include_hidden=include_hidden, tag=selected_tag)
+        selected_review_state = selected_review_state.strip()
+        if selected_review_state and selected_review_state.lower() not in {state.lower() for state in review_options}:
+            selected_review_state = ""
+        selected_platform = selected_platform.strip()
+        selected_aspect_ratio = selected_aspect_ratio.strip()
+        search_q = search_q.strip()
+        filter_kwargs = {
+            "include_hidden": include_hidden,
+            "tag": selected_tag,
+            "product_id": selected_product_id,
+            "review_state": selected_review_state,
+            "platform": selected_platform,
+            "aspect_ratio": selected_aspect_ratio,
+            "q": search_q,
+        }
+        total_assets = asset_inventory_count(session, **filter_kwargs)
         if open_asset_id is not None:
-            all_assets = asset_inventory(session, include_hidden=include_hidden, tag=selected_tag)
+            all_assets = asset_inventory(session, **filter_kwargs)
             for index, model in enumerate(all_assets):
                 if model.asset.id == open_asset_id:
                     page = (index // ASSETS_PAGE_SIZE) + 1
                     break
         pagination = _pagination(page, total_assets, ASSETS_PAGE_SIZE)
+        platform_options = [item["key"] for item in social_image_platform_options()]
+        aspect_options = sorted({item["aspect_ratio"] for item in social_image_platform_options()})
         return {
             "active": "assets",
             "assets": asset_inventory(
                 session,
-                include_hidden=include_hidden,
                 limit=ASSETS_PAGE_SIZE,
                 offset=pagination["offset"],
-                tag=selected_tag,
+                **filter_kwargs,
             ),
             "show_hidden": include_hidden,
             "selected_tag": selected_tag,
+            "selected_product_id": selected_product_id,
+            "selected_review_state": selected_review_state,
+            "selected_platform": selected_platform,
+            "selected_aspect_ratio": selected_aspect_ratio,
+            "search_q": search_q,
             "tag_options": tag_options,
+            "review_options": review_options,
+            "platform_options": platform_options,
+            "aspect_options": aspect_options,
             "asset_tag_label": asset_tag_label,
             "pagination": pagination,
             "total_asset_count": total_assets,
@@ -572,6 +676,15 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             "products": list(session.scalars(select(ProductRecord).order_by(ProductRecord.name))),
             "open_asset_id": open_asset_id,
             "return_to": _safe_return_url(return_to, "products_admin") if return_to else "",
+            "gallery_query": {
+                "show_hidden": 1 if include_hidden else None,
+                "tag": selected_tag or None,
+                "product_id": selected_product_id,
+                "review_state": selected_review_state or None,
+                "platform": selected_platform or None,
+                "aspect_ratio": selected_aspect_ratio or None,
+                "q": search_q or None,
+            },
         }
 
     @app.get("/creative-assets")
@@ -579,6 +692,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         show_hidden = request.args.get("show_hidden") == "1"
         page = _page_arg(request.args.get("page"))
         selected_tag = request.args.get("tag", "")
+        selected_product_id = _int_or_none(request.args.get("product_id"))
+        selected_review_state = request.args.get("review_state", "")
+        selected_platform = request.args.get("platform", "")
+        selected_aspect_ratio = request.args.get("aspect_ratio", "")
+        search_q = request.args.get("q", "")
         open_asset_id = _int_or_none(request.args.get("open_asset"))
         return_to = request.args.get("return_to", "")
         with session_scope(factory) as session:
@@ -589,6 +707,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     include_hidden=show_hidden,
                     page=page,
                     selected_tag=selected_tag,
+                    selected_product_id=selected_product_id,
+                    selected_review_state=selected_review_state,
+                    selected_platform=selected_platform,
+                    selected_aspect_ratio=selected_aspect_ratio,
+                    search_q=search_q,
                     open_asset_id=open_asset_id,
                     return_to=return_to,
                 ),
@@ -974,6 +1097,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         show_hidden = request.args.get("show_hidden") == "1"
         page = _page_arg(request.args.get("page"))
         selected_tag = request.args.get("tag", "")
+        selected_product_id = _int_or_none(request.args.get("product_id"))
+        selected_review_state = request.args.get("review_state", "")
+        selected_platform = request.args.get("platform", "")
+        selected_aspect_ratio = request.args.get("aspect_ratio", "")
+        search_q = request.args.get("q", "")
         open_asset_id = _int_or_none(request.args.get("open_asset"))
         return_to = request.args.get("return_to", "")
         with session_scope(factory) as session:
@@ -984,6 +1112,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                     include_hidden=show_hidden,
                     page=page,
                     selected_tag=selected_tag,
+                    selected_product_id=selected_product_id,
+                    selected_review_state=selected_review_state,
+                    selected_platform=selected_platform,
+                    selected_aspect_ratio=selected_aspect_ratio,
+                    search_q=search_q,
                     open_asset_id=open_asset_id,
                     return_to=return_to,
                 ),

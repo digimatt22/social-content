@@ -5,33 +5,65 @@
     <form method="get" action="{{ url_for('assets') }}" class="gallery-filter-form">
       {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
       <input type="hidden" name="page" value="1">
-      <span class="sr-only">Image tag</span>
-      <select name="tag" aria-label="Image tag" data-auto-submit>
-        <option value="">All tags</option>
+      <label class="sr-only" for="gallery-product">Product</label>
+      <select id="gallery-product" name="product_id" aria-label="Product" data-auto-submit>
+        <option value="">All products</option>
+        {% for product in products %}
+          <option value="{{ product.id }}" {{ 'selected' if selected_product_id == product.id else '' }}>{{ product.name }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="gallery-tag">Asset type</label>
+      <select id="gallery-tag" name="tag" aria-label="Asset type" data-auto-submit>
+        <option value="">All types</option>
         {% for tag in tag_options %}
           <option value="{{ tag }}" {{ 'selected' if selected_tag == tag else '' }}>{{ tag }}</option>
         {% endfor %}
       </select>
+      <label class="sr-only" for="gallery-review">Review state</label>
+      <select id="gallery-review" name="review_state" aria-label="Review state" data-auto-submit>
+        <option value="">All review states</option>
+        {% for state in review_options %}
+          <option value="{{ state }}" {{ 'selected' if selected_review_state == state else '' }}>{{ state }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="gallery-platform">Platform</label>
+      <select id="gallery-platform" name="platform" aria-label="Platform" data-auto-submit>
+        <option value="">All platforms</option>
+        {% for platform in platform_options %}
+          <option value="{{ platform }}" {{ 'selected' if selected_platform == platform else '' }}>{{ platform }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="gallery-aspect">Aspect ratio</label>
+      <select id="gallery-aspect" name="aspect_ratio" aria-label="Aspect ratio" data-auto-submit>
+        <option value="">All ratios</option>
+        {% for ratio in aspect_options %}
+          <option value="{{ ratio }}" {{ 'selected' if selected_aspect_ratio == ratio else '' }}>{{ ratio }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="gallery-q">Search name</label>
+      <input id="gallery-q" type="search" name="q" value="{{ search_q }}" placeholder="Search name" aria-label="Search name">
+      <button class="secondary" type="submit">Search</button>
       <a
         class="button secondary icon-button"
         href="{{ url_for('assets', show_hidden=1 if show_hidden else none) }}"
-        aria-label="Reset image tag filter"
-        title="Reset image tag filter"
+        aria-label="Reset gallery filters"
+        title="Reset gallery filters"
       >
         <i data-lucide="filter-x" aria-hidden="true"></i>
-        <span class="sr-only">Reset image tag filter</span>
+        <span class="sr-only">Reset gallery filters</span>
       </a>
     </form>
     <div class="button-group pagination-actions">
       {% if pagination.has_previous %}
-        <a class="button secondary" href="{{ url_for('assets', page=pagination.previous_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}">Previous</a>
+        <a class="button secondary" href="{{ url_for('assets', page=pagination.previous_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none) }}">Previous</a>
       {% endif %}
       {% if pagination.has_next %}
-        <a class="button secondary" href="{{ url_for('assets', page=pagination.next_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}" data-load-next>Next</a>
+        <a class="button secondary" href="{{ url_for('assets', page=pagination.next_page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none) }}" data-load-next>Next</a>
       {% endif %}
     </div>
   </div>
 {% endmacro %}
+
 {% block content %}
 <div class="topline">
   <div>
@@ -41,9 +73,9 @@
   </div>
   <div class="button-group">
     {% if show_hidden %}
-      <a class="button secondary" href="{{ url_for('assets', tag=selected_tag if selected_tag else none) }}">Hide hidden images</a>
+      <a class="button secondary" href="{{ url_for('assets', tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none) }}">Hide hidden images</a>
     {% elif hidden_asset_count %}
-      <a class="button secondary" href="{{ url_for('assets', show_hidden=1, tag=selected_tag if selected_tag else none) }}">Show hidden images ({{ hidden_asset_count }})</a>
+      <a class="button secondary" href="{{ url_for('assets', show_hidden=1, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none) }}">Show hidden images ({{ hidden_asset_count }})</a>
     {% endif %}
     <form method="post" action="{{ url_for('scan_assets') }}">
       <button type="submit">Scan local assets</button>
@@ -55,8 +87,16 @@
   <div>
     <div class="eyebrow">Visual inventory</div>
     <h3>{{ pagination.start }}-{{ pagination.end }} of {{ pagination.total }} asset{{ '' if pagination.total == 1 else 's' }}</h3>
-    {% if selected_tag %}
-      <p class="subtle">Filtered to image tag: {{ selected_tag }}</p>
+    {% if selected_product_id or selected_tag or selected_review_state or selected_platform or selected_aspect_ratio or search_q %}
+      <p class="subtle">
+        Filtered
+        {% if selected_product_id %} · product #{{ selected_product_id }}{% endif %}
+        {% if selected_tag %} · type {{ selected_tag }}{% endif %}
+        {% if selected_review_state %} · {{ selected_review_state }}{% endif %}
+        {% if selected_platform %} · {{ selected_platform }}{% endif %}
+        {% if selected_aspect_ratio %} · {{ selected_aspect_ratio }}{% endif %}
+        {% if search_q %} · “{{ search_q }}”{% endif %}
+      </p>
     {% endif %}
     {% if not show_hidden and hidden_asset_count %}
       <p class="subtle">{{ hidden_asset_count }} hidden image{{ '' if hidden_asset_count == 1 else 's' }} excluded from this view.</p>
@@ -115,6 +155,8 @@
         <h3>{{ asset.name }}</h3>
         <div class="meta">
           <span class="pill">{{ asset_tag_label(asset.asset_type) }}</span>
+          {% if model.platform %}<span class="pill">{{ model.platform }}</span>{% endif %}
+          {% if model.aspect_ratio %}<span class="pill">{{ model.aspect_ratio }}</span>{% endif %}
           {% if asset.hidden_from_generation %}<span class="pill blocked">hidden from automation</span>{% endif %}
           <span class="pill {{ 'complete' if asset.review_state == 'approved' else 'blocked' if asset.review_state in ['needs review', 'unreviewed'] else '' }}">{{ asset.review_state }}</span>
         </div>
@@ -162,7 +204,7 @@
         {% endif %}
         <form method="post" action="{{ url_for('asset_visibility', asset_id=asset.id) }}" data-preserve-scroll>
           <input type="hidden" name="hidden" value="{{ '0' if asset.hidden_from_generation else '1' }}">
-          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden or asset.hidden_from_generation else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
+          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden or asset.hidden_from_generation else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none, _anchor='asset-' ~ asset.id) }}">
           <button
             class="{{ 'secondary' if asset.hidden_from_generation else 'warn' }} icon-button"
             type="submit"
@@ -184,7 +226,7 @@
             action="{{ url_for('asset_delete_local', asset_id=asset.id) }}"
             onsubmit="return confirm('Delete this local image file and unlink it from products? This cannot be undone.');"
           >
-            <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none) }}">
+            <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none) }}">
             <button class="warn icon-button" type="submit" aria-label="Delete local image" title="Delete local image">
               <i data-lucide="trash-2" aria-hidden="true"></i>
               <span class="sr-only">Delete local image</span>
@@ -229,7 +271,7 @@
     <section class="panel">
       <h3>Photo Details</h3>
       <form method="post" action="{{ url_for('asset_product_link', asset_id=asset.id) }}">
-        <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, open_asset=asset.id, return_to=return_to if return_to else none, _anchor='asset-' ~ asset.id) }}">
+        <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none, open_asset=asset.id, return_to=return_to if return_to else none, _anchor='asset-' ~ asset.id) }}">
         <label>Name
           <input name="name" value="{{ asset.name }}" required>
         </label>
@@ -274,7 +316,7 @@
       <section class="panel">
         <h3>Review</h3>
         <form method="post" action="{{ url_for('asset_review', asset_id=asset.id) }}" style="margin-top: 12px;">
-          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, _anchor='asset-' ~ asset.id) }}">
+          <input type="hidden" name="return_to" value="{{ url_for('assets', page=pagination.page, show_hidden=1 if show_hidden else none, tag=selected_tag if selected_tag else none, product_id=selected_product_id if selected_product_id else none, review_state=selected_review_state if selected_review_state else none, platform=selected_platform if selected_platform else none, aspect_ratio=selected_aspect_ratio if selected_aspect_ratio else none, q=search_q if search_q else none, _anchor='asset-' ~ asset.id) }}">
           <label>Review notes
             <textarea name="approval_notes">{{ asset.approval_notes }}</textarea>
           </label>

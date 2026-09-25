@@ -447,8 +447,9 @@
       .gallery-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
       .pagination-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 0 14px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
       .gallery-control-bar { display: grid; grid-template-columns: minmax(110px, 1fr) auto minmax(110px, 1fr); }
-      .gallery-filter-form { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: min(420px, 100%); }
-      .gallery-filter-form select { width: min(320px, 54vw); min-height: 38px; padding: 6px 32px 6px 10px; }
+      .gallery-filter-form { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; min-width: min(720px, 100%); }
+      .gallery-filter-form select, .gallery-filter-form input[type="search"] { width: min(150px, 42vw); min-height: 38px; padding: 6px 10px; }
+      .gallery-filter-form select { padding-right: 28px; }
       .gallery-filter-form .icon-button { box-shadow: none; }
       .pagination-actions { justify-content: flex-end; }
       .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
@@ -529,7 +530,7 @@
         .pagination-bar { display: grid; gap: 8px; }
         .gallery-control-bar { grid-template-columns: 1fr; align-items: stretch; }
         .gallery-filter-form { justify-content: stretch; min-width: 0; }
-        .gallery-filter-form select { width: 100%; }
+        .gallery-filter-form select, .gallery-filter-form input[type="search"] { width: 100%; }
         .pagination-actions { justify-content: stretch; }
         .pagination-actions .button { flex: 1; text-align: center; }
         .gallery-card h3 { font-size: 14px; }

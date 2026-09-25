@@ -173,7 +173,8 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `GET /api/week`
 - `GET /api/tasks/<task_id>`
 - `GET /api/metrics-due`
-- `GET /api/assets`
+- `GET /api/assets` — list/find assets; query params: `product_id`, `asset_type` (or `tag`), `review_state`, `platform`, `aspect_ratio`, `q` (name contains), `show_hidden=1`. Response `assets[]` includes `id`, `product_id`, `name`, `asset_type`, `review_state`, `source_path`, `canonical_url`, `file_exists`, plus `platform` / `aspect_ratio` when known from a linked Art Studio generation job (or derived from width/height).
+- `GET /api/products/<product_id>/assets` — same filters scoped to one product (404 if missing).
 - `GET /api/data-health`
 - `GET /api/planned-content`
 - `POST /api/tasks/<task_id>/finish`
