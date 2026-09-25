@@ -4,7 +4,7 @@
 - Status: ready for review
 - Owner: Matthew Wood / Codex
 - Branch: `codex/social-image-platform-aspect-ratios`
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/11
 - Last updated: 2026-09-25
 
 ## Summary
