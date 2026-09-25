@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy import text
 
 from ..db import create_db_engine, init_db, session_factory, session_scope
+from ..integrations import WebsiteConfig
 from ..services.durable_jobs import enqueue_job
 
 
@@ -34,7 +35,8 @@ def emit_due_jobs(factory, now: datetime | None = None) -> int:
         )
         emitted += int(created)
         current_date = checked_at.date().isoformat()
-        if (checked_at.hour, checked_at.minute) >= (2, 10):
+        website_config = WebsiteConfig.from_env()
+        if (checked_at.hour, checked_at.minute) >= (2, 10) and website_config.api_key:
             for job_type in ("catalog.reconcile", "editorial.reconcile"):
                 _, created = enqueue_job(
                     session,
@@ -62,19 +64,20 @@ def emit_due_jobs(factory, now: datetime | None = None) -> int:
                 correlation_id=f"shadow-digest:{current_date}",
             )
             emitted += int(created)
-        measurement_slot = checked_at.replace(
-            minute=(checked_at.minute // 15) * 15,
-            second=0,
-            microsecond=0,
-        )
-        _, created = enqueue_job(
-            session,
-            job_type="measurement.ingest",
-            payload={"scheduled_slot": measurement_slot.isoformat()},
-            idempotency_key=f"measurement.ingest:{measurement_slot.isoformat()}",
-            correlation_id=f"measurement:{measurement_slot.isoformat()}",
-        )
-        emitted += int(created)
+        if website_config.measurement_api_key:
+            measurement_slot = checked_at.replace(
+                minute=(checked_at.minute // 15) * 15,
+                second=0,
+                microsecond=0,
+            )
+            _, created = enqueue_job(
+                session,
+                job_type="measurement.ingest",
+                payload={"scheduled_slot": measurement_slot.isoformat()},
+                idempotency_key=f"measurement.ingest:{measurement_slot.isoformat()}",
+                correlation_id=f"measurement:{measurement_slot.isoformat()}",
+            )
+            emitted += int(created)
         return emitted
 
 

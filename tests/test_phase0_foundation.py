@@ -111,8 +111,34 @@ class Phase0FoundationTests(unittest.TestCase):
         init_db(engine)
         factory = session_factory(engine)
         now = utc_now().replace(hour=3, minute=12, second=0, microsecond=0)
-        self.assertEqual(5, emit_due_jobs(factory, now))
-        self.assertEqual(1, emit_due_jobs(factory, now + timedelta(minutes=20)))
+        with patch.dict(
+            os.environ,
+            {
+                "MARKETING_AGENT_READ_API_KEY": "test-read-key",
+                "MARKETING_AGENT_MEASUREMENT_API_KEY": "test-measurement-key",
+            },
+            clear=False,
+        ):
+            self.assertEqual(5, emit_due_jobs(factory, now))
+            self.assertEqual(1, emit_due_jobs(factory, now + timedelta(minutes=20)))
+        engine.dispose()
+
+    def test_scheduler_skips_coverage_jobs_without_agent_credentials(self) -> None:
+        engine = create_db_engine(self.root / "jobs-skip.sqlite")
+        init_db(engine)
+        factory = session_factory(engine)
+        now = utc_now().replace(hour=3, minute=12, second=0, microsecond=0)
+        cleared = {
+            "MARKETING_AGENT_API_KEY": "",
+            "MARKETING_AGENT_READ_API_KEY": "",
+            "MARKETING_AGENT_MEASUREMENT_API_KEY": "",
+        }
+        with patch.dict(os.environ, cleared, clear=False):
+            emitted = emit_due_jobs(factory, now)
+        self.assertEqual(2, emitted)
+        with factory() as session:
+            types = set(session.scalars(select(AutomationJobRecord.job_type)))
+        self.assertEqual({"system.noop", "shadow.generate"}, types)
         engine.dispose()
 
     def test_operational_status_enforces_queue_and_lease_attention_contract(self) -> None:
