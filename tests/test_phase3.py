@@ -5654,8 +5654,9 @@ class Phase3LocalWebConsoleTests(unittest.TestCase):
                 follow_redirects=True,
             )
             self.assertEqual(response.status_code, 200)
-            self.assertIn(b"Handoff queued for Magnific: 3 Social Worthy image jobs for Social Duck.", response.data)
+            self.assertIn(b"Handoff queued for Magnific: 3 Social Worthy image jobs for Social Duck across IG Feed", response.data)
             self.assertIn(b"Social image handoffs", response.data)
+            self.assertIn(b"make-progress-strip", response.data)
 
             with session_scope(app.config["SESSION_FACTORY"]) as session:
                 jobs = list(session.scalars(select(CreativeGenerationJobRecord).order_by(CreativeGenerationJobRecord.id)))

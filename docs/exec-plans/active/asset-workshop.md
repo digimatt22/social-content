@@ -3,9 +3,9 @@
 ## Status
 - Status: in progress
 - Owner: Matthew / Codex
-- Branch: docs/asset-workshop-strategy
-- PR: https://github.com/digimatt22/social-content/pull/10
-- Last updated: 2026-09-25 (findability shipped in PR)
+- Branch: codex/make-ux
+- PR: https://github.com/digimatt22/social-content/pull/13
+- Last updated: 2026-09-25 (make UX in progress)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
@@ -58,8 +58,8 @@ Old plan kept and marked parked for primary focus:
 
 ## Build order
 1. **Done:** Magnific API drain (live on Sheldon). **In flight:** per-platform aspect ratios.
-2. **Done (this PR):** Findability — Gallery filters (product, type, review, platform, aspect, name search); `GET /api/assets` + `GET /api/products/<id>/assets` query params (`product_id`, `asset_type`, `review_state`, `platform`, `aspect_ratio`, `q`); stable agent JSON includes id/product_id/name/asset_type/review_state/source_path/canonical_url/file_exists/platform/aspect_ratio when known from linked generation jobs.
-3. **Make UX:** multi-platform queue; worker progress visible.
+2. **Done:** Findability — Gallery filters + agent asset list APIs (PR #12).
+3. **In progress (this PR):** Make UX — multi-platform queue progress on Products/Art Studio; Gallery needs-review social grouping.
 4. **Local refs:** make local files Magnific-reachable (https/upload).
 5. **Nav focus:** image-asset primary; park coverage/shadow behind more.
 6. **Later:** background Etsy sync; video on same pattern; Magnific webhook verify.
@@ -73,12 +73,12 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Pinterest growth plan is **not** the primary active goal for day-to-day product work.
 
 ## Work State
-- Planned: make UX, local refs, nav focus, later items above.
-- In progress: none for findability (PR opened).
-- Completed earlier: strategy lock; per-platform aspect ratios (#11); findability filters + agent list API (this PR).
+- Planned: local refs, nav focus, later items above.
+- In progress: make UX (multi-platform progress + needs-review clarity).
+- Completed earlier: strategy lock; per-platform aspect ratios (#11); findability filters + agent list API (#12).
 - Blocked: none.
-- Needs human validation: smoke Gallery filters on hosted/local; confirm agent list shape.
-- Ready for review: findability PR.
+- Needs human validation: after queueing multi-platform jobs on Products, confirm progress strip + Gallery needs-review banner.
+- Ready for review: make UX PR #13.
 - Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`).
 
 ## Decisions
@@ -119,4 +119,4 @@ No code, deploy, aspect-ratio, or nav-hide work in this PR.
 
 ## Closeout
 - Final status: TBD until merge.
-- Follow-up: make UX → local refs → nav focus → later items (separate PRs).
+- Follow-up: local refs → nav focus → later items (separate PRs).
