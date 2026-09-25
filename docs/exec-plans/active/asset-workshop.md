@@ -4,7 +4,7 @@
 - Status: in progress
 - Owner: Matthew / Codex
 - Branch: codex/make-ux
-- PR: (opening)
+- PR: https://github.com/digimatt22/social-content/pull/13
 - Last updated: 2026-09-25 (make UX in progress)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
@@ -78,7 +78,7 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Completed earlier: strategy lock; per-platform aspect ratios (#11); findability filters + agent list API (#12).
 - Blocked: none.
 - Needs human validation: after queueing multi-platform jobs on Products, confirm progress strip + Gallery needs-review banner.
-- Ready for review: make UX PR (when opened).
+- Ready for review: make UX PR #13.
 - Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`).
 
 ## Decisions
