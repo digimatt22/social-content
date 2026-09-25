@@ -4,7 +4,7 @@
 - Status: in progress
 - Owner: Matthew / Codex
 - Branch: docs/asset-workshop-strategy
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/10
 - Last updated: 2026-09-25
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
