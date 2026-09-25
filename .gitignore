@@ -18,6 +18,11 @@ data/*.sqlite
 data/*.sqlite-*
 data/*.db
 data/*.db-*
+data/*.sqlite.backup-*
+data/*.sqlite3.backup-*
+data/*.db.backup-*
+*.sqlite.backup-*
+*.sqlite3.backup-*
 data/backups/
 data/exports/
 data/logs/
