@@ -1,4 +1,15 @@
 {% extends "base.html" %}
+{% macro products_filter_url(page=none, show_hidden_override=none, anchor=none) -%}
+  {{ url_for(
+    'products_admin',
+    page=page if page is not none else none,
+    sort=selected_sort,
+    show_hidden=(1 if (show_hidden if show_hidden_override is none else show_hidden_override) else none),
+    tag=selected_tag if selected_tag else none,
+    q=search_q if search_q else none,
+    _anchor=anchor if anchor else none
+  ) }}
+{%- endmacro %}
 {% macro product_controls() %}
   <div class="pagination-bar gallery-control-bar" aria-label="Product controls">
     <span class="subtle">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
@@ -11,13 +22,32 @@
         <option value="source" {{ 'selected' if selected_sort == 'source' else '' }}>Source</option>
         <option value="synced" {{ 'selected' if selected_sort == 'synced' else '' }}>Last synced</option>
       </select>
+      <label class="sr-only" for="products-tag">Product tag</label>
+      <select id="products-tag" name="tag" aria-label="Product tag" data-auto-submit>
+        <option value="">All tags</option>
+        {% for tag in all_tags %}
+          <option value="{{ tag }}" {{ 'selected' if selected_tag == tag else '' }}>{{ tag }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="products-q">Search name</label>
+      <input id="products-q" type="search" name="q" value="{{ search_q }}" placeholder="Search name" aria-label="Search name">
+      <button class="secondary" type="submit">Search</button>
+      <a
+        class="button secondary icon-button"
+        href="{{ url_for('products_admin', show_hidden=1 if show_hidden else none) }}"
+        aria-label="Reset product filters"
+        title="Reset product filters"
+      >
+        <i data-lucide="filter-x" aria-hidden="true"></i>
+        <span class="sr-only">Reset product filters</span>
+      </a>
     </form>
     <div class="button-group pagination-actions">
       {% if pagination.has_previous %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.previous_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Previous</a>
+        <a class="button secondary" href="{{ products_filter_url(page=pagination.previous_page) }}">Previous</a>
       {% endif %}
       {% if pagination.has_next %}
-        <a class="button secondary" href="{{ url_for('products_admin', page=pagination.next_page, sort=selected_sort, show_hidden=1 if show_hidden else none) }}">Next</a>
+        <a class="button secondary" href="{{ products_filter_url(page=pagination.next_page) }}">Next</a>
       {% endif %}
     </div>
   </div>
@@ -31,12 +61,12 @@
   </div>
   <div class="button-group">
     {% if show_hidden %}
-      <a class="button secondary" href="{{ url_for('products_admin', sort=selected_sort, page=pagination.page) }}">Hide hidden images</a>
+      <a class="button secondary" href="{{ products_filter_url(page=pagination.page, show_hidden_override=false) }}">Hide hidden images</a>
     {% elif hidden_asset_count %}
-      <a class="button secondary" href="{{ url_for('products_admin', sort=selected_sort, show_hidden=1, page=pagination.page) }}">Show hidden images ({{ hidden_asset_count }})</a>
+      <a class="button secondary" href="{{ products_filter_url(page=pagination.page, show_hidden_override=true) }}">Show hidden images ({{ hidden_asset_count }})</a>
     {% endif %}
     <form method="post" action="{{ url_for('sync_etsy') }}">
-      <input type="hidden" name="return_to" value="{{ url_for('products_admin') }}">
+      <input type="hidden" name="return_to" value="{{ products_filter_url() }}">
       <button type="submit">Sync Etsy</button>
     </form>
   </div>
@@ -52,6 +82,13 @@
         No products
       {% endif %}
     </h3>
+    {% if selected_tag or search_q %}
+      <p class="subtle">
+        Filtered
+        {% if selected_tag %} · tag {{ selected_tag }}{% endif %}
+        {% if search_q %} · “{{ search_q }}”{% endif %}
+      </p>
+    {% endif %}
     {% if selected_sort != 'name' %}
       <p class="subtle">Sorted by {{ 'last synced' if selected_sort == 'synced' else selected_sort }}.</p>
     {% endif %}
@@ -106,7 +143,7 @@
           data-reference-form
           data-api-url="{{ url_for('api_product_default_reference_assets', product_id=product.id) }}"
         >
-          <input type="hidden" name="return_to" value="{{ url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id) }}">
+          <input type="hidden" name="return_to" value="{{ products_filter_url(page=pagination.page, anchor='product-' ~ product.id) }}">
           <p class="subtle">Select the default reference images I should use when this product needs generated creative.</p>
           <div class="reference-save-state" aria-live="polite" data-reference-status></div>
           <div class="product-image-grid">
@@ -136,7 +173,7 @@
                   </label>
                   <a
                     class="button secondary icon-button"
-                    href="{{ url_for('assets', open_asset=asset.id, show_hidden=1 if asset.hidden_from_generation else none, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id), _anchor='asset-' ~ asset.id) }}"
+                    href="{{ url_for('assets', open_asset=asset.id, show_hidden=1 if asset.hidden_from_generation else none, return_to=products_filter_url(page=pagination.page, anchor='product-' ~ product.id), _anchor='asset-' ~ asset.id) }}"
                     aria-label="Edit image details in Gallery"
                     title="Edit image details in Gallery"
                   >
@@ -194,7 +231,7 @@
           </div>
         </div>
         <form method="post" action="{{ url_for('product_queue_social_images', product_id=product.id) }}" class="product-social-action">
-          <input type="hidden" name="return_to" value="{{ url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id) }}">
+          <input type="hidden" name="return_to" value="{{ products_filter_url(page=pagination.page, anchor='product-' ~ product.id) }}">
           <fieldset class="product-social-platforms">
             <legend>Platforms</legend>
             <div class="platform-chip-row">
@@ -232,7 +269,7 @@
             {% if progress.ready_for_review_count %}
               <p class="subtle make-progress-review-link">
                 {{ progress.ready_for_review_count }} ready for review —
-                <a href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=product.id, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Open needs-review in Gallery</a>
+                <a href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=product.id, return_to=products_filter_url(page=pagination.page, anchor='product-' ~ product.id)) }}">Open needs-review in Gallery</a>
               </p>
             {% endif %}
           </div>
@@ -258,7 +295,7 @@
                   <strong>{{ job.candidate_asset.name }}</strong>
                   <div class="meta">
                     <span class="pill {{ 'complete' if job.candidate_asset.review_state == 'approved' else 'blocked' }}">{{ job.candidate_asset.review_state }}</span>
-                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, review_state='needs review' if row.ready_for_review else none, tag=social_image_asset_type if row.ready_for_review else none, product_id=product.id if row.ready_for_review else none, return_to=url_for('products_admin', sort=selected_sort, page=pagination.page, show_hidden=1 if show_hidden else none, _anchor='product-' ~ product.id)) }}">Review in Gallery</a>
+                    <a href="{{ url_for('assets', open_asset=job.candidate_asset.id, review_state='needs review' if row.ready_for_review else none, tag=social_image_asset_type if row.ready_for_review else none, product_id=product.id if row.ready_for_review else none, return_to=products_filter_url(page=pagination.page, anchor='product-' ~ product.id)) }}">Review in Gallery</a>
                   </div>
                 {% else %}
                   {% if job.review_notes %}<p class="subtle">{{ job.review_notes }}</p>{% endif %}

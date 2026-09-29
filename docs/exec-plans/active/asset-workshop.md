@@ -3,9 +3,9 @@
 ## Status
 - Status: ready for review
 - Owner: Matthew / Codex
-- Branch: codex/agent-make-loop-apis
-- PR: https://github.com/digimatt22/social-content/pull/17
-- Last updated: 2026-09-29 (agent make-loop JSON APIs — queue + review)
+- Branch: codex/products-find-parity
+- PR: https://github.com/digimatt22/social-content/pull/18
+- Last updated: 2026-09-29 (products find parity — `/products` q+tag + `GET /api/products`)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
@@ -78,7 +78,8 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 ## Work State
 - Planned: later items (background Etsy sync; video pattern; Magnific webhook verify).
 - In progress: none.
-- Ready for review: agent make-loop JSON APIs (queue + review; branch `codex/agent-make-loop-apis`).
+- Ready for review: products find parity (`codex/products-find-parity`).
+- Completed earlier: agent make-loop JSON APIs (queue + review; #17).
 - Completed earlier: strategy lock; Magnific REST drain; per-platform aspect ratios (#11); findability (#12); make UX (#13); local refs staging (#14).
 - Completed (this PR): nav focus — Coverage/Shadow demoted from primary chrome into More tools.
 - Blocked: none.
@@ -126,6 +127,7 @@ Out of scope: deleting Coverage/Shadow code, deploy, Brand Lab, video, backgroun
 
 ## Open questions
 - (Resolved) Agent list filters: `GET /api/assets` query params + optional `GET /api/products/<id>/assets`.
+- (Resolved) Products find parity: `/products` `q`+`tag` (Gallery-style) + `GET /api/products` catalog (`id`, `name`, `sync_status`, `default_ref_count`, `tags`; `q`/`tag`/`page`/`sort`).
 - (Resolved) Local-ref Magnific reachability: Magnific Upload Files API (`POST /v1/ai/uploads/request-url` → PUT → `asset_url`). Persist `file_id`+checksum in `SyncMetadata` (`magnific_upload_asset_<id>`); refresh via `GET /v1/ai/uploads` on retry. Etsy https refs unchanged.
 - When (if ever) to resume Pinterest growth as a primary track after asset-workshop loops are solid.
 
