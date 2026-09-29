@@ -4,7 +4,7 @@
 - Status: ready for review
 - Owner: Matthew / Codex
 - Branch: codex/gallery-bulk-needs-review
-- PR: (open with this change)
+- PR: https://github.com/digimatt22/social-content/pull/19
 - Last updated: 2026-09-29 (Gallery bulk needs-review approve/reject)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
