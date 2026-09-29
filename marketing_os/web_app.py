@@ -364,6 +364,46 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 }
             )
 
+    @app.get("/api/products")
+    def api_products():
+        selected_sort = request.args.get("sort", "name").strip().lower()
+        search_q = request.args.get("q", "").strip()
+        selected_tag = request.args.get("tag", "").strip()
+        page_raw = request.args.get("page")
+        with session_scope(factory) as session:
+            products = _filtered_products(session, q=search_q, tag=selected_tag, sort=selected_sort)
+            selected_sort = _normalize_product_sort(selected_sort)
+            total = len(products)
+            pagination = None
+            if page_raw is not None and str(page_raw).strip() != "":
+                pagination = _pagination(_page_arg(page_raw), total, PRODUCTS_PAGE_SIZE)
+                products = products[pagination["offset"] : pagination["offset"] + PRODUCTS_PAGE_SIZE]
+            ref_counts = _default_reference_counts(session, [product.id for product in products if product.id is not None])
+            payload = {
+                "products": [
+                    _serialize_product_catalog_item(product, default_ref_count=ref_counts.get(product.id, 0))
+                    for product in products
+                ],
+                "filters": {
+                    "q": search_q,
+                    "tag": selected_tag,
+                    "sort": selected_sort,
+                },
+                "count": len(products),
+            }
+            if pagination is not None:
+                payload["pagination"] = {
+                    "page": pagination["page"],
+                    "page_size": pagination["page_size"],
+                    "total": pagination["total"],
+                    "total_pages": pagination["total_pages"],
+                    "has_previous": pagination["has_previous"],
+                    "has_next": pagination["has_next"],
+                }
+            else:
+                payload["filters"]["page"] = None
+            return jsonify(payload)
+
     @app.get("/api/products/<int:product_id>/assets")
     def api_product_assets(product_id: int):
         asset_type = request.args.get("asset_type", "").strip()
@@ -1471,19 +1511,19 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         selected_sort = request.args.get("sort", "name").strip().lower()
         show_hidden = request.args.get("show_hidden") == "1"
         page = _page_arg(request.args.get("page"))
+        search_q = request.args.get("q", "").strip()
+        selected_tag = request.args.get("tag", "").strip()
         with session_scope(factory) as session:
             all_tags = _all_product_tags(session)
-            product_count = session.scalar(select(func.count()).select_from(ProductRecord)) or 0
+            if selected_tag:
+                canonical = next((tag for tag in all_tags if tag.lower() == selected_tag.lower()), "")
+                selected_tag = canonical
+            filtered = _filtered_products(session, q=search_q, tag=selected_tag, sort=selected_sort)
+            selected_sort = _normalize_product_sort(selected_sort)
+            product_count = len(filtered)
+            all_products_count = session.scalar(select(func.count()).select_from(ProductRecord)) or 0
             pagination = _pagination(page, product_count, PRODUCTS_PAGE_SIZE)
-            product_query = select(ProductRecord)
-            if selected_sort == "source":
-                product_query = product_query.order_by(ProductRecord.external_source, ProductRecord.name)
-            elif selected_sort == "synced":
-                product_query = product_query.order_by(ProductRecord.last_synced_at.desc(), ProductRecord.name)
-            else:
-                selected_sort = "name"
-                product_query = product_query.order_by(ProductRecord.name)
-            products = list(session.scalars(product_query.offset(pagination["offset"]).limit(PRODUCTS_PAGE_SIZE)))
+            products = filtered[pagination["offset"] : pagination["offset"] + PRODUCTS_PAGE_SIZE]
             product_ids = [product.id for product in products]
             assets_by_product: dict[int, list[AssetRecord]] = {product.id: [] for product in products}
             references_by_product: dict[int, list[ProductExternalReference]] = {product.id: [] for product in products}
@@ -1535,9 +1575,11 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 "products.html",
                 active="products",
                 products=products,
-                all_products_count=product_count,
+                all_products_count=all_products_count,
                 all_tags=all_tags,
                 selected_sort=selected_sort,
+                selected_tag=selected_tag,
+                search_q=search_q,
                 show_hidden=show_hidden,
                 pagination=pagination,
                 hidden_asset_count=hidden_asset_count,
@@ -2321,6 +2363,56 @@ def _product_review_model(record: EtsyReviewRecord) -> dict[str, object]:
         "image_url": record.image_url_fullxfull,
         "created_on": created_on,
         "listing_id": record.listing_id,
+    }
+
+
+def _normalize_product_sort(selected_sort: str) -> str:
+    value = (selected_sort or "name").strip().lower()
+    return value if value in {"name", "source", "synced"} else "name"
+
+
+def _filtered_products(session, *, q: str = "", tag: str = "", sort: str = "name") -> list[ProductRecord]:
+    selected_sort = _normalize_product_sort(sort)
+    product_query = select(ProductRecord)
+    search_q = (q or "").strip()
+    if search_q:
+        product_query = product_query.where(func.lower(ProductRecord.name).contains(search_q.lower()))
+    if selected_sort == "source":
+        product_query = product_query.order_by(ProductRecord.external_source, ProductRecord.name)
+    elif selected_sort == "synced":
+        product_query = product_query.order_by(ProductRecord.last_synced_at.desc(), ProductRecord.name)
+    else:
+        product_query = product_query.order_by(ProductRecord.name)
+    products = list(session.scalars(product_query))
+    selected_tag = (tag or "").strip()
+    if selected_tag:
+        needle = selected_tag.lower()
+        products = [
+            product
+            for product in products
+            if needle in {value.lower() for value in json_list(product.use_cases_json)}
+        ]
+    return products
+
+
+def _default_reference_counts(session, product_ids: list[int]) -> dict[int, int]:
+    if not product_ids:
+        return {}
+    rows = session.execute(
+        select(AssetRecord.product_id, func.count())
+        .where(AssetRecord.product_id.in_(product_ids), AssetRecord.default_reference == 1)
+        .group_by(AssetRecord.product_id)
+    ).all()
+    return {int(product_id): int(count or 0) for product_id, count in rows if product_id is not None}
+
+
+def _serialize_product_catalog_item(product: ProductRecord, *, default_ref_count: int = 0) -> dict[str, object]:
+    return {
+        "id": product.id,
+        "name": product.name,
+        "sync_status": product.sync_status,
+        "default_ref_count": int(default_ref_count),
+        "tags": json_list(product.use_cases_json),
     }
 
 
