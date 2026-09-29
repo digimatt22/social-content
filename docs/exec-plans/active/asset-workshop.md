@@ -4,7 +4,7 @@
 - Status: ready for review
 - Owner: Matthew / Codex
 - Branch: codex/agent-make-loop-apis
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/17
 - Last updated: 2026-09-29 (agent make-loop JSON APIs — queue + review)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
