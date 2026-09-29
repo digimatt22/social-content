@@ -1,10 +1,10 @@
 # Asset Workshop (Marketing OS primary goal)
 
 ## Status
-- Status: in progress
+- Status: ready for review
 - Owner: Matthew / Codex
 - Branch: codex/products-find-parity
-- PR: TBD
+- PR: https://github.com/digimatt22/social-content/pull/18
 - Last updated: 2026-09-29 (products find parity — `/products` q+tag + `GET /api/products`)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
