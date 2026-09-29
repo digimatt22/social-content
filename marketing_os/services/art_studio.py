@@ -1145,6 +1145,105 @@ def enqueue_social_image_generation(
     return job
 
 
+def enqueue_product_social_image_jobs(
+    session: Session,
+    product_id: int,
+    *,
+    option_count: int = 3,
+    platforms: list[str] | None = None,
+    reference_asset_ids: list[int] | None = None,
+    source_asset_id: int | None = None,
+) -> list[CreativeGenerationJobRecord]:
+    """Queue Social Worthy image jobs for a product's default (or explicit) references.
+
+    Mirrors the Products "Generate social images" form: one job per platform × option.
+    """
+    product = _product_or_raise(session, product_id)
+    option_count = max(1, min(8, int(option_count or 3)))
+    platform_keys = _normalize_social_image_platforms(platforms)
+    if reference_asset_ids:
+        reference_ids = [int(value) for value in reference_asset_ids][:4]
+        if not reference_ids:
+            raise ValueError("Choose at least one reference image before generating social images.")
+        primary_reference_id = int(source_asset_id) if source_asset_id is not None else reference_ids[0]
+        if primary_reference_id not in reference_ids:
+            reference_ids = [primary_reference_id, *[rid for rid in reference_ids if rid != primary_reference_id]][:4]
+    else:
+        references = list(
+            session.scalars(
+                select(AssetRecord)
+                .where(AssetRecord.product_id == product.id)
+                .where(AssetRecord.default_reference == 1)
+                .where(AssetRecord.hidden_from_generation == 0)
+                .order_by(AssetRecord.id)
+            )
+        )
+        if not references:
+            raise ValueError("Choose at least one default reference image before generating social images.")
+        reference_ids = [reference.id for reference in references[:4]]
+        primary_reference_id = int(source_asset_id) if source_asset_id is not None else reference_ids[0]
+        if primary_reference_id not in reference_ids:
+            # Explicit source still uses product defaults as supporting refs when possible.
+            reference_ids = [primary_reference_id, *reference_ids][:4]
+    return [
+        enqueue_social_image_generation(
+            session,
+            product.id,
+            primary_reference_id,
+            option_number=option_number,
+            reference_asset_ids=reference_ids,
+            platform=platform,
+        )
+        for platform in platform_keys
+        for option_number in range(1, option_count + 1)
+    ]
+
+
+def _normalize_social_image_platforms(platforms: list[str] | None) -> list[str]:
+    raw = platforms or []
+    keys = [
+        normalize_social_image_platform(value)
+        for value in raw
+        if str(value).strip()
+    ]
+    keys = [key for key in keys if key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS]
+    # Preserve order, drop duplicates.
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(key)
+    return ordered or [DEFAULT_SOCIAL_IMAGE_PLATFORM]
+
+
+def serialize_social_image_queue_job(job: CreativeGenerationJobRecord) -> dict[str, object]:
+    """Lean job payload for agent queue responses (id, platform, aspect, status)."""
+    metadata = _json_dict(job.response_metadata_json)
+    platform = str(metadata.get("platform") or "").strip()
+    aspect_ratio = str(metadata.get("aspect_ratio") or "").strip() or social_image_aspect_ratio_from_job(job)
+    return {
+        "id": job.id,
+        "source_asset_id": job.source_asset_id,
+        "candidate_asset_id": job.candidate_asset_id,
+        "product_id": metadata.get("product_id"),
+        "option_number": metadata.get("option_number"),
+        "platform": platform,
+        "platform_label": str(metadata.get("platform_label") or social_image_platform_label(platform)),
+        "aspect_ratio": aspect_ratio,
+        "status": job.provider_status,
+        "provider_status": job.provider_status,
+        "provider_status_label": art_studio_provider_status_label(job.provider_status),
+        "provider": job.provider,
+        "model_name": job.model_name,
+        "target_format": job.target_format,
+        "review_state": job.review_state,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
+
+
 def _ensure_social_image_automation_job(
     session: Session,
     job: CreativeGenerationJobRecord,

@@ -3,9 +3,9 @@
 ## Status
 - Status: ready for review
 - Owner: Matthew / Codex
-- Branch: codex/nav-focus
-- PR: https://github.com/digimatt22/social-content/pull/15
-- Last updated: 2026-09-25 (nav focus — Coverage/Shadow demoted from primary chrome)
+- Branch: codex/agent-make-loop-apis
+- PR: TBD
+- Last updated: 2026-09-29 (agent make-loop JSON APIs — queue + review)
 
 Allowed statuses: planned, in progress, blocked, needs human validation, ready for review, completed, abandoned.
 
@@ -32,7 +32,7 @@ Product + refs + platform/aspect → queue → Magnific worker drain → outputs
 
 ## Actors
 - **Human UI:** products, gallery, art studio (social images / video surfaces).
-- **Agents via APIs:** `/api/assets`, `/api/art-studio/jobs`, product APIs, queue endpoints.
+- **Agents via APIs:** `/api/assets`, `/api/art-studio/jobs`, `POST /api/art-studio/social-images/queue`, `POST /api/assets/<id>/review`, product APIs.
 - **Worker:** `art_studio.social_image.generate` when `MAGNIFIC_API_KEY` is set (hosted REST drain on Sheldon).
 - Agents must **not** invent parallel filesystem truth; use Marketing OS catalog + asset records.
 
@@ -63,8 +63,9 @@ Old plan kept and marked parked for primary focus:
 4. **Done:** Local refs → Magnific-reachable (Upload Files API staging) (#14).
 5. **Done (this PR):** Nav focus — Coverage / Pinterest Shadow moved under More tools so Products, Gallery, Art Studio dominate primary chrome.
 6. **Later:** background Etsy sync; video on same pattern; Magnific webhook verify.
+7. **Done (this PR):** Agent make-loop JSON APIs — `POST /api/art-studio/social-images/queue` + `POST /api/assets/<id>/review` (write Bearer); HTML forms unchanged.
 
-**Primary build-order loop (items 1–5) complete.** Remaining work is the later parked track (item 6+).
+**Primary build-order loop (items 1–5) complete.** Item 7 is the next agent-facing make-loop ship; remaining parked track is item 6+.
 
 ## Success
 An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + Stories 9:16 → wait for reviewable files → approve — without leaving Marketing OS and without a bot babysitting Magnific.
@@ -76,12 +77,13 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 
 ## Work State
 - Planned: later items (background Etsy sync; video pattern; Magnific webhook verify).
-- In progress: none for primary loop.
+- In progress: none.
+- Ready for review: agent make-loop JSON APIs (queue + review; branch `codex/agent-make-loop-apis`).
 - Completed earlier: strategy lock; Magnific REST drain; per-platform aspect ratios (#11); findability (#12); make UX (#13); local refs staging (#14).
 - Completed (this PR): nav focus — Coverage/Shadow demoted from primary chrome into More tools.
 - Blocked: none.
 - Needs human validation: spot-check chrome on `mmm.digicolony.net` after deploy — primary Workflow shows Products/Gallery/Art Studio; Coverage/Shadow only under More tools; `/coverage` and `/shadow-campaigns` still load.
-- Ready for review: this PR (nav focus).
+- Ready for review: this PR (agent make-loop APIs). Nav focus already merged.
 - Completed: Magnific REST social-image drain on Sheldon (`art_studio.social_image.generate`); primary build-order items 1–5.
 
 ## Decisions
@@ -91,7 +93,14 @@ An agent or human can: resolve product → list refs → enqueue e.g. IG 4:5 + S
 - Production hostname: `mmm.digicolony.net`.
 
 ## Implementation
-Nav focus (this PR):
+### Agent make-loop APIs (follow-on)
+- `POST /api/art-studio/social-images/queue` wraps `enqueue_product_social_image_jobs` / `enqueue_social_image_generation` (product default refs × platforms × option_count).
+- `POST /api/assets/<id>/review` wraps `review_asset`.
+- Auth: write-scoped Bearer service credential on secure app; CSRF skipped for service auth.
+- Docs: `docs/AUTOMATIONS.md`, `docs/operating-guides/local-web-console.md`.
+- Tests: `tests/test_agent_make_loop_apis.py`.
+
+Nav focus (prior PR):
 - `marketing_os/templates/base.html` — remove Coverage and Pinterest Shadow from primary Workflow list; place them first under More tools; auto-open overflow when `active` is coverage/shadow
 - Routes/blueprints unchanged (`/coverage`, `/shadow-campaigns`, APIs)
 - `tests/test_nav_focus.py` — asserts primary chrome excludes those labels and overflow still links them; routes return 200
