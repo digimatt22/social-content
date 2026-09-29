@@ -104,9 +104,10 @@ Authenticated service callers (Bearer token with **write** scope; CSRF skipped f
 
 3. **Review** — `POST /api/assets/<id>/review`  
    JSON body: `review_state` (`approved` | `needs review` | `rejected`), optional `approval_notes` or `notes`.  
-   Response `200`: `{ "asset": <serialize_asset_view> }`.
+   Response `200`: `{ "asset": <serialize_asset_view> }`.  
+   Bulk: `POST /api/assets/review` with `asset_ids` (list of ints) plus the same `review_state` / notes fields. Response `200`: `{ "count", "assets": [...] }`.
 
-Header: `Authorization: Bearer <service_token>` where the credential includes `write` (POST) or `read` (GET). Do not confuse with `MAGNIFIC_API_KEY` or any marketing-agent env key — use Marketing OS service credentials created via `marketing-os-admin` / `create_service_credential`. Human HTML form POSTs (`/products/<id>/social-images/queue`, `/assets/<id>/review`) remain unchanged.
+Header: `Authorization: Bearer <service_token>` where the credential includes `write` (POST) or `read` (GET). Do not confuse with `MAGNIFIC_API_KEY` or any marketing-agent env key — use Marketing OS service credentials created via `marketing-os-admin` / `create_service_credential`. Human HTML form POSTs (`/products/<id>/social-images/queue`, `/assets/<id>/review`, Gallery bulk `POST /assets/review/bulk`) remain available; secure browser forms carry CSRF.
 
 Phase 4 registers `pinterest.publish` and `pinterest.reconcile` for disabled
 contract/recovery testing. Production refuses the fixture provider and no live

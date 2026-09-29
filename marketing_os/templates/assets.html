@@ -110,9 +110,21 @@
       <div>
         <div class="eyebrow">Make loop · needs review</div>
         <h3>{{ needs_review_social_count }} generated social image{{ '' if needs_review_social_count == 1 else 's' }} await approve/reject</h3>
-        <p class="subtle">Grouped by product. Open a group to filter Gallery, or jump straight into an asset drawer.</p>
+        <p class="subtle">Grouped by product. Check images to bulk approve/reject, or use Approve all / Reject all on a group.</p>
       </div>
-      <a class="button" href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, show_hidden=1 if show_hidden else none) }}">Show all needs-review socials</a>
+      <div class="button-group make-review-toolbar">
+        <a class="button secondary" href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, show_hidden=1 if show_hidden else none) }}">Show all needs-review socials</a>
+        <form id="make-review-bulk-form" method="post" action="{{ url_for('assets_bulk_review') }}" class="make-review-bulk-form">
+          <input type="hidden" name="return_to" value="{{ url_for('assets', show_hidden=1 if show_hidden else none) }}">
+          <label class="make-review-notes">Notes
+            <input type="text" name="approval_notes" placeholder="Optional bulk notes">
+          </label>
+          <div class="button-group">
+            <button name="review_state" value="approved" type="submit">Approve selected</button>
+            <button class="warn" name="review_state" value="rejected" type="submit">Reject selected</button>
+          </div>
+        </form>
+      </div>
     </div>
     <div class="make-review-groups">
       {% for group in needs_review_social_groups %}
@@ -124,6 +136,22 @@
             {% for ratio in group.aspect_ratios %}<span class="pill">{{ ratio }}</span>{% endfor %}
           </div>
           <div class="button-group">
+            {% if group.assets %}
+              <form method="post" action="{{ url_for('assets_bulk_review') }}" class="inline-form">
+                <input type="hidden" name="return_to" value="{{ url_for('assets', show_hidden=1 if show_hidden else none) }}">
+                {% for asset in group.assets %}
+                  <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                {% endfor %}
+                <button name="review_state" value="approved" type="submit">Approve all</button>
+              </form>
+              <form method="post" action="{{ url_for('assets_bulk_review') }}" class="inline-form">
+                <input type="hidden" name="return_to" value="{{ url_for('assets', show_hidden=1 if show_hidden else none) }}">
+                {% for asset in group.assets %}
+                  <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                {% endfor %}
+                <button class="warn" name="review_state" value="rejected" type="submit">Reject all</button>
+              </form>
+            {% endif %}
             {% if group.product_id %}
               <a class="button secondary" href="{{ url_for('assets', review_state='needs review', tag=social_image_asset_type, product_id=group.product_id, show_hidden=1 if show_hidden else none) }}">Filter to product</a>
             {% endif %}
@@ -131,6 +159,19 @@
               <a class="button secondary" href="{{ url_for('assets', open_asset=group.assets[0].id, review_state='needs review', tag=social_image_asset_type, product_id=group.product_id if group.product_id else none, show_hidden=1 if show_hidden else none) }}">Open first</a>
             {% endif %}
           </div>
+          {% if group.assets %}
+            <ul class="make-review-asset-list">
+              {% for asset in group.assets %}
+                <li>
+                  <label class="make-review-pick">
+                    <input form="make-review-bulk-form" type="checkbox" name="asset_id" value="{{ asset.id }}">
+                    <span>{{ asset.name }}{% if asset.platform_label %} · {{ asset.platform_label }}{% endif %}{% if asset.aspect_ratio %} · {{ asset.aspect_ratio }}{% endif %}</span>
+                  </label>
+                  <a class="subtle" href="{{ url_for('assets', open_asset=asset.id, review_state='needs review', tag=social_image_asset_type, product_id=group.product_id if group.product_id else none, show_hidden=1 if show_hidden else none) }}">Open</a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
         </article>
       {% endfor %}
     </div>

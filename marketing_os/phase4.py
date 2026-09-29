@@ -1526,6 +1526,26 @@ def review_asset(session: Session, asset_id: int, review_state: str, notes: str 
     return asset
 
 
+def review_assets(
+    session: Session,
+    asset_ids: list[int],
+    review_state: str,
+    notes: str = "",
+) -> list[AssetRecord]:
+    """Apply the same review decision to many assets (Gallery bulk / agent bulk)."""
+    unique_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_id in asset_ids:
+        asset_id = int(raw_id)
+        if asset_id in seen:
+            continue
+        seen.add(asset_id)
+        unique_ids.append(asset_id)
+    if not unique_ids:
+        raise ValueError("At least one asset_id is required.")
+    return [review_asset(session, asset_id, review_state, notes) for asset_id in unique_ids]
+
+
 def set_asset_generation_visibility(session: Session, asset_id: int, hidden: bool, note: str = "") -> AssetRecord:
     asset = session.get(AssetRecord, asset_id)
     if asset is None:

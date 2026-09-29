@@ -190,6 +190,8 @@ Phase 4 keeps the Flask/Jinja app, but the main operator workflows also expose J
 - `POST /api/assets/library/scan`
 - `POST /api/art-studio/social-images/queue` — agent make-loop queue (JSON: `product_id`, `platforms`/`platform`, `option_count`; uses product default refs). Returns job ids/platform/aspect/status.
 - `POST /api/assets/<asset_id>/review` — agent make-loop review (JSON: `review_state`, optional `approval_notes`/`notes`). Returns updated asset JSON.
+- `POST /api/assets/review` — bulk review (JSON: `asset_ids`, `review_state`, optional notes). Returns `{ count, assets }`.
+- Gallery HTML bulk: `POST /assets/review/bulk` (form: repeated `asset_id` or comma `asset_ids`, `review_state`, optional `approval_notes`/`return_to`). CSRF on secure app.
 
 Local `create_app` remains unauthenticated for console use. The hosted secure app requires Bearer service tokens (`read` for GET, `write` for POST; CSRF skipped for service auth). Do not expose the local console to the public internet. See `docs/AUTOMATIONS.md` (Agent make-loop) for the bot kick + review flow.
 
