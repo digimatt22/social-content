@@ -106,6 +106,7 @@ from .phase4 import (
     posting_guides,
     refresh_asset_file_state,
     review_asset,
+    review_assets,
     scan_local_asset_folder,
     serialize_asset_view,
     serialize_data_health_item,
@@ -1271,6 +1272,36 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 return jsonify({"error": message}), status
             return jsonify({"asset": serialize_asset_view(AssetView(asset, []))})
 
+    @app.post("/api/assets/review")
+    def api_assets_bulk_review():
+        payload = request.get_json(silent=True) or {}
+        review_state = str(payload.get("review_state") or "").strip()
+        if not review_state:
+            return jsonify({"error": "review_state is required."}), 400
+        notes = str(payload.get("approval_notes") or payload.get("notes") or "")
+        raw_ids = payload.get("asset_ids")
+        if raw_ids is None and payload.get("asset_id") is not None:
+            raw_ids = [payload.get("asset_id")]
+        if not isinstance(raw_ids, list):
+            return jsonify({"error": "asset_ids must be a non-empty list of integers."}), 400
+        try:
+            asset_ids = [int(item) for item in raw_ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "asset_ids must be a non-empty list of integers."}), 400
+        with session_scope(factory) as session:
+            try:
+                assets = review_assets(session, asset_ids, review_state, notes)
+            except ValueError as exc:
+                message = str(exc)
+                status = 404 if "not found" in message.lower() else 400
+                return jsonify({"error": message}), status
+            return jsonify(
+                {
+                    "count": len(assets),
+                    "assets": [serialize_asset_view(AssetView(asset, [])) for asset in assets],
+                }
+            )
+
     @app.post("/art-studio/social-image/import")
     def art_studio_import_social_image() -> str:
         try:
@@ -1720,6 +1751,31 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             try:
                 review_asset(session, asset_id, review_state, notes)
                 flash("Asset review saved.")
+            except ValueError as exc:
+                flash(str(exc))
+        return redirect(return_to)
+
+    @app.post("/assets/review/bulk")
+    def assets_bulk_review() -> str:
+        review_state = request.form.get("review_state", "needs review")
+        notes = request.form.get("approval_notes", "")
+        return_to = request.form.get("return_to") or url_for("assets")
+        raw_ids = request.form.getlist("asset_id")
+        if not raw_ids:
+            compact = request.form.get("asset_ids", "").strip()
+            raw_ids = [part for part in compact.replace(";", ",").split(",") if part.strip()]
+        try:
+            asset_ids = [int(item) for item in raw_ids]
+        except (TypeError, ValueError):
+            flash("Select at least one valid asset to review.")
+            return redirect(return_to)
+        if not asset_ids:
+            flash("Select at least one valid asset to review.")
+            return redirect(return_to)
+        with session_scope(factory) as session:
+            try:
+                assets = review_assets(session, asset_ids, review_state, notes)
+                flash(f"Bulk review saved for {len(assets)} asset{'s' if len(assets) != 1 else ''}.")
             except ValueError as exc:
                 flash(str(exc))
         return redirect(return_to)

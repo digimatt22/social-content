@@ -355,6 +355,15 @@
       .make-review-group { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
       .make-review-group:first-child { border-top: 0; padding-top: 0; }
       .make-review-group .button-group { flex-wrap: wrap; }
+      .make-review-toolbar { flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 10px; }
+      .make-review-bulk-form { display: grid; gap: 8px; justify-items: end; }
+      .make-review-bulk-form .make-review-notes { margin: 0; font-size: 13px; }
+      .make-review-bulk-form .make-review-notes input { min-width: min(260px, 70vw); }
+      .make-review-group .inline-form { display: inline; margin: 0; }
+      .make-review-asset-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+      .make-review-asset-list li { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+      .make-review-pick { display: inline-flex; gap: 8px; align-items: flex-start; margin: 0; font-weight: 600; }
+      .make-review-pick input { margin-top: 3px; }
       .product-review-disclosure { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fffdf7; overflow: hidden; }
       .product-review-disclosure summary { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 1.4fr) auto; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; font-weight: 800; }
       .product-review-disclosure summary::-webkit-details-marker { display: none; }
