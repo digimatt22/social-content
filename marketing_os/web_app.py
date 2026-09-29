@@ -53,6 +53,7 @@ from .services.art_studio import (
     art_studio_video_requests,
     cancel_video_request,
     create_video_request,
+    enqueue_product_social_image_jobs,
     enqueue_social_image_generation,
     social_image_platform_options,
     social_image_platform_label,
@@ -71,6 +72,7 @@ from .services.art_studio import (
     register_video_job_output,
     register_video_output,
     serialize_art_studio_job,
+    serialize_social_image_queue_job,
     validate_video_motion_prompt,
     video_template_options,
 )
@@ -84,6 +86,7 @@ from .services.phase5_readiness import (
 )
 from .phase4 import (
     OPERATOR_DEFAULT_ROLE,
+    AssetView,
     assign_asset_to_task,
     asset_inventory,
     asset_inventory_count,
@@ -1178,6 +1181,56 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
             ]
             return jsonify({"jobs": [serialize_art_studio_job(job) for job in jobs], "count": len(jobs)})
 
+    @app.post("/api/art-studio/social-images/queue")
+    def api_art_studio_queue_social_images():
+        payload = request.get_json(silent=True) or {}
+        product_id = _int_or_none(payload.get("product_id"))
+        if product_id is None:
+            return jsonify({"error": "product_id is required."}), 400
+        option_count = _int_or_none(payload.get("option_count"))
+        if option_count is None:
+            option_count = _int_or_none(payload.get("option_number"))
+        if option_count is None:
+            option_count = 3
+        platforms = _platforms_from_payload(payload)
+        source_asset_id = _int_or_none(payload.get("source_asset_id"))
+        reference_asset_ids = _int_list_from_payload(payload.get("reference_asset_ids"))
+        with session_scope(factory) as session:
+            try:
+                jobs = enqueue_product_social_image_jobs(
+                    session,
+                    product_id,
+                    option_count=option_count,
+                    platforms=platforms,
+                    reference_asset_ids=reference_asset_ids or None,
+                    source_asset_id=source_asset_id,
+                )
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify(
+                {
+                    "product_id": product_id,
+                    "jobs": [serialize_social_image_queue_job(job) for job in jobs],
+                    "count": len(jobs),
+                }
+            ), 201
+
+    @app.post("/api/assets/<int:asset_id>/review")
+    def api_asset_review(asset_id: int):
+        payload = request.get_json(silent=True) or {}
+        review_state = str(payload.get("review_state") or "").strip()
+        if not review_state:
+            return jsonify({"error": "review_state is required."}), 400
+        notes = str(payload.get("approval_notes") or payload.get("notes") or "")
+        with session_scope(factory) as session:
+            try:
+                asset = review_asset(session, asset_id, review_state, notes)
+            except ValueError as exc:
+                message = str(exc)
+                status = 404 if "not found" in message.lower() else 400
+                return jsonify({"error": message}), status
+            return jsonify({"asset": serialize_asset_view(AssetView(asset, []))})
+
     @app.post("/art-studio/social-image/import")
     def art_studio_import_social_image() -> str:
         try:
@@ -1499,46 +1552,25 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
     def product_queue_social_images(product_id: int) -> str:
         return_to = request.form.get("return_to") or url_for("products_admin", _anchor=f"product-{product_id}")
         option_count = max(1, min(8, int(request.form.get("option_number", "3") or 3)))
+        platforms = [
+            normalize_social_image_platform(value)
+            for value in request.form.getlist("platform")
+            if str(value).strip()
+        ]
+        platforms = [key for key in platforms if key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS]
         try:
             with session_scope(factory) as session:
                 product = session.get(ProductRecord, product_id)
                 if product is None:
                     abort(404)
-                references = list(
-                    session.scalars(
-                        select(AssetRecord)
-                        .where(AssetRecord.product_id == product_id)
-                        .where(AssetRecord.default_reference == 1)
-                        .where(AssetRecord.hidden_from_generation == 0)
-                        .order_by(AssetRecord.id)
-                    )
+                jobs = enqueue_product_social_image_jobs(
+                    session,
+                    product_id,
+                    option_count=option_count,
+                    platforms=platforms or None,
                 )
-                if not references:
-                    flash("Choose at least one default reference image before generating social images.")
-                    return redirect(return_to)
-                reference_ids = [reference.id for reference in references[:4]]
-                primary_reference_id = reference_ids[0]
-                platforms = [
-                    normalize_social_image_platform(value)
-                    for value in request.form.getlist("platform")
-                    if str(value).strip()
-                ]
-                platforms = [key for key in platforms if key in SOCIAL_IMAGE_PLATFORM_ASPECT_RATIOS]
-                if not platforms:
-                    platforms = [DEFAULT_SOCIAL_IMAGE_PLATFORM]
-                jobs = [
-                    enqueue_social_image_generation(
-                        session,
-                        product_id,
-                        primary_reference_id,
-                        option_number=option_number,
-                        reference_asset_ids=reference_ids,
-                        platform=platform,
-                    )
-                    for platform in platforms
-                    for option_number in range(1, option_count + 1)
-                ]
-                platform_labels = ", ".join(social_image_platform_label(key) for key in platforms)
+                platform_keys = platforms or [DEFAULT_SOCIAL_IMAGE_PLATFORM]
+                platform_labels = ", ".join(social_image_platform_label(key) for key in platform_keys)
                 job_ids = ", ".join(f"#{job.id}" for job in jobs[:8])
                 if len(jobs) > 8:
                     job_ids += f" (+{len(jobs) - 8} more)"
@@ -1963,6 +1995,35 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
         return redirect(url_for("settings"))
 
     return app
+
+
+
+def _platforms_from_payload(payload: dict[str, object]) -> list[str] | None:
+    raw = payload.get("platforms", payload.get("platform"))
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        values = [item.strip() for item in raw.split(",") if item.strip()]
+    elif isinstance(raw, (list, tuple)):
+        values = [str(item).strip() for item in raw if str(item).strip()]
+    else:
+        values = [str(raw).strip()] if str(raw).strip() else []
+    return values or None
+
+
+def _int_list_from_payload(value: object) -> list[int]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        items = value
+    else:
+        items = [value]
+    result: list[int] = []
+    for item in items:
+        parsed = _int_or_none(item)
+        if parsed is not None:
+            result.append(parsed)
+    return result
 
 
 def _int_or_none(value: object) -> int | None:

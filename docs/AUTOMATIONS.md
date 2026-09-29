@@ -92,6 +92,22 @@ Art Studio social-image drain registers `art_studio.social_image.generate` when 
 
 Agents find product refs and generated assets via `GET /api/assets` (filters: `product_id`, `asset_type`, `review_state`, `platform`, `aspect_ratio`, `q`) or `GET /api/products/<id>/assets`. Platform/aspect on list rows come from linked `CreativeGenerationJobRecord` metadata when present.
 
+### Agent make-loop (queue + review)
+
+Authenticated service callers (Bearer token with **write** scope; CSRF skipped for service auth) can drive the Products-style make loop without HTML forms:
+
+1. **Queue** — `POST /api/art-studio/social-images/queue`  
+   JSON body: `product_id` (required), `platforms` or `platform` (list or comma string; default `ig_feed`), `option_count` (1–8; alias `option_number`; default 3). Optional `source_asset_id` / `reference_asset_ids`; otherwise uses the product's default reference images (same as Products → Generate social images).  
+   Response `201`: `{ "product_id", "count", "jobs": [ { "id", "platform", "aspect_ratio", "status", "source_asset_id", "option_number", ... } ] }`.
+
+2. **Poll** — `GET /api/art-studio/jobs?status=queued|all` (read scope) and/or `GET /api/assets?product_id=…&review_state=needs%20review`.
+
+3. **Review** — `POST /api/assets/<id>/review`  
+   JSON body: `review_state` (`approved` | `needs review` | `rejected`), optional `approval_notes` or `notes`.  
+   Response `200`: `{ "asset": <serialize_asset_view> }`.
+
+Header: `Authorization: Bearer <service_token>` where the credential includes `write` (POST) or `read` (GET). Do not confuse with `MAGNIFIC_API_KEY` or any marketing-agent env key — use Marketing OS service credentials created via `marketing-os-admin` / `create_service_credential`. Human HTML form POSTs (`/products/<id>/social-images/queue`, `/assets/<id>/review`) remain unchanged.
+
 Phase 4 registers `pinterest.publish` and `pinterest.reconcile` for disabled
 contract/recovery testing. Production refuses the fixture provider and no live
 adapter is installed. An ambiguous response commits `publish_unknown` before
