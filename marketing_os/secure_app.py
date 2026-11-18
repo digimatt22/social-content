@@ -65,6 +65,7 @@ def create_secure_app(
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops)
     factory = app.config["SESSION_FACTORY"]
     studio_hosted = os.environ.get("STUDIO_HOSTED_GATEWAY") == "1"
+    app.config["STUDIO_HOSTED_GATEWAY"] = studio_hosted
     login_csrf_signer = URLSafeTimedSerializer(app.secret_key, salt="marketing-os-login-csrf")
 
     @app.before_request
@@ -120,6 +121,16 @@ def create_secure_app(
         if request.is_secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
         csrf = request.cookies.get(CSRF_COOKIE, "")
+        if (
+            studio_hosted
+            and request.method == "GET"
+            and request.path == "/studio/api/studio/state"
+            and response.status_code == 200
+            and getattr(g, "auth_kind", "") == "browser"
+            and csrf
+            and hmac.compare_digest(token_hash(csrf), g.csrf_token_hash)
+        ):
+            response.headers["X-CSRF-Token"] = csrf
         if csrf and response.mimetype == "text/html" and response.direct_passthrough is False:
             body = response.get_data(as_text=True)
             hidden = f'<input type="hidden" name="_csrf_token" value="{csrf}">'

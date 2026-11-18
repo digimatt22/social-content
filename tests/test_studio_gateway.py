@@ -30,6 +30,9 @@ class HostedStudioGatewayTest(TestCase):
 
             self.assertEqual(client.get("/studio/", base_url=ORIGIN).location, "/auth/login")
             self.assertEqual(client.get("/studio/api/studio/products", base_url=ORIGIN).status_code, 401)
+            anonymous_state = client.get("/studio/api/studio/state", base_url=ORIGIN)
+            self.assertEqual(anonymous_state.status_code, 401)
+            self.assertNotIn("X-CSRF-Token", anonymous_state.headers)
             http.assert_not_called()
 
             first_form = client.get("/auth/login", base_url=ORIGIN)
@@ -61,12 +64,22 @@ class HostedStudioGatewayTest(TestCase):
             products = client.get("/studio/api/studio/products", base_url=ORIGIN)
             self.assertEqual(products.json, {"products": []})
             self.assertEqual(products.headers["Cache-Control"], "no-store")
+            self.assertNotIn("X-CSRF-Token", products.headers)
             self.assertEqual(http.return_value.request.call_args.args[:2], ("GET", "/studio/api/studio/products"))
-            self.assertEqual(client.get("/legacy", base_url=ORIGIN).status_code, 200)
+            legacy = client.get("/legacy", base_url=ORIGIN)
+            self.assertEqual(legacy.status_code, 200)
+            self.assertIn('href="/legacy">Today', legacy.text)
+            self.assertIn('href="/studio/">Back to Social Studio', legacy.text)
 
             path = "/studio/api/studio/assignment"
             self.assertEqual(client.post(path, json={"title": "Fixture"}, base_url=ORIGIN).status_code, 403)
-            csrf = client.get_cookie(CSRF_COOKIE, domain="mmm.digicolony.net").value
+            state = client.get("/studio/api/studio/state", base_url=ORIGIN)
+            self.assertEqual(state.headers["Cache-Control"], "no-store")
+            self.assertIn("Cookie", state.vary)
+            csrf = state.headers["X-CSRF-Token"]
+            cookie = client.get_cookie(CSRF_COOKIE, domain="mmm.digicolony.net")
+            self.assertTrue(cookie.http_only)
+            self.assertEqual(csrf, cookie.value)
             headers = {"X-CSRF-Token": csrf, "Origin": "https://example.invalid"}
             self.assertEqual(client.post(path, json={"title": "Fixture"}, headers=headers, base_url=ORIGIN).status_code, 403)
             headers["Origin"] = ORIGIN

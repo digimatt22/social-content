@@ -593,6 +593,9 @@
             <p class="nav-tagline">MattMadeMe content console</p>
           </div>
         </div>
+        {% if config.STUDIO_HOSTED_GATEWAY %}
+          <a href="/studio/">Back to Social Studio</a>
+        {% endif %}
         <div class="nav-section">Workflow</div>
         {% for key, label, endpoint in [
           ("today", "Today", "dashboard"),
@@ -604,7 +607,7 @@
           ("products", "Products", "products_admin"),
           ("insights", "Signals", "insights")
         ] %}
-          <a class="{{ 'active' if active == key else '' }}" href="{{ url_for(endpoint) }}">{{ label }}</a>
+          <a class="{{ 'active' if active == key else '' }}" href="{{ '/legacy' if key == 'today' and config.STUDIO_HOSTED_GATEWAY else url_for(endpoint) }}">{{ label }}</a>
         {% endfor %}
         <details class="nav-more" {{ 'open' if active in ['coverage', 'shadow', 'metrics_due', 'completed', 'metrics', 'data_health', 'plans', 'settings'] else '' }}>
           <summary>More tools</summary>

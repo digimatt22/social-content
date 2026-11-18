@@ -1,20 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const hosted = process.env.NEXT_PUBLIC_STUDIO_HOSTED === "1";
 const api = `${hosted ? "/studio" : ""}/api/studio`;
-const sections = ["Work", hosted ? "Products" : "Library", "Review", "Results"];
-const librarySection = hosted ? "Products" : "Library";
+const librarySection = hosted ? "Products" : "Photo library";
+const sections = ["Posts", librarySection];
+const postStages = ["Draft", "Review"];
 const gateNames = ["Idea and relevance", "Visual execution", "Product and factual truth", "Copy and outcome"];
 const date = (time) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).format(time);
 const version = (id) => id.slice(0, 8);
 const photoUrl = (photo) => photo.preview ?? `${api}/source/${photo.id}${photo.sha256 ? `?hash=${photo.sha256}` : ""}`;
 const empty = { assignments: [], copy: [], jobs: [], proposals: [], artifacts: [], reviews: [] };
-
-function csrfToken() {
-  return document.cookie.split("; ").find(value => value.startsWith("marketing_os_csrf="))?.split("=")[1] ?? "";
-}
 
 function ImageStrip({ photos }) {
   return <div className="image-strip">{photos.map(photo =>
@@ -30,18 +27,19 @@ function Library({ catalog, selected, toggle }) {
     <div><strong>{photo.product}</strong><small>{photo.file}</small>
       {photo.kind && <small>{photo.kind === "etsy" ? "Etsy reference" : "Uploaded original"}</small>}
       {toggle && <button type="button" className="quiet" aria-pressed={selected.includes(photo.id)}
+        disabled={selected.length >= 4 && !selected.includes(photo.id)}
         onClick={() => toggle(photo.id)}>{selected.includes(photo.id) ? `Reference ${selected.indexOf(photo.id) + 1}` : "Select photo"}</button>}
     </div>
   </div>)}</div>;
 }
 
-function ProductBrowser({ selected, toggle, submit, busy }) {
+function ProductBrowser({ selected, toggle, submit, busy, initialProductId = "", startPost }) {
   const [products, setProducts] = useState([]);
-  const [id, setId] = useState("");
+  const [id, setId] = useState(initialProductId);
   const [search, setSearch] = useState("");
   const [photos, setPhotos] = useState([]);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialProductId));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,8 +86,10 @@ function ProductBrowser({ selected, toggle, submit, busy }) {
       </select></label>
     </div>
     {error && <p role="alert" className="error">{error}</p>}
-    {loading && <p className="muted">Loading photos…</p>}
+    {loading && <p className="muted" role="status">Loading photos…</p>}
+    {search.trim() && !visible.length && <p className="muted" role="status">No matching products.</p>}
     {id && !loading && !photos.length && !error && <p className="muted">This product has no available photos.</p>}
+    {!toggle && id && photos.length > 0 && <button className="product-post" type="button" onClick={() => startPost(id)}>Start a post with this product</button>}
     <Library catalog={photos} selected={selected} toggle={toggle} />
     {id && !toggle && <form onSubmit={async e => {
       e.preventDefault();
@@ -105,31 +105,43 @@ function ProductBrowser({ selected, toggle, submit, busy }) {
   </div>;
 }
 
-function NewAssignment({ catalog, create, busy, cancel }) {
+function NewAssignment({ catalog, create, busy, cancel, productId }) {
   const [selected, setSelected] = useState([]);
+  const heading = useRef(null);
+  useEffect(() => { heading.current?.focus(); }, []);
   const toggle = (id) => setSelected(prev => prev.includes(id) ? prev.filter(item => item !== id) : prev.length < 4 ? [...prev, id] : prev);
   return <form className="card new-assignment" onSubmit={(e) => {
     e.preventDefault();
     create({ ...Object.fromEntries(new FormData(e.currentTarget)), sourceIds: selected });
   }}>
-    <div className="row"><h2>New assignment</h2><button className="quiet" type="button" onClick={cancel}>Cancel</button></div>
-    <label>Title <input name="title" required maxLength={100} placeholder="A recognizable moment for this duck" /></label>
-    <div className="grid three">
-      <label>Outcome <select name="outcome"><option>Follower growth</option><option>Engagement</option><option>Drive sales</option></select></label>
-      <label>Channel <select name="channel"><option>Instagram</option><option>Facebook</option><option>Pinterest</option><option>X</option><option>r/3dprintedducks</option></select></label>
-      <label>Format <select name="format"><option>Still image</option><option>Photo carousel</option></select></label>
-    </div>
-    <div className="grid two">
-      <label>Audience situation <textarea name="audience" required placeholder="Who recognizes this moment?" /></label>
-      <label>Visible payoff <textarea name="payoff" required placeholder="What do they see or discover?" /></label>
-      <label>Source detail that carries the idea <textarea name="fit" required /></label>
-      <label>Intended viewer action <textarea name="action" required /></label>
-    </div>
-    <label>Measurement and decision rule <textarea name="measure" required placeholder="Primary metric, observation window, and what would justify another post" /></label>
-    <h3>Reference photos</h3>
-    <p className="muted">Select photos in reference order. {selected.length} of 4 selected.</p>
-    {hosted ? <ProductBrowser selected={selected} toggle={toggle} /> : <Library catalog={catalog} selected={selected} toggle={toggle} />}
-    <button disabled={busy || !selected.length}>Save assignment</button>
+    <div className="row"><h2 ref={heading} tabIndex={-1}>New post</h2><button className="quiet" type="button" onClick={cancel}>Cancel</button></div>
+    <fieldset>
+      <legend>Post idea</legend>
+      <label>Working title <input name="title" required maxLength={100} placeholder="A recognizable moment for this duck" /></label>
+      <div className="grid two">
+        <label>Who is this for? <textarea name="audience" required placeholder="Who recognizes this moment?" /></label>
+        <label>What will they see or discover? <textarea name="payoff" required /></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Reference photos</legend>
+      <p className="muted" role="status">Select 1 to 4 photos in the order you want to use them. {selected.length} selected.</p>
+      {hosted ? <ProductBrowser selected={selected} toggle={toggle} initialProductId={productId} /> : <Library catalog={catalog} selected={selected} toggle={toggle} />}
+    </fieldset>
+    <fieldset>
+      <legend>Post details</legend>
+      <div className="grid three">
+        <label>Outcome <select name="outcome"><option>Follower growth</option><option>Engagement</option><option>Drive sales</option></select></label>
+        <label>Channel <select name="channel"><option>Instagram</option><option>Facebook</option><option>Pinterest</option><option>X</option><option>r/3dprintedducks</option></select></label>
+        <label>Format <select name="format"><option>Still image</option><option>Photo carousel</option></select></label>
+      </div>
+      <div className="grid two">
+        <label>Which detail makes this product fit? <textarea name="fit" required /></label>
+        <label>What should viewers do next? <textarea name="action" required /></label>
+      </div>
+      <label>How will you judge the result? <textarea name="measure" required placeholder="Metric, when you will check it, and what would justify another post" /></label>
+    </fieldset>
+    <button disabled={busy || !selected.length}>Create post</button>
   </form>;
 }
 
@@ -197,58 +209,63 @@ function Magnific({ brief, proposals, artifacts, action, attach, busy }) {
   </section>;
 }
 
-function Work({ assignment, records, action, attach, busy, copyAvailable }) {
+function Draft({ assignment, records, action, attach, busy, copyAvailable }) {
   const brief = assignment.brief;
   const job = records.jobs[0];
   const active = job && ["queued", "submitting", "running", "uncertain"].includes(job.state);
   return <>
     <section className="card">
-      <span className="eyebrow">{brief.channel} · {brief.outcome}</span>
-      <h2>{brief.title}</h2>
+      <h3>Post brief</h3>
       <dl className="brief grid two">
         <div><dt>Audience situation</dt><dd>{brief.audience}</dd></div>
         <div><dt>Visible payoff</dt><dd>{brief.payoff}</dd></div>
         <div><dt>Source detail</dt><dd>{brief.fit}</dd></div>
         <div><dt>Viewer action</dt><dd>{brief.action}</dd></div>
       </dl>
-      <h3>{brief.format} · Original photos</h3>
+      <h3>Reference photos · {brief.format}</h3>
       <ImageStrip photos={brief.sources} />
     </section>
     <section className="card" id="copy">
-      <div className="row"><h2>Channel copy</h2>
-        <button disabled={!copyAvailable || busy || active} onClick={() => action({ command: "queue-copy" })}>Draft with OpenAI</button></div>
-      {!copyAvailable && <p className="muted">OpenAI worker is unavailable. You can save a draft below.</p>}
+      <div className="row"><h3>Caption</h3>
+        {copyAvailable && <button className="quiet" disabled={busy || active} onClick={() => action({ command: "queue-copy" })}>Draft with OpenAI</button>}</div>
       {job && <p className="state-line" role="status">OpenAI · {job.state}{job.detail ? ` · ${job.detail}` : ""}</p>}
       <form key={records.copy[0]?.id ?? "empty"} onSubmit={(e) => {
         e.preventDefault();
         action({ command: "save-copy", caption: new FormData(e.currentTarget).get("caption") });
       }}>
         <label>Caption <textarea name="caption" required maxLength={2200} defaultValue={records.copy[0]?.caption} rows={4} /></label>
-        <button className="quiet" disabled={busy}>Save new copy version</button>
+        <button disabled={busy}>{records.copy.length ? "Save caption version" : "Save caption"}</button>
       </form>
       {records.copy.length > 0 && <details><summary>{records.copy.length} saved {records.copy.length === 1 ? "version" : "versions"}</summary>
         {records.copy.map(item => <article key={item.id} className="version"><strong>{version(item.id)} · {item.origin === "openai" ? "OpenAI" : "Manual"}</strong><p>{item.caption}</p></article>)}
       </details>}
     </section>
-    {brief.format === "Still image" && <Magnific brief={brief} proposals={records.proposals} artifacts={records.artifacts} action={action} attach={attach} busy={busy} />}
+    {brief.format === "Still image" && <details className="image-tools" open={records.proposals.length > 0}>
+      <summary>Generate an image with Magnific</summary>
+      <Magnific brief={brief} proposals={records.proposals} artifacts={records.artifacts} action={action} attach={attach} busy={busy} />
+    </details>}
   </>;
 }
 
-function Review({ records, action, busy }) {
+function Review({ records, action, busy, openDraft }) {
   const [mediaId, setMedia] = useState("");
   const [copyId, setCopy] = useState("");
   const asset = records.artifacts.find(item => item.id === mediaId) ?? records.artifacts[0];
   const copy = records.copy.find(item => item.id === copyId) ?? records.copy[0];
 
-  if (!asset || !copy) return <section className="card"><h2>Review</h2><p>Save a caption and choose media in Work.</p></section>;
+  if (!asset || !copy) return <section className="card">
+    <h3>{copy ? "Add media before review" : "Save a caption before review"}</h3>
+    <p>{copy ? "Add the image you want to review in Draft." : "Save a caption in Draft, then review it alongside its image."}</p>
+    <button type="button" onClick={openDraft}>Back to draft</button>
+  </section>;
 
   return <>
     <section className="card">
-      <h2>Review a version</h2>
+      <h3>Review a version</h3>
       <div className="grid two">
         <label>Media <select value={asset.id} onChange={e => setMedia(e.target.value)}>{records.artifacts.map(item =>
           <option key={item.id} value={item.id}>{item.flags.kind === "originals" ? "Original photos" : "Magnific image"} · {version(item.id)}</option>)}</select></label>
-        <label>Copy <select value={copy.id} onChange={e => setCopy(e.target.value)}>{records.copy.map(item =>
+        <label>Caption <select value={copy.id} onChange={e => setCopy(e.target.value)}>{records.copy.map(item =>
           <option key={item.id} value={item.id}>{item.origin} · {version(item.id)}</option>)}</select></label>
       </div>
       <div className="review-preview">
@@ -290,30 +307,21 @@ function Review({ records, action, busy }) {
   </>;
 }
 
-function Results({ assignment, reviews }) {
-  return <section className="card">
-    <span className="eyebrow">{assignment.brief.outcome}</span>
-    <h2>Measurement plan</h2>
-    <p>{assignment.brief.measure}</p>
-    <p className="muted">Audience results begin with actual publication.</p>
-    <h3>Owner decisions</h3>
-    {reviews.filter(item => item.owner_decision).map(item => <p key={item.id}>{date(item.owner_at)} · <strong>{item.owner_decision}</strong> · {item.owner_note}</p>)}
-    {!reviews.some(item => item.owner_decision) && <p className="muted">Awaiting a creative decision.</p>}
-  </section>;
-}
-
 export default function Studio({ catalog }) {
   const [data, setData] = useState(empty);
-  const [section, setSection] = useState("Work");
+  const [section, setSection] = useState("Posts");
+  const [stage, setStage] = useState("Draft");
   const [id, setId] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [newPost, setNewPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const csrf = useRef("");
   const refresh = useCallback(async () => {
     const response = await fetch(`${api}/state`, { cache: "no-store" });
     if (hosted && response.status === 401) { window.location.assign("/auth/login"); return; }
     if (!response.ok) throw new Error("The studio could not load.");
+    csrf.current = response.headers.get("X-CSRF-Token") ?? "";
     setData(await response.json());
     setLoading(false);
   }, []);
@@ -330,13 +338,17 @@ export default function Studio({ catalog }) {
     try {
       const form = body instanceof FormData;
       const headers = new Headers(form ? undefined : { "Content-Type": "application/json" });
-      if (hosted) headers.set("X-CSRF-Token", csrfToken());
+      if (hosted) {
+        if (!csrf.current) throw new Error("Reload Studio to refresh your sign-in, then try again.");
+        headers.set("X-CSRF-Token", csrf.current);
+      }
       const response = await fetch(`${api}/${path}`, {
         method: "POST", headers,
         body: form ? body : JSON.stringify(body),
       });
+      if (hosted && response.status === 401) { window.location.assign("/auth/login"); return null; }
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      if (!response.ok) throw new Error(result.error || "Your change could not be saved.");
       await refresh();
       return result;
     } catch (error) {
@@ -347,13 +359,38 @@ export default function Studio({ catalog }) {
     }
   }
 
+  async function signOut() {
+    try {
+      if (!csrf.current) throw new Error();
+      const response = await fetch("/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrf.current } });
+      if (!response.ok) throw new Error();
+      window.location.assign("/auth/login");
+    } catch {
+      setError("Sign-out could not be completed. Reload the page and try again.");
+    }
+  }
+
   const assignment = data.assignments.find(item => item.id === id) ?? data.assignments[0];
   const records = Object.fromEntries(["copy", "jobs", "proposals", "artifacts", "reviews"].map(key => [
     key, data[key].filter(item => item.assignment_id === assignment?.id),
   ]));
   const action = (body) => submit(`command/${assignment.id}`, body);
-  const go = (next) => { setSection(next); setCreating(false); setError(""); };
-  const current = records.reviews.find(item => item.owner_decision);
+  const go = (next) => {
+    if (next === section) return;
+    setSection(next);
+    setNewPost(null);
+    setError("");
+  };
+  const startPost = (productId = "") => {
+    setSection("Posts");
+    setStage("Draft");
+    setNewPost({ productId });
+    setError("");
+  };
+  const currentReview = records.reviews.find(item =>
+    item.copy_id === records.copy[0]?.id && item.artifact_id === records.artifacts[0]?.id);
+  const postStatus = !records.copy.length ? "Needs a caption" : !records.artifacts.length ? "Needs media" :
+    currentReview?.owner_decision ?? (currentReview ? "Awaiting decision" : "Ready for review");
 
   return <>
     <header><div className="header-inner">
@@ -361,41 +398,62 @@ export default function Studio({ catalog }) {
       <nav aria-label="Studio">{sections.map(name => <button key={name} type="button" className={section === name ? "active" : ""}
         aria-current={section === name ? "page" : undefined} onClick={() => go(name)}>{name}</button>)}</nav>
       {hosted && <div className="studio-account">
-        <a href="/legacy">Classic tools</a>
-        <button type="button" onClick={async () => {
-          const response = await fetch("/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrfToken() } });
-          if (response.ok) window.location.assign("/auth/login");
-          else setError("Sign-out could not be completed. Reload the page and try again.");
-        }}>Sign out</button>
+        <a href="/legacy">Older dashboard</a>
+        <button type="button" onClick={signOut}>Sign out</button>
       </div>}
     </div></header>
     <main>
-      <div className="page-title"><div><span className="eyebrow">MattMadeMe Studio</span><h1>{section === "Work" ? "Assignments" : section}</h1></div>
-        {section === "Work" && !creating && <button onClick={() => { setCreating(true); setError(""); }}>+ New assignment</button>}
+      <div className="page-title"><h1>{section}</h1>
+        {section === "Posts" && !newPost && assignment && <button type="button" onClick={() => startPost()}>New post</button>}
       </div>
       {error && <div className="error" role="alert">{error}</div>}
       {section === librarySection && <section className="card">
-        {hosted ? <><div className="row"><h2>Product catalog</h2><a href="/products">Manage products</a></div><ProductBrowser submit={submit} busy={busy} /></> : <><h2>Original photos</h2><Library catalog={catalog} /></>}
+        {hosted ? <><div className="row"><h2>Product catalog</h2><a href="/products">Edit product details</a></div><ProductBrowser submit={submit} busy={busy} startPost={startPost} /></> : <><h2>Original photos</h2><Library catalog={catalog} /></>}
       </section>}
-      {section !== librarySection && creating && <NewAssignment catalog={catalog} busy={busy} cancel={() => setCreating(false)} create={async body => {
+      {section === "Posts" && newPost && <NewAssignment catalog={catalog} productId={newPost.productId} busy={busy} cancel={() => setNewPost(null)} create={async body => {
         const result = await submit("assignment", body);
-        if (result) { setId(result.id); setCreating(false); }
+        if (result) { setId(result.id); setNewPost(null); }
       }} />}
-      {section !== librarySection && !creating && assignment && <div className="workspace">
-        <aside className="assignment-list" aria-label="Saved assignments">
+      {section === "Posts" && !newPost && assignment && <div className="workspace">
+        <aside className="assignment-list" aria-label="Saved posts">
           {data.assignments.map(item => <button key={item.id} type="button" className={item.id === assignment.id ? "selected" : ""}
-            onClick={() => { setId(item.id); setError(""); }}><small>{item.brief.channel} · {item.brief.outcome}</small><strong>{item.brief.title}</strong></button>)}
+            aria-current={item.id === assignment.id ? "true" : undefined} onClick={() => {
+              if (item.id !== assignment.id) { setId(item.id); setStage("Draft"); setError(""); }
+            }}><strong>{item.brief.title}</strong><small>{item.brief.channel} · {item.brief.outcome}</small></button>)}
         </aside>
         <div className="stack" key={assignment.id}>
-          {section !== "Work" && <div className="context"><strong>{assignment.brief.title}</strong>{current && <span>{current.owner_decision}</span>}</div>}
-          {section === "Work" && <Work assignment={assignment} records={records} action={action} busy={busy} copyAvailable={data.copyAvailable} attach={form => submit(`attach/${assignment.id}`, form)} />}
-          {section === "Review" && <Review records={records} action={action} busy={busy} />}
-          {section === "Results" && <Results assignment={assignment} reviews={records.reviews} />}
+          <div className="post-heading">
+            <p className="muted">{assignment.brief.channel} · {assignment.brief.outcome}</p>
+            <h2>{assignment.brief.title}</h2>
+            <div className="row">
+              <div className="post-stages" role="group" aria-label="Post stages">
+                {postStages.map(name => <button key={name} type="button" className="quiet" aria-pressed={stage === name} onClick={() => { setStage(name); setError(""); }}>{name}</button>)}
+              </div>
+              <span className="post-status">{postStatus}</span>
+            </div>
+          </div>
+          <div hidden={stage !== "Draft"}>
+            <div className="stack">
+              <Draft assignment={assignment} records={records} action={action} busy={busy} copyAvailable={data.copyAvailable} attach={form => submit(`attach/${assignment.id}`, form)} />
+              {records.copy.length > 0 && records.artifacts.length > 0 && <div><button type="button" onClick={() => { setStage("Review"); setError(""); }}>Review post</button></div>}
+            </div>
+          </div>
+          <div hidden={stage !== "Review"}>
+            <div className="stack">
+              <Review records={records} action={action} busy={busy} openDraft={() => setStage("Draft")} />
+              <section className="card"><h3>Measurement plan</h3><p>{assignment.brief.measure}</p></section>
+            </div>
+          </div>
         </div>
       </div>}
-      {section !== librarySection && !creating && !assignment &&
-        <div className="empty"><strong>{loading ? "Loading assignments…" : "Start with a useful idea."}</strong>
-          {!loading && <p>Choose an outcome and the original photos that carry the payoff.</p>}</div>}
+      {section === "Posts" && !newPost && !assignment &&
+        <div className="empty">
+          {loading ? <p role="status">Loading posts…</p> : <>
+            <h2>Start a post</h2>
+            <p>Choose reference photos, write a caption, and review them together.</p>
+            <button type="button" onClick={() => startPost()}>New post</button>
+          </>}
+        </div>}
     </main>
   </>;
 }

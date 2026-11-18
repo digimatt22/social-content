@@ -28,7 +28,7 @@ Run `sh run-local.sh test` to verify the caption request, response-ID recovery, 
 
 ## Hosted Social Studio
 
-On Sheldon, the existing operator login leads to Social Studio. The Products tab uses the existing catalog and shows Etsy references separately from uploaded originals. Select a saved photo when creating an assignment. Social Studio stores the exact bytes of selected references, uploaded originals, and generated results in PostgreSQL. Classic tools retains the existing application for product management and older workflows.
+On Sheldon, the existing operator login opens Social Studio. Start a post from Posts or from a selected product. Products shows Etsy references separately from uploaded originals. Each post keeps its caption, optional Magnific image, version-specific review, and measurement plan together. Social Studio stores selected references, uploaded originals, and generated results in PostgreSQL. Older dashboard opens the previous console. Edit product details opens its product editor directly.
 
 Sheldon routes the public hostname to the authenticated Flask gateway. Next.js listens on container loopback. The web process uses the existing database runtime role. Hosted OpenAI calls need their own credential scope and budget.
 
