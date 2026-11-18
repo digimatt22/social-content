@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,8 +60,8 @@ class ProductsDefaultReferenceCsrfTests(unittest.TestCase):
                 asset_id = asset.id
 
             client = app.test_client()
-            client.get("/auth/login", base_url="https://localhost")
-            login_csrf = client.get_cookie("marketing_os_login_csrf").value
+            form = client.get("/auth/login", base_url="https://localhost")
+            login_csrf = re.search(r'name="_login_csrf" value="([^"]+)"', form.text)[1]
             login = client.post(
                 "/auth/login",
                 data={

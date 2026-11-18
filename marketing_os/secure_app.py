@@ -27,7 +27,12 @@ from .studio_gateway import register_studio_gateway, studio_process_ready
 SESSION_COOKIE = "marketing_os_session"
 CSRF_COOKIE = "marketing_os_csrf"
 LOGIN_CSRF_COOKIE = "marketing_os_login_csrf"
+LOGIN_CSRF_MAX_AGE = 600
 PUBLIC_ENDPOINTS = {"health", "ready", "login", "static"}
+
+
+def login_csrf_cookie_name(token: str) -> str:
+    return f"{LOGIN_CSRF_COOKIE}_{token_hash(token)[:24]}"
 
 
 def create_secure_app(
@@ -123,19 +128,29 @@ def create_secure_app(
             response.headers["Content-Length"] = str(len(response.get_data()))
         return response
 
+    def login_form(error: str = "", status: int = 200) -> Response:
+        token = login_csrf_signer.dumps(secrets.token_urlsafe(24))
+        response = make_response(render_template("login.html", error=error, login_csrf=token), status)
+        response.headers["Cache-Control"] = "no-store"
+        response.set_cookie(
+            login_csrf_cookie_name(token), token, path="/auth/login",
+            secure=True, httponly=True, samesite="Strict", max_age=LOGIN_CSRF_MAX_AGE,
+        )
+        return response
+
     @app.route("/auth/login", methods=["GET", "POST"], endpoint="login")
     def login():
-        error = ""
         if request.method == "POST":
             submitted_login_csrf = request.form.get("_login_csrf", "")
-            cookie_login_csrf = request.cookies.get(LOGIN_CSRF_COOKIE, "")
+            cookie_name = login_csrf_cookie_name(submitted_login_csrf)
+            cookie_login_csrf = request.cookies.get(cookie_name, "")
             try:
-                login_csrf_signer.loads(cookie_login_csrf, max_age=600)
-                login_csrf_valid = hmac.compare_digest(submitted_login_csrf, cookie_login_csrf)
+                login_csrf_signer.loads(cookie_login_csrf, max_age=LOGIN_CSRF_MAX_AGE)
+                login_csrf_valid = hmac.compare_digest(submitted_login_csrf.encode(), cookie_login_csrf.encode())
             except (BadSignature, SignatureExpired):
                 login_csrf_valid = False
             if not login_csrf_valid:
-                return {"error": "login_csrf_validation_failed"}, 403
+                return login_form("This sign-in form expired. Enter your username and password again.", 403)
             with session_scope(factory) as session:
                 principal = authenticate_password(
                     session,
@@ -166,22 +181,13 @@ def create_secure_app(
                         samesite="Lax",
                         max_age=12 * 60 * 60,
                     )
-                    response.delete_cookie(LOGIN_CSRF_COOKIE)
+                    response.headers["Cache-Control"] = "no-store"
+                    response.delete_cookie(cookie_name, path="/auth/login", secure=True, httponly=True, samesite="Strict")
                     return response
-            error = "Invalid credentials or account temporarily locked."
-        login_csrf = login_csrf_signer.dumps(secrets.token_urlsafe(24))
-        response = make_response(
-            render_template("login.html", error=error, login_csrf=login_csrf)
-        )
-        response.set_cookie(
-            LOGIN_CSRF_COOKIE,
-            login_csrf,
-            secure=True,
-            httponly=True,
-            samesite="Strict",
-            max_age=600,
-        )
-        return response
+            response = login_form("Invalid credentials or account temporarily locked.")
+            response.delete_cookie(cookie_name, path="/auth/login", secure=True, httponly=True, samesite="Strict")
+            return response
+        return login_form()
 
     @app.post("/auth/logout", endpoint="logout")
     def logout():

@@ -126,33 +126,6 @@
         ],
         "build": []
       }
-    },
-    "migration": {
-      "build": {
-        "dockerfile": "Dockerfile",
-        "target": "runtime"
-      },
-      "command": [
-        "python",
-        "scripts/studio-migrate.py"
-      ],
-      "user": "marketing-os",
-      "resources": {
-        "memory_bytes": 536870912,
-        "cpus": 0.5,
-        "pids": 128
-      },
-      "restart": "no",
-      "stop_grace_seconds": 30,
-      "revision": "studio_0001",
-      "backup_required": true,
-      "authority": "separate",
-      "secrets": {
-        "runtime": [
-          "MARKETING_OS_DB_MIGRATION_URL"
-        ],
-        "build": []
-      }
     }
   },
   "ingress": {

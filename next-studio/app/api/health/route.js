@@ -8,9 +8,7 @@ export async function GET() {
   try {
     const studio = openStudio();
     await studio.get("SELECT id FROM public.products LIMIT 1");
-    const { revision } = await studio.get("SELECT to_regclass('social_studio.revision') AS revision");
-    if (!revision) return Response.json({ status: "awaiting_migration" });
-    const applied = await studio.get("SELECT version FROM revision");
+    const applied = await studio.get("SELECT version FROM social_studio.revision");
     if (applied?.version !== "studio_0001") throw new Error("Unexpected studio revision");
     return Response.json({ status: "ready" });
   } catch {

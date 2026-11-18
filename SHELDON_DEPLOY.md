@@ -4,7 +4,7 @@
 
 The `studio-runtime` image serves Next.js at `/studio/` through the existing private Marketing OS login. The classic dashboard stays at `/legacy`. Product management stays at `/products`. Sheldon still uses the `marketing-os` application and `mmm.digicolony.net` route.
 
-The `studio_0001` migration creates a `social_studio` schema and grants the existing runtime role access to its tables. It leaves the earlier Alembic revision and existing tables intact. Readiness can report the pending schema while the deployment tool stages the image. Production promotion must first record the matching approved migration. Check the protected backup's freshness before running it. Rollback uses the previous known-healthy release; the new schema remains available for a future release.
+The initial Studio release applied the separately approved `studio_0001` migration. It created the `social_studio` schema and granted the existing runtime role access to its tables. Subsequent releases require that schema for readiness. Any future schema change requires its own declared migration and approved protected backup. Rollback uses the previous known-healthy release with the current database schema.
 
 Before promotion, verify an anonymous denial and a signed-in session through the staged app. Check that the catalog uses the existing product IDs and labels Etsy references separately from uploaded originals. Verify that an assignment created on a disposable database and its selected image survive a web process restart. Check `/ready` and the actual `/studio/api/studio/state` response through the authenticated path after promotion.
 
@@ -12,8 +12,8 @@ The Sheldon worker service runs the existing Marketing OS worker and, when enabl
 
 Marketing OS uses the schema-2 Sheldon contract in `sheldon.json`.
 
-The release contains separate web, worker, scheduler, migration, and database
-hook images plus an application-owned PostgreSQL 17.10 service. Runtime,
+The release contains separate web, worker, scheduler, and database hook images
+plus an application-owned PostgreSQL 17.10 service. Runtime,
 migration, backup, and cluster-bootstrap credentials are separate server-side
 secrets. No secret value belongs in Git or a release archive.
 

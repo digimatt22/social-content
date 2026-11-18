@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,7 +7,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from marketing_os.db import session_scope
-from marketing_os.secure_app import CSRF_COOKIE, LOGIN_CSRF_COOKIE, create_secure_app
+from marketing_os.secure_app import CSRF_COOKIE, create_secure_app, login_csrf_cookie_name
 from marketing_os.services.auth import create_principal
 
 
@@ -31,11 +32,25 @@ class HostedStudioGatewayTest(TestCase):
             self.assertEqual(client.get("/studio/api/studio/products", base_url=ORIGIN).status_code, 401)
             http.assert_not_called()
 
-            client.get("/auth/login", base_url=ORIGIN)
-            login_token = client.get_cookie(LOGIN_CSRF_COOKIE, domain="mmm.digicolony.net").value
-            result = client.post("/auth/login", data={
+            first_form = client.get("/auth/login", base_url=ORIGIN)
+            login_token = re.search(r'name="_login_csrf" value="([^"]+)"', first_form.text)[1]
+            self.assertEqual(first_form.headers["Cache-Control"], "no-store")
+            second_tab = app.test_client()
+            second_form = second_tab.get("/auth/login", base_url=ORIGIN)
+            second_token = re.search(r'name="_login_csrf" value="([^"]+)"', second_form.text)[1]
+            self.assertNotEqual(login_token, second_token)
+            cookie = second_tab.get_cookie(login_csrf_cookie_name(second_token), domain="mmm.digicolony.net", path="/auth/login")
+            client.set_cookie(cookie.key, cookie.value, domain=cookie.domain, path=cookie.path)
+
+            data = {
                 "username": "test-admin", "password": password, "_login_csrf": login_token,
-            }, base_url=ORIGIN)
+            }
+            bad_form = second_tab.post("/auth/login", data=data, base_url=ORIGIN)
+            self.assertEqual(bad_form.status_code, 403)
+            self.assertIn("This sign-in form expired", bad_form.text)
+            self.assertIn('name="_login_csrf"', bad_form.text)
+            self.assertEqual(bad_form.headers["Cache-Control"], "no-store")
+            result = client.post("/auth/login", data=data, base_url=ORIGIN)
             self.assertEqual(result.status_code, 302)
             self.assertEqual(client.get("/", base_url=ORIGIN).location, "/studio/")
 

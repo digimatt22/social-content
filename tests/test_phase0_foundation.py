@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from datetime import timedelta
@@ -252,8 +253,8 @@ class Phase0FoundationTests(unittest.TestCase):
                 base_url="https://localhost",
             ).status_code,
         )
-        client.get("/auth/login", base_url="https://localhost")
-        login_csrf = client.get_cookie("marketing_os_login_csrf").value
+        form = client.get("/auth/login", base_url="https://localhost")
+        login_csrf = re.search(r'name="_login_csrf" value="([^"]+)"', form.text)[1]
         response = client.post(
             "/auth/login",
             data={
@@ -355,8 +356,8 @@ class Phase0FoundationTests(unittest.TestCase):
         with factory.begin() as session:
             create_principal(session, username="admin", password="correct horse battery staple", roles={"admin"})
         client = app.test_client()
-        client.get("/auth/login", base_url="https://localhost")
-        login_csrf = client.get_cookie("marketing_os_login_csrf").value
+        form = client.get("/auth/login", base_url="https://localhost")
+        login_csrf = re.search(r'name="_login_csrf" value="([^"]+)"', form.text)[1]
         client.post(
             "/auth/login",
             data={
