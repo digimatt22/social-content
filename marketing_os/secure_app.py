@@ -21,6 +21,7 @@ from .services.auth import (
 )
 from .web_app import create_app
 from .services.capability_preflight import capability_report
+from .studio_gateway import register_studio_gateway, studio_process_ready
 
 
 SESSION_COOKIE = "marketing_os_session"
@@ -58,6 +59,7 @@ def create_secure_app(
         hops = int(os.environ["MARKETING_OS_PROXY_HOPS"])
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops)
     factory = app.config["SESSION_FACTORY"]
+    studio_hosted = os.environ.get("STUDIO_HOSTED_GATEWAY") == "1"
     login_csrf_signer = URLSafeTimedSerializer(app.secret_key, salt="marketing-os-login-csrf")
 
     @app.before_request
@@ -80,7 +82,7 @@ def create_secure_app(
                     g.csrf_token_hash = session_record.csrf_token_hash
                     auth_kind = "browser"
         if principal is None:
-            if request.path.startswith("/api/"):
+            if request.path.startswith(("/api/", "/studio/api/")):
                 return {"error": "authentication_required"}, 401
             return redirect("/auth/login")
         g.principal = principal
@@ -201,8 +203,12 @@ def create_secure_app(
             return {"status": "not_ready"}, 503
         if production and not capability_report("foundation")["ready"]:
             return {"status": "not_ready"}, 503
+        if studio_hosted and not studio_process_ready():
+            return {"status": "not_ready"}, 503
         return {"status": "ready"}
 
+    if studio_hosted:
+        register_studio_gateway(app)
     return app
 
 

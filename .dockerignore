@@ -17,3 +17,7 @@ __pycache__
 *.dump
 *.age
 tests
+**/.env.local
+**/.studio
+**/.next
+**/node_modules

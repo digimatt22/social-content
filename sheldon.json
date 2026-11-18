@@ -15,17 +15,12 @@
       "framework": "flask",
       "build": {
         "dockerfile": "Dockerfile",
-        "target": "runtime"
+        "target": "studio-runtime"
       },
       "command": [
-        "gunicorn",
-        "--bind",
-        "0.0.0.0:8080",
-        "--workers",
-        "2",
-        "--access-logfile",
-        "-",
-        "marketing_os.wsgi:app"
+        "python",
+        "scripts/studio-service.py",
+        "web"
       ],
       "container_port": 8080,
       "user": "marketing-os",
@@ -53,7 +48,8 @@
           "ETSY_SHOP_ID",
           "ETSY_SHOP_NAME",
           "MARKETING_AGENT_API_KEY",
-          "MAGNIFIC_API_KEY"
+          "MAGNIFIC_API_KEY",
+          "STUDIO_OPENAI_DAILY_JOBS"
         ],
         "build": []
       }
@@ -61,10 +57,12 @@
     "worker": {
       "build": {
         "dockerfile": "Dockerfile",
-        "target": "runtime"
+        "target": "studio-runtime"
       },
       "command": [
-        "marketing-os-worker"
+        "python",
+        "scripts/studio-service.py",
+        "worker"
       ],
       "user": "marketing-os",
       "resources": {
@@ -91,7 +89,9 @@
           "ETSY_SHOP_NAME",
           "MARKETING_AGENT_API_KEY",
           "MAGNIFIC_API_KEY",
-          "MAGNIFIC_WEBHOOK_SECRET"
+          "MAGNIFIC_WEBHOOK_SECRET",
+          "OPENAI_API_KEY",
+          "STUDIO_OPENAI_DAILY_JOBS"
         ],
         "build": []
       }
@@ -133,7 +133,8 @@
         "target": "runtime"
       },
       "command": [
-        "scripts/sheldon-migrate.sh"
+        "python",
+        "scripts/studio-migrate.py"
       ],
       "user": "marketing-os",
       "resources": {
@@ -143,7 +144,7 @@
       },
       "restart": "no",
       "stop_grace_seconds": 30,
-      "revision": "0005_pinterest_control_plane",
+      "revision": "studio_0001",
       "backup_required": true,
       "authority": "separate",
       "secrets": {
@@ -182,7 +183,9 @@
       "ETSY_SHOP_NAME",
       "MARKETING_AGENT_API_KEY",
       "MAGNIFIC_API_KEY",
-      "MAGNIFIC_WEBHOOK_SECRET"
+      "MAGNIFIC_WEBHOOK_SECRET",
+      "OPENAI_API_KEY",
+      "STUDIO_OPENAI_DAILY_JOBS"
     ],
     "build": []
   },

@@ -21,6 +21,7 @@ COPY --chown=marketing-os:marketing-os scripts/sheldon-database-readiness.sh \
     scripts/sheldon-database-restore-check.sh \
     scripts/sheldon-migrate.sh \
     scripts/sheldon-protected-rows.sh \
+    scripts/studio-migrate.py \
     ./scripts/
 RUN pip install --no-cache-dir .
 
@@ -38,3 +39,22 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/usr/lib/postgresql/17/bin:${PATH}"
 USER marketing-os
+
+FROM node:24-bookworm-slim AS studio-build
+WORKDIR /studio
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY next-studio/package.json next-studio/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY next-studio/app ./app
+COPY next-studio/lib ./lib
+COPY next-studio/scripts/worker.mjs ./scripts/worker.mjs
+COPY next-studio/next.config.mjs ./
+ARG NEXT_DEPLOYMENT_ID=local
+RUN STUDIO_HOSTED=1 NEXT_DEPLOYMENT_ID="$NEXT_DEPLOYMENT_ID" npm run build
+
+FROM runtime AS studio-runtime
+ENV STUDIO_HOSTED_GATEWAY=1 NEXT_TELEMETRY_DISABLED=1
+COPY --from=studio-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=studio-build --chown=marketing-os:marketing-os /studio /app/next-studio
+COPY --chown=marketing-os:marketing-os scripts/studio-service.py ./scripts/
+CMD ["python", "scripts/studio-service.py", "web"]

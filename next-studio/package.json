@@ -1,0 +1,20 @@
+{
+  "name": "mattmademe-social-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {"node": ">=24"},
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "worker": "node --env-file-if-exists=.env.local scripts/worker.mjs",
+    "test": "node --test scripts/workflow.test.mjs"
+  },
+  "dependencies": {
+    "next": "15.5.29",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

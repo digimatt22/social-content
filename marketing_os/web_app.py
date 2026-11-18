@@ -608,6 +608,7 @@ def create_app(db_path: str | Path | None = None, business_dir: str = "docs/busi
                 }
             )
 
+    @app.get("/legacy")
     @app.get("/")
     def dashboard() -> str:
         role = request.args.get("role", "all")
