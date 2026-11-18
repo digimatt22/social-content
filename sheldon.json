@@ -107,7 +107,7 @@
       "user": "marketing-os",
       "resources": {
         "memory_bytes": 268435456,
-        "cpus": 0.25,
+        "cpus": 0.75,
         "pids": 128
       },
       "restart": "unless-stopped",
